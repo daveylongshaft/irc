@@ -1,0 +1,94 @@
+{
+  "generated": "2026-03-02T00:00:00",
+  "time_cost_per_second": 0.003572222222222222,
+  "hourly_rate": 12.86,
+  "benchmarks": [
+    "multi-file-refactor",
+    "debug-test-failure",
+    "implement-feature",
+    "code-review",
+    "large-context-nav"
+  ],
+  "rankings": {
+    "haiku": {
+      "specs": {
+        "model": "claude-haiku-4-5-20251001",
+        "provider": "anthropic",
+        "input_cost_per_mtok": 1.00,
+        "output_cost_per_mtok": 5.00,
+        "type": "cloud-cheap",
+        "description": "Claude Haiku 4.5 (fast, cheap)",
+        "capabilities": ["code-generation", "analysis", "reasoning"]
+      },
+      "status": "no-data",
+      "avg_duration": null,
+      "total_cost": null,
+      "score": null,
+      "runs": 0
+    },
+    "sonnet": {
+      "specs": {
+        "model": "claude-sonnet-4-6",
+        "provider": "anthropic",
+        "input_cost_per_mtok": 3.00,
+        "output_cost_per_mtok": 15.00,
+        "type": "cloud-balanced",
+        "description": "Claude Sonnet 4.6 (balanced, capable)",
+        "capabilities": ["code-generation", "analysis", "reasoning", "complex-refactoring"]
+      },
+      "status": "no-data",
+      "avg_duration": null,
+      "total_cost": null,
+      "score": null,
+      "runs": 0
+    },
+    "opus": {
+      "specs": {
+        "model": "claude-opus-4-6",
+        "provider": "anthropic",
+        "input_cost_per_mtok": 5.00,
+        "output_cost_per_mtok": 25.00,
+        "type": "cloud-premium",
+        "description": "Claude Opus 4.6 (smartest)",
+        "capabilities": ["complex-reasoning", "multi-step", "novel-problems", "deep-analysis"]
+      },
+      "status": "no-data",
+      "avg_duration": null,
+      "total_cost": null,
+      "score": null,
+      "runs": 0
+    },
+    "gemini-2.5-flash": {
+      "specs": {
+        "model": "gemini-2.5-flash",
+        "provider": "google",
+        "input_cost_per_mtok": 0.15,
+        "output_cost_per_mtok": 0.60,
+        "type": "cloud-cheap",
+        "description": "Gemini 2.5 Flash (fast, cheap)",
+        "capabilities": ["code-generation", "analysis"]
+      },
+      "status": "no-data",
+      "avg_duration": null,
+      "total_cost": null,
+      "score": null,
+      "runs": 0
+    },
+    "gemini-3-pro": {
+      "specs": {
+        "model": "gemini-3-pro",
+        "provider": "google",
+        "input_cost_per_mtok": 1.25,
+        "output_cost_per_mtok": 10.00,
+        "type": "cloud-balanced",
+        "description": "Gemini 3 Pro (capable)",
+        "capabilities": ["code-generation", "analysis", "reasoning"]
+      },
+      "status": "no-data",
+      "avg_duration": null,
+      "total_cost": null,
+      "score": null,
+      "runs": 0
+    }
+  }
+}

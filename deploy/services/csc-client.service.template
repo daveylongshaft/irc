@@ -1,0 +1,20 @@
+[Unit]
+Description=CSC Human Client
+After=network.target csc-server.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User={USER}
+Group={GROUP}
+WorkingDirectory={INSTALL_DIR}/packages/csc-client
+ExecStart={PYTHON} main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csc-client
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

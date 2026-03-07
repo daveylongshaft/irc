@@ -1,0 +1,26 @@
+version: '3.8'
+
+# Local AI agent infrastructure using ollama
+# Usage:
+#   docker compose -f docker/docker-compose.ollama.yml up -d
+#   docker compose -f docker/docker-compose.ollama.yml exec ollama ollama pull codellama:7b
+#
+# The ollama API is available at http://localhost:11434
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: csc-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+
+volumes:
+  ollama-models:
+    name: csc-ollama-models

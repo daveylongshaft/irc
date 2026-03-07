@@ -1,0 +1,32 @@
+{
+  "sample_rate": 44100,
+  "total_samples": 44100,
+  "duration": 1.0,
+  "target_frequencies": [
+    440,
+    880,
+    1320
+  ],
+  "target_amplitudes": [
+    1.0,
+    0.5,
+    0.3
+  ],
+  "detected_peaks": [
+    [
+      440.0,
+      1.0
+    ],
+    [
+      880.0,
+      0.4997288749324841
+    ],
+    [
+      1320.0,
+      0.2999677689006215
+    ]
+  ],
+  "identified_count": 3,
+  "total_expected": 3,
+  "success": true
+}

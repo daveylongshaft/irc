@@ -1,0 +1,19 @@
+[Unit]
+Description=Client-Server-Commander Server
+After=network.target
+
+[Service]
+Type=simple
+User={USER}
+Group={GROUP}
+WorkingDirectory={INSTALL_DIR}/packages/csc-server
+ExecStart={PYTHON} main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csc-server
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

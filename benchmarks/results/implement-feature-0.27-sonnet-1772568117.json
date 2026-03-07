@@ -1,0 +1,15 @@
+{
+  "benchmark": "implement-feature",
+  "agent": "sonnet",
+  "model": "claude-sonnet-4-6",
+  "duration": 0.27,
+  "turns": 1,
+  "timestamp": 1772568117,
+  "datetime": "2026-03-03T14:01:57",
+  "success": false,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cache_read_tokens": 0,
+  "error": "Streaming is required for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-python#long-requests for more details",
+  "output_preview": ""
+}

@@ -1,0 +1,15 @@
+{
+  "benchmark": "multi-file-refactor",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 64.91,
+  "turns": 32,
+  "timestamp": 1772567260,
+  "datetime": "2026-03-03T13:47:40",
+  "success": true,
+  "input_tokens": 289776,
+  "output_tokens": 5537,
+  "cache_read_tokens": 0,
+  "error": "",
+  "output_preview": "Perfect! Let me create a final summary of what was accomplished:\n\n## Summary\n\nI have successfully completed the **multi-file-refactor** benchmark task. Here's what was accomplished:\n\n### \u2705 Refactoring Completed\n\n**Function Renamed**: `estimate_tokens_for_text` \u2192 `estimate_input_tokens`\n\n### \ud83d\udccb Files Modified: 2\n\n1. **bin/claude-batch/common.py**\n   - Line 142: Renamed function definition from `estimate_tokens_for_text` to `estimate_input_tokens`\n\n2. **bin/claude-batch/cbatch_list.py**\n   - Line 12: Updated import statement to use `estimate_input_tokens`\n   - Line 73: Updated function call to use `estimate_input_tokens`\n\n### \ud83d\udd0d Verification Results\n\n**Search for old name `estimate_tokens_for_text`:**\n- \u2705 Zero matches found in active code files\n- Only match is in cached bytecode (which will be regenerated)\n\n**Search for new name `estimate_input_tokens`:**\n- \u2705 Exactly 3 matches (as expected):\n  - 1 function definition in common.py (line 142)\n  - 1 import in cbatch_list.py (line 12)\n  - 1 fu"
+}

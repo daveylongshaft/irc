@@ -1,0 +1,24 @@
+VARIANCE REPORT
+================
+
+Analysis Date: 2026-02-04
+Project: Client-Server-Commander
+
+1. Inconsistency: File System Access Scope
+   - README.md states: "File uploads... protocol with dual-layer security validation — root confinement and core file protection."
+   - Code (services/builtin_service.py): The `Builtin` service module (accessible via "AI" commands) contains methods `create_directory_local`, `delete_local`, and `move_local` that are explicitly marked "UNRESTRICTED" in the comments (though they have a `SAFEGUARD_PATHS` blacklist).
+   - Analysis: While the *file upload protocol* (`<begin file>`) handled by `server_file_handler.py` strictly enforces root confinement as documented, the *AI service layer* (`builtin_service.py`) permits broader system access. This distinction is not explicitly detailed in the "File Uploads" section of the README, potentially leading to a false sense of total system isolation if one assumes "AI" commands are equally restricted.
+
+2. Inconsistency: FTP Functionality
+   - README.md: Does not mention FTP capabilities.
+   - Code (services/builtin_service.py): Contains `ftp_connect_list`, `ftp_download_file`, `ftp_upload_file` methods.
+   - Analysis: These appear to be legacy or undocumented features available to the AI agents.
+
+3. Minor: Missing Docstrings (Rectified)
+   - Initial analysis found 121 functions missing docstrings across `client/`, `server/`, `shared/`, `gemini/`, `claude/`, and `services/`.
+   - Action: Docstrings have been auto-generated and applied to ensure code consistency with the request.
+
+4. Observation: 'run' directory
+   - The directory `run/` contains copies of `gemini/` code (`client.py`, `server.py`, etc.). This is likely a build artifact or runtime directory not documented in the README's directory structure.
+
+END OF REPORT

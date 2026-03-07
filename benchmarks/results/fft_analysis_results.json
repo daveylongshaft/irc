@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-02-20T21:16:21.146327",
+  "sample_count": 44100,
+  "sample_rate": 44100,
+  "duration_seconds": 1.0,
+  "frequency_range_hz": {
+    "min": 0.0,
+    "max": 22049.0,
+    "nyquist_freq": 22050.0
+  },
+  "spectrum_statistics": {
+    "total_energy": 1.2963979502081075e+17,
+    "peak_energy": 488543806873338.1,
+    "peak_energy_percent": 0.3768470991449141,
+    "max_magnitude": 7800915.614344937,
+    "mean_magnitude": 2149486.695418665,
+    "std_magnitude": 1122079.6448892877
+  },
+  "frequency_band_energy": {
+    "subwoofer_20_60hz": 96480764.04928951,
+    "bass_60_250hz": 401016512.70105386,
+    "midrange_250_4000hz": 8054490457.181578,
+    "treble_4000_20000hz": 34213436417.01767
+  },
+  "top_frequency_peaks": [
+    {
+      "frequency_hz": 11146.0,
+      "magnitude": 7800915.614344937,
+      "normalized_magnitude": 1.0
+    },
+    {
+      "frequency_hz": 1350.0,
+      "magnitude": 7230499.460082882,
+      "normalized_magnitude": 0.9268783073088076
+    },
+    {
+      "frequency_hz": 1427.0,
+      "magnitude": 7146542.493573018,
+      "normalized_magnitude": 0.9161158570195779
+    },
+    {
+      "frequency_hz": 14695.0,
+      "magnitude": 7056468.805026033,
+      "normalized_magnitude": 0.9045693036404654
+    },
+    {
+      "frequency_hz": 2801.0,
+      "magnitude": 7054110.6615495775,
+      "normalized_magnitude": 0.9042670130385624
+    },
+    {
+      "frequency_hz": 6748.0,
+      "magnitude": 6921453.018108363,
+      "normalized_magnitude": 0.8872616190566979
+    },
+    {
+      "frequency_hz": 4771.0,
+      "magnitude": 6712084.502800063,
+      "normalized_magnitude": 0.8604226522406363
+    },
+    {
+      "frequency_hz": 637.0,
+      "magnitude": 6664642.077494325,
+      "normalized_magnitude": 0.854341003925085
+    },
+    {
+      "frequency_hz": 1248.0,
+      "magnitude": 6638801.6588500235,
+      "normalized_magnitude": 0.8510285185808283
+    },
+    {
+      "frequency_hz": 21581.0,
+      "magnitude": 6582732.6721919235,
+      "normalized_magnitude": 0.8438410306717172
+    }
+  ]
+}

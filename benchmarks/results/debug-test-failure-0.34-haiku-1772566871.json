@@ -1,0 +1,15 @@
+{
+  "benchmark": "debug-test-failure",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 0.34,
+  "turns": 1,
+  "timestamp": 1772566871,
+  "datetime": "2026-03-03T13:41:11",
+  "success": false,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cache_read_tokens": 0,
+  "error": "\"Could not resolve authentication method. Expected either api_key or auth_token to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted\"",
+  "output_preview": ""
+}

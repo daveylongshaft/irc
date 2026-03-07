@@ -1,0 +1,302 @@
+{
+  "multi-file-refactor": {
+    "created": 1740960000,
+    "description": "Rename a function across multiple files \u2014 tests code navigation, search, coordinated edits",
+    "runs": [
+      {
+        "agent": "haiku",
+        "duration": 0.45,
+        "turns": 1,
+        "timestamp": 1772566872,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 5.73,
+        "turns": 1,
+        "timestamp": 1772567252,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 64.91,
+        "turns": 32,
+        "timestamp": 1772567260,
+        "success": true,
+        "input_tokens": 289776,
+        "output_tokens": 5537
+      },
+      {
+        "agent": "haiku",
+        "duration": 84.17,
+        "turns": 31,
+        "timestamp": 1772567327,
+        "success": true,
+        "input_tokens": 501218,
+        "output_tokens": 5418
+      },
+      {
+        "agent": "haiku",
+        "duration": 22.02,
+        "turns": 5,
+        "timestamp": 1772568066,
+        "success": false,
+        "input_tokens": 20942,
+        "output_tokens": 473
+      },
+      {
+        "agent": "sonnet",
+        "duration": 0.4,
+        "turns": 1,
+        "timestamp": 1772568126,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    ]
+  },
+  "debug-test-failure": {
+    "created": 1740960000,
+    "description": "Diagnose and fix a test failure from a log file \u2014 tests debugging and root cause analysis",
+    "runs": [
+      {
+        "agent": "haiku",
+        "duration": 0.34,
+        "turns": 1,
+        "timestamp": 1772566871,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 6.12,
+        "turns": 1,
+        "timestamp": 1772567041,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 5.26,
+        "turns": 1,
+        "timestamp": 1772567049,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 10.29,
+        "turns": 2,
+        "timestamp": 1772567057,
+        "success": false,
+        "input_tokens": 1680,
+        "output_tokens": 193
+      },
+      {
+        "agent": "haiku",
+        "duration": 55.92,
+        "turns": 9,
+        "timestamp": 1772567981,
+        "success": true,
+        "input_tokens": 225944,
+        "output_tokens": 2979
+      },
+      {
+        "agent": "sonnet",
+        "duration": 0.28,
+        "turns": 1,
+        "timestamp": 1772568113,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    ]
+  },
+  "implement-feature": {
+    "created": 1740960000,
+    "description": "Add a utility function with error handling \u2014 tests code generation quality and conventions",
+    "runs": [
+      {
+        "agent": "haiku",
+        "duration": 0.27,
+        "turns": 1,
+        "timestamp": 1772566871,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 77.41,
+        "turns": 21,
+        "timestamp": 1772567067,
+        "success": false,
+        "input_tokens": 140226,
+        "output_tokens": 3895
+      },
+      {
+        "agent": "haiku",
+        "duration": 6.0,
+        "turns": 1,
+        "timestamp": 1772567146,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 60.54,
+        "turns": 14,
+        "timestamp": 1772567154,
+        "success": false,
+        "input_tokens": 105789,
+        "output_tokens": 3362
+      },
+      {
+        "agent": "haiku",
+        "duration": 9.17,
+        "turns": 2,
+        "timestamp": 1772568040,
+        "success": false,
+        "input_tokens": 1625,
+        "output_tokens": 110
+      },
+      {
+        "agent": "sonnet",
+        "duration": 0.27,
+        "turns": 1,
+        "timestamp": 1772568117,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    ]
+  },
+  "code-review": {
+    "created": 1740960000,
+    "description": "Review a code file for bugs and improvements \u2014 tests analytical depth and comprehension",
+    "runs": [
+      {
+        "agent": "haiku",
+        "duration": 0.61,
+        "turns": 1,
+        "timestamp": 1772566870,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 7.3,
+        "turns": 1,
+        "timestamp": 1772567005,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 18.59,
+        "turns": 5,
+        "timestamp": 1772567015,
+        "success": false,
+        "input_tokens": 25899,
+        "output_tokens": 322
+      },
+      {
+        "agent": "haiku",
+        "duration": 6.18,
+        "turns": 1,
+        "timestamp": 1772567035,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 7.77,
+        "turns": 1,
+        "timestamp": 1772567970,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "sonnet",
+        "duration": 0.32,
+        "turns": 1,
+        "timestamp": 1772568109,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    ]
+  },
+  "large-context-nav": {
+    "created": 1740960000,
+    "description": "Navigate codebase to answer specific questions \u2014 tests search efficiency and comprehension",
+    "runs": [
+      {
+        "agent": "haiku",
+        "duration": 0.34,
+        "turns": 1,
+        "timestamp": 1772566871,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "agent": "haiku",
+        "duration": 10.87,
+        "turns": 2,
+        "timestamp": 1772567215,
+        "success": false,
+        "input_tokens": 1648,
+        "output_tokens": 92
+      },
+      {
+        "agent": "haiku",
+        "duration": 7.52,
+        "turns": 2,
+        "timestamp": 1772567228,
+        "success": false,
+        "input_tokens": 1648,
+        "output_tokens": 98
+      },
+      {
+        "agent": "haiku",
+        "duration": 14.59,
+        "turns": 3,
+        "timestamp": 1772567237,
+        "success": false,
+        "input_tokens": 3416,
+        "output_tokens": 160
+      },
+      {
+        "agent": "haiku",
+        "duration": 11.0,
+        "turns": 3,
+        "timestamp": 1772568052,
+        "success": false,
+        "input_tokens": 4152,
+        "output_tokens": 176
+      },
+      {
+        "agent": "sonnet",
+        "duration": 0.29,
+        "turns": 1,
+        "timestamp": 1772568122,
+        "success": false,
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    ]
+  }
+}

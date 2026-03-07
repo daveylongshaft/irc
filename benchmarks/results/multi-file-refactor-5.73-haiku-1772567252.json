@@ -1,0 +1,15 @@
+{
+  "benchmark": "multi-file-refactor",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 5.73,
+  "turns": 1,
+  "timestamp": 1772567252,
+  "datetime": "2026-03-03T13:47:32",
+  "success": false,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgixosLXuRzi11CEdUgz'}",
+  "output_preview": ""
+}

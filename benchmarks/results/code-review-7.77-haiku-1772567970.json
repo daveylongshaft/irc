@@ -1,0 +1,15 @@
+{
+  "benchmark": "code-review",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 7.77,
+  "turns": 1,
+  "timestamp": 1772567970,
+  "datetime": "2026-03-03T13:59:30",
+  "success": false,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgjsfWmXotfK3tM8YYu8'}",
+  "output_preview": ""
+}

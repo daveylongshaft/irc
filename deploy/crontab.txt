@@ -1,0 +1,2 @@
+# CSC test runner — runs every minute, checks for tests without log files
+* * * * * {INSTALL_DIR}/tests/run_tests.sh

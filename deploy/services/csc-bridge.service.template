@@ -1,0 +1,20 @@
+[Unit]
+Description=CSC IRC Bridge (TCP to UDP)
+After=csc-server.service
+Requires=csc-server.service
+
+[Service]
+Type=simple
+User={USER}
+Group={GROUP}
+WorkingDirectory={INSTALL_DIR}/packages/csc-bridge
+ExecStart={PYTHON} main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csc-bridge
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

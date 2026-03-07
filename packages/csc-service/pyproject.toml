@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csc-service"
+version = "0.1.0"
+description = "Unified CSC service package"
+authors = [{name = "CSC Team"}]
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+all = ["anthropic", "google-generativeai", "openai"]
+
+[tool.setuptools.packages.find]
+where = ["."]

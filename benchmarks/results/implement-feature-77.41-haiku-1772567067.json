@@ -1,0 +1,15 @@
+{
+  "benchmark": "implement-feature",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 77.41,
+  "turns": 21,
+  "timestamp": 1772567067,
+  "datetime": "2026-03-03T13:44:27",
+  "success": false,
+  "input_tokens": 140226,
+  "output_tokens": 3895,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgipQXB4KXzo2PZosT8f'}",
+  "output_preview": "Let me check where the file was created:"
+}

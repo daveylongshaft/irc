@@ -1,0 +1,15 @@
+{
+  "benchmark": "implement-feature",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 9.17,
+  "turns": 2,
+  "timestamp": 1772568040,
+  "datetime": "2026-03-03T14:00:40",
+  "success": false,
+  "input_tokens": 1625,
+  "output_tokens": 110,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgjxz4Nsu4YmjW9SsAUD'}",
+  "output_preview": "I'll complete this benchmark task by first examining the existing code file, then adding the `format_duration` function with proper error handling and following the existing code style.\n\nLet me start by exploring the project structure and the target file."
+}

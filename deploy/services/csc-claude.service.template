@@ -1,0 +1,22 @@
+[Unit]
+Description=CSC Claude AI Client
+After=network.target csc-server.service
+StartLimitIntervalSec=0
+
+[Service]
+UMask=0002
+Type=simple
+User={USER}
+Group={GROUP}
+WorkingDirectory={INSTALL_DIR}/packages/csc-claude
+ExecStart={PYTHON} main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csc-claude
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile={INSTALL_DIR}/.env
+
+[Install]
+WantedBy=multi-user.target

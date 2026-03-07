@@ -1,0 +1,15 @@
+{
+  "benchmark": "multi-file-refactor",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 22.02,
+  "turns": 5,
+  "timestamp": 1772568066,
+  "datetime": "2026-03-03T14:01:06",
+  "success": false,
+  "input_tokens": 20942,
+  "output_tokens": 473,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgk1tFTmhiDYrGwMhvVW'}",
+  "output_preview": "Now let me check each of these Python files for references to the old function name:"
+}

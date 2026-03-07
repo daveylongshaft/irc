@@ -1,0 +1,15 @@
+{
+  "benchmark": "large-context-nav",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 7.52,
+  "turns": 2,
+  "timestamp": 1772567228,
+  "datetime": "2026-03-03T13:47:08",
+  "success": false,
+  "input_tokens": 1648,
+  "output_tokens": 98,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgiwB5EZqX7hVwySrwFq'}",
+  "output_preview": "I'll help you complete this benchmark task. Let me start by exploring the CSC codebase to find answers to these 5 questions."
+}

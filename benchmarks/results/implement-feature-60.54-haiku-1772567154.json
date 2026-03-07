@@ -1,0 +1,15 @@
+{
+  "benchmark": "implement-feature",
+  "agent": "haiku",
+  "model": "claude-haiku-4-5-20251001",
+  "duration": 60.54,
+  "turns": 14,
+  "timestamp": 1772567154,
+  "datetime": "2026-03-03T13:45:54",
+  "success": false,
+  "input_tokens": 105789,
+  "output_tokens": 3362,
+  "cache_read_tokens": 0,
+  "error": "Error code: 529 - {'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'Overloaded'}, 'request_id': 'req_011CYgiufD6nB9ebiSbvhW3Y'}",
+  "output_preview": "Let me use a file instead:"
+}
