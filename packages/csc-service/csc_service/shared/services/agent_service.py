@@ -54,9 +54,9 @@ class agent( Service ):
     # This is separate from the user prompt and cannot be scrolled past.
     WIP_SYSTEM_PROMPT = (
         "MANDATORY: Journal every step to the WIP file BEFORE doing it. "
-        "Run: echo '<what you are about to do>' >> workorders/wip/{wip_file} "
+        "Run: echo '<what you are about to do>' >> ops/wo/wip/{wip_file} "
         "BEFORE each action. No checkboxes. No Edit tool. Just echo one line per step. "
-        "Example: echo 'read version_service.py' >> workorders/wip/{wip_file} "
+        "Example: echo 'read version_service.py' >> ops/wo/wip/{wip_file} "
         "NEVER run tests — cron handles that within 1 minute for free. "
         "NEVER DELETE WIP FILES. The wrapper handles moving them to done/. "
         "NEVER run git commands. The wrapper handles git operations. "
@@ -504,7 +504,7 @@ class agent( Service ):
         # Keep original filename when moving to WIP (no timestamping)
         wip_filename = prompt_path.name
 
-        # Construct the full path for the new WIP file in workorders/wip/
+        # Construct the full path for the new WIP file in ops/wo/wip/
         wip_full_path = self.WIP_DIR / wip_filename
 
         try:

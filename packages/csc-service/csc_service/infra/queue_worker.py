@@ -8,14 +8,14 @@ handling everything: git, prompt movement, agent spawning, and monitoring.
 
 Lifecycle per task:
   1. git pull
-  2. queue/in/ -> queue/work/  (+ workorders/ready/ -> workorders/wip/)
+  2. queue/in/ -> queue/work/  (+ ops/wo/ready/ -> ops/wo/wip/)
   3. Assemble prompt (README.1shot + agents/<name>/context/* + WIP)
   4. Spawn AI agent in background, note PID
   5. Exit (non-blocking)
   6. Next run: check PID - if alive, monitor WIP growth
   7. When agent exits: check WIP for COMPLETE
-     - COMPLETE -> workorders/wip/ -> workorders/done/
-     - No COMPLETE -> workorders/wip/ -> workorders/ready/
+     - COMPLETE -> ops/wo/wip/ -> workorders/done/
+     - No COMPLETE -> ops/wo/wip/ -> ops/wo/ready/
   8. queue/work/ -> queue/out/
   9. refresh-maps, git add/commit (with WIP summary in message)/push
 
@@ -88,13 +88,13 @@ def _initialize_paths(work_dir_arg=None):
             from csc_service.shared.platform import Platform
             CSC_ROOT = Path(Platform.PROJECT_ROOT).resolve()
         except Exception:
-            # Fallback: env var or .csc_root walk
+            # Fallback: env var or .irc_root walk
             if os.environ.get("CSC_ROOT"):
                 CSC_ROOT = Path(os.environ["CSC_ROOT"]).resolve()
             else:
                 p = SCRIPT_DIR
                 for _ in range(10):
-                    if (p / ".csc_root").exists():
+                    if (p / ".irc_root").exists():
                         break
                     if p == p.parent:
                         break
@@ -508,7 +508,7 @@ def scan_pending_work():
             # Extract workorder filename from orders.md
             try:
                 content = orders_md_path.read_text(encoding='utf-8', errors='ignore')
-                match = re.search(r'(?:ops/wo/wip|wo/wip|workorders/wip)/([^\s\n]+\.md)', content)
+                match = re.search(r'(?:ops/wo/wip|wo/wip|ops/wo/wip)/([^\s\n]+\.md)', content)
                 if not match:
                     continue
 
@@ -891,7 +891,7 @@ def spawn_agent(agent_name, prompt_filename, agent_repo=None):
     log(f"  orders_relative={work_orders_relative}")
     log(f"  orders_exists={orders_abs.exists()}")
     if agent_repo:
-        log(f"  agent_repo={agent_repo}, is_csc_root={agent_repo.resolve() == CSC_ROOT.resolve()}")
+        log(f"  agent_repo={agent_repo}, is.irc_root={agent_repo.resolve() == CSC_ROOT.resolve()}")
 
     try:
         log_fh = open(agent_log, 'w', encoding='utf-8')
@@ -1362,7 +1362,7 @@ def process_inbox():
 
     log(f"Processing pending workorder: {workorder_filename} (agent: {agent_name}, ts: {item['ts']})")
 
-    # Verify workorder still exists in workorders/wip/
+    # Verify workorder still exists in ops/wo/wip/
     workorder_path = WIP_DIR / workorder_filename
     if not workorder_path.exists():
         log(f"Workorder not found: {workorder_filename} — dumping list, rescanning", "WARN")

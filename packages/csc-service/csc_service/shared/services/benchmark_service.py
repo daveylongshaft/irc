@@ -175,7 +175,7 @@ class benchmark(Service):
 
         This method:
         1. Reads benchmark prompt template
-        2. Creates WIP file in workorders/wip/ with combined prompt
+        2. Creates WIP file in ops/wo/wip/ with combined prompt
         3. Puts prompt in agents/{agent_name}/queue/in/
         4. Monitors for COMPLETE tag in WIP file
         5. Archives results with timing data

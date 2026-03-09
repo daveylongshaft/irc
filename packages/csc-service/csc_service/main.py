@@ -17,21 +17,21 @@ def main():
     args = sys.argv[1:]
     
     # Walk up to find project root
-    csc_root = Path(__file__).resolve().parent
+   .irc_root = Path(__file__).resolve().parent
     for _ in range(10):
-        if (csc_root / "CLAUDE.md").exists() or (csc_root / "csc-service.json").exists():
+        if .irc_root / ".irc_root").exists() or .irc_root / "csc-service.json").exists():
             break
-        if csc_root == csc_root.parent:
+        if.irc_root ==.irc_root.parent:
             break
-        csc_root = csc_root.parent
-    work_dir = csc_root
+       .irc_root =.irc_root.parent
+    work_dir =.irc_root
     poll_interval = 60
 
     # Initialize Platform layer first - this sets up global Log paths
     from csc_service.shared.platform import Platform
     plat = Platform()
     
-    config_file = csc_root / "csc-service.json"
+    config_file =.irc_root / "csc-service.json"
     config = {}
     if config_file.exists():
         try:
