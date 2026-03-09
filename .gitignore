@@ -10,3 +10,8 @@ build/
 *.daemon.log
 .env
 .trash/
+*.db
+Server_data.json
+bridge/config-local.json
+bridge/config-remote.json
+bridge/config.json

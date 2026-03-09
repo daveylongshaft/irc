@@ -159,7 +159,7 @@ class ChatGPT(Client):
         except Exception as e:
             self.log(f"[{self.name}] Failed to restore state: {e}")
 
-    def _load_env_file(self, env_path: str = "/opt/csc/.env") -> dict:
+    def _load_env_file(self, env_path: str = None) -> dict:
         """Load environment variables from .env file."""
         env_vars = {}
         try:
@@ -224,7 +224,7 @@ class ChatGPT(Client):
             return ""
 
         if not self.openai_client:
-            return "(ChatGPT API client not initialized. Check API key in /opt/csc/.env)"
+            return "(ChatGPT API client not initialized. Check API key in .env at project root)"
 
         with self._query_lock:
             try:
