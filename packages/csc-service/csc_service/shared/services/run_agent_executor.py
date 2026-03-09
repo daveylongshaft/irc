@@ -71,10 +71,10 @@ class RunAgentExecutor:
 
     @staticmethod
     def _find_project_root() -> Path:
-        """Find project root by looking for CLAUDE.md or csc-service.json."""
+        """Find project root by looking for .irc_root or csc-service.json."""
         current = Path(__file__).resolve().parent
         for _ in range(10):
-            if (current / "CLAUDE.md").exists() or (current / "csc-service.json").exists():
+            if (current / ".irc_root").exists() or (current / "csc-service.json").exists():
                 return current
             if current == current.parent:
                 break
@@ -174,7 +174,7 @@ class RunAgentExecutor:
 
         Reads queue/in/orders.md and builds command:
             claude --append-system-prompt "system rules..." \
-                   --output workorders/wip/{wip_file} \
+                   --output ops/wo/wip/{wip_file} \
                    "< full prompt with system rules + orders content >"
 
         Returns:
@@ -199,9 +199,9 @@ class RunAgentExecutor:
         wip_filename_only = self.wip_path.name
         system_prompt = (
             "MANDATORY: Journal every step to the WIP file BEFORE doing it. "
-            "Run: echo '<what you are about to do>' >> workorders/wip/{wip_file} "
+            "Run: echo '<what you are about to do>' >> ops/wo/wip/{wip_file} "
             "BEFORE each action. No checkboxes. No Edit tool. Just echo one line per step. "
-            "Example: echo 'read version_service.py' >> workorders/wip/{wip_file} "
+            "Example: echo 'read version_service.py' >> ops/wo/wip/{wip_file} "
             "NEVER run tests — cron handles that within 1 minute for free. "
             "NEVER DELETE WIP FILES. The wrapper handles moving them to done/. "
             "NEVER run git commands. The wrapper handles git operations. "

@@ -15,31 +15,31 @@ from csc_service.shared.data import Data
 
 
 class PRReviewer(Data):
-    def __init__(self, csc_root=None):
+    def __init__(self,.irc_root=None):
         super().__init__()
         self.name = "pr-review"
-        self._initialize_paths(csc_root)
+        self._initialize_paths.irc_root)
         self.init_data("pr-review_runtime.json")
 
-    def _initialize_paths(self, csc_root=None):
-        if csc_root:
-            self.csc_root = Path(csc_root).resolve()
+    def _initialize_paths(self,.irc_root=None):
+        if.irc_root:
+            self.irc_root = Path.irc_root).resolve()
         else:
             p = Path(__file__).resolve().parent
             for _ in range(10):
-                if (p / "CLAUDE.md").exists() or (p / "csc-service.json").exists():
+                if (p / ".irc_root").exists() or (p / "csc-service.json").exists():
                     break
                 if p == p.parent:
                     break
                 p = p.parent
-            self.csc_root = p
+            self.irc_root = p
 
     def run_cycle(self):
         """Run PR review cycle by calling autonomous bash script."""
         self.log("Starting PR review cycle")
 
         # Call the autonomous pr-review-agent.sh script
-        script_path = self.csc_root / "bin" / "pr-review-agent.sh"
+        script_path = self.irc_root / "bin" / "pr-review-agent.sh"
 
         if not script_path.exists():
             self.log(f"PR review script not found: {script_path}", "WARN")
@@ -48,7 +48,7 @@ class PRReviewer(Data):
         try:
             result = subprocess.run(
                 ["bash", str(script_path)],
-                cwd=str(self.csc_root),
+                cwd=str(self.irc_root),
                 capture_output=True,
                 text=True,
                 timeout=300,
@@ -68,7 +68,7 @@ class PRReviewer(Data):
             self.log(f"PR review cycle failed: {e}", "ERROR")
 
 
-def run_cycle(csc_root=None):
+def run_cycle.irc_root=None):
     """Entry point called by service main loop."""
-    reviewer = PRReviewer(csc_root)
+    reviewer = PRReviewer.irc_root)
     reviewer.run_cycle()

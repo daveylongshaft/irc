@@ -2,7 +2,7 @@
 
 The PM is NOT an AI agent — it's a deterministic decision engine that:
 1. Checks if queue-worker is busy (one task at a time)
-2. Scans workorders/ready/ for new work
+2. Scans ops/wo/ready/ for new work
 3. Prioritises by urgency (P0 > P1 > P2 > P3)
 4. Classifies by filename pattern
 5. Picks cheapest capable agent (with human-override prefix support)
@@ -412,7 +412,7 @@ def recover_orphaned_wip() -> list:
     """Find WIP files that have no matching queue entry and recover them.
 
     An orphaned WIP file is one where:
-    - File exists in workorders/wip/
+    - File exists in ops/wo/wip/
     - No matching entry in any agent's queue/in/ or queue/work/
     - PM state says it was assigned but there's no active process
 

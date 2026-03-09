@@ -36,7 +36,7 @@ for _i in range(10):
     _p = _p.parent
 IRC_ROOT = _p
 
-# CSC_ROOT is one level above irc/ (has .csc_root)
+# CSC_ROOT is one level above irc/ (has .irc_root)
 CSC_ROOT = IRC_ROOT.parent
 
 POLL_INTERVAL = 60
