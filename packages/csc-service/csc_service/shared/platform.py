@@ -64,12 +64,16 @@ class Platform(Version):
 
     # Default platform.json location (next to the running process)
     PLATFORM_JSON_FILENAME = "platform.json"
-    # Walk up to find project root (contains CLAUDE.md or csc-service.json)
+    # Walk up to find project root — prefer csc-service.json (true root) over CLAUDE.md (submodule)
     _p = Path(__file__).resolve().parent
+    _claude_md_stop = None
     for _i in range(10):
-        if (_p / "CLAUDE.md").exists() or (_p / "csc-service.json").exists():
+        if (_p / "csc-service.json").exists():
             break
+        if (_p / "CLAUDE.md").exists() and _claude_md_stop is None:
+            _claude_md_stop = _p  # remember but keep walking for csc-service.json
         if _p == _p.parent:
+            _p = _claude_md_stop or _p
             break
         _p = _p.parent
     PROJECT_ROOT = _p

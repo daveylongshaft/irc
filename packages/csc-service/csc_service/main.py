@@ -47,6 +47,7 @@ def main():
     enable_queue_worker = config.get("enable_queue_worker", True)
     enable_pm = config.get("enable_pm", True)
     enable_pr_review = config.get("enable_pr_review", False)
+    enable_jules = config.get("jules", {}).get("enabled", False)
 
     from csc_service.infra import git_sync
     git_sync.setup(work_dir)
@@ -86,6 +87,10 @@ def main():
                 if enable_pr_review:
                     from csc_service.infra import pr_review
                     pr_review.run_cycle(work_dir)
+
+                if enable_jules:
+                    from csc_service.infra import jules_monitor
+                    jules_monitor.run_cycle(work_dir)
 
                 git_sync.push_if_changed()
                 time.sleep(poll_interval)
