@@ -26,6 +26,12 @@ try:
     from csc_service.shared.services.stats_service.stats_service import StatsService
 except (ImportError, ModuleNotFoundError):
     StatsService = None  # sqlite3 not available on this build
+try:
+    from csc_service.clients.jules.jules import Jules
+    from csc_service.clients.jules.config import JulesConfig
+except (ImportError, ModuleNotFoundError):
+    Jules = None
+    JulesConfig = None
 
 # ---------------------------------------------------------------------------
 # Global paths (set by setup())
@@ -37,6 +43,8 @@ AGENTS_DIR = None
 READY_DIR = None
 WIP_DIR = None
 DONE_DIR = None
+jules: Jules = None
+
 
 # ---------------------------------------------------------------------------
 # Agent roster and assignment policy
@@ -113,6 +121,13 @@ def setup(work_dir: Path):
     READY_DIR = _base / "ready"
     WIP_DIR   = _base / "wip"
     DONE_DIR  = _base / "done"
+
+    global jules
+    if Jules and JulesConfig:
+        jules_config = JulesConfig()
+        if jules_config.enabled:
+            jules = Jules()
+
 
 
 # ======================================================================
@@ -611,6 +626,107 @@ def mark_failed(filename: str):
     _save_state(state)
 
 
+def _is_jules_task(workorder_path: str) -> bool:
+    """Check if workorder is suitable for Jules."""
+    try:
+        content = Path(workorder_path).read_text(encoding='utf-8', errors='replace').lower()
+        jules_keywords = [
+            'bug', 'fix', 'refactor', 'test', 'documentation',
+            'feature', 'implement', 'debug'
+        ]
+        return any(kw in content for kw in jules_keywords)
+    except FileNotFoundError:
+        return False
+
+def jules_available() -> bool:
+    """Check if Jules has capacity."""
+    if not jules:
+        return False
+
+    active_sessions = jules.sessions
+    return len(active_sessions) < jules.config.max_concurrent_sessions
+
+def assign_to_jules(workorder_path: str):
+    """Assign workorder to Jules."""
+    if not jules:
+        return
+
+    repo_url = jules.config.github_repo
+    if not repo_url:
+        _log("Jules github_repo is not configured.", "ERROR")
+        return
+
+    try:
+        session_id = jules.submit_workorder(workorder_path, repo_url)
+
+        state = _load_state()
+        state.setdefault('jules_assignments', {})[session_id] = {
+            'workorder': workorder_path,
+            'assigned_at': time.time(),
+        }
+        
+        fname = Path(workorder_path).name
+        state.setdefault('assignments', {})[fname] = {
+            "agent": "jules",
+            "status": "assigned",
+            "timestamp": _ts(),
+        }
+        _save_state(state)
+
+        # Move to wip
+        wip_path = WIP_DIR / fname
+        Path(workorder_path).rename(wip_path)
+
+        _log(f"Assigned to Jules: {fname} (session: {session_id})", "INFO")
+    except Exception as e:
+        _log(f"Jules assignment failed: {e}", "ERROR")
+
+def _monitor_jules_sessions():
+    """Check on active Jules sessions, retrieve results."""
+    if not jules:
+        return
+
+    state = _load_state()
+    assignments = state.get('jules_assignments', {})
+    sessions_to_remove = []
+
+    for session_id, info in assignments.items():
+        status = jules.check_status(session_id)
+
+        if status.get('state') == 'completed':
+            results = jules.get_results(session_id)
+            pr_url = results.get('pr_url')
+            if pr_url:
+                _log(f"Jules completed {info['workorder']}: {pr_url}", "INFO")
+                
+                # Move workorder to done
+                wip_path = WIP_DIR / Path(info['workorder']).name
+                done_path = DONE_DIR / Path(info['workorder']).name
+                wip_path.rename(done_path)
+                
+                mark_completed(Path(info['workorder']).name)
+
+            sessions_to_remove.append(session_id)
+        elif status.get('state') == 'failed':
+            _log(f"Jules session failed: {session_id}", "ERROR")
+            
+            # Move workorder back to ready
+            wip_path = WIP_DIR / Path(info['workorder']).name
+            ready_path = READY_DIR / Path(info['workorder']).name
+            wip_path.rename(ready_path)
+
+            mark_failed(Path(info['workorder']).name)
+            sessions_to_remove.append(session_id)
+
+    for session_id in sessions_to_remove:
+        del assignments[session_id]
+        if session_id in jules.sessions:
+            del jules.sessions[session_id]
+            
+    state['jules_assignments'] = assignments
+    _save_state(state)
+
+
 # ======================================================================
 # Main cycle
 # ======================================================================
@@ -691,6 +807,9 @@ def run_cycle() -> list:
     if not READY_DIR or not READY_DIR.exists():
         return []
 
+    # First, monitor Jules sessions
+    _monitor_jules_sessions()
+
     state = _load_state()
 
     # --- Phase 1: Clean stale queue entries (dead PIDs, orphaned queue/in/) ---
@@ -737,17 +856,24 @@ def run_cycle() -> list:
 
         priority = prioritize(fname)
         category = classify(fname)
-        candidates.append((fname, priority, category, entry))
+        candidates.append((wo_file, priority, category, entry))
 
     if not candidates:
         _save_state(state)
         return []
 
     # Sort by priority tier, then alphabetically within tier
-    candidates.sort(key=lambda x: (PRIORITY_ORDER.get(x[1], 99), x[0]))
+    candidates.sort(key=lambda x: (PRIORITY_ORDER.get(x[1], 99), x[0].name))
 
     # --- Phase 5: Pick ONE and assign ---
-    for fname, priority, category, entry in candidates:
+    for wo_file, priority, category, entry in candidates:
+        fname = wo_file.name
+        
+        # Check for Jules assignment
+        if _is_jules_task(str(wo_file)) and jules_available():
+            assign_to_jules(str(wo_file))
+            return [(fname, "jules")]
+
         agent_name = pick_agent(category, fname, entry if entry else None)
 
         try:

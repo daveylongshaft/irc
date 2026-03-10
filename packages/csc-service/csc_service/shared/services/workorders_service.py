@@ -454,7 +454,7 @@ class workorders( Service ):
         try:
             # Directly import and instantiate agent service
             import importlib
-            agent_module = importlib.import_module("csc_shared.services.agent_service")
+            agent_module = importlib.import_module("csc_service.shared.services.agent_service")
             agent_class = getattr(agent_module, "agent", None)
             if not agent_class:
                 return "Error: agent service class not found"

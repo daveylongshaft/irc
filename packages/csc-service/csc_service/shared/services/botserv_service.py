@@ -171,7 +171,7 @@ class Botserv(Service):
         storage_key = f"botserv_logread_offset_{channel}_{logfile_path}"
         last_read_offset = self.server.storage.get(storage_key, 0)
         
-        script_path = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "server", "scripts", "read_privileged_log.py"))
+        script_path = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "..", "bin", "read_privileged_log.py"))
         
         try:
             # Call the privileged script
