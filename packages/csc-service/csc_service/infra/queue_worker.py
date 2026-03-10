@@ -214,7 +214,7 @@ def create_agent_temp_repo(agent_name, wo_stem):
     ts = int(time.time())
     # Sanitize wo_stem for filesystem use
     safe_stem = re.sub(r'[^\w-]', '_', wo_stem)[:40]
-    repo = CSC_ROOT / "tmp" / agent_name / f"{safe_stem}-{ts}" / "repo"
+    repo = Path("/opt/clones") / agent_name / f"{safe_stem}-{ts}" / "repo"
     repo.mkdir(parents=True, exist_ok=True)
 
     irc_remote = _get_irc_remote()
@@ -903,9 +903,9 @@ def spawn_agent(agent_name, prompt_filename, agent_repo=None):
         log(f"run_agent script not found for {agent_name} (checked agent dir and templates)", "ERROR")
         return None, None
 
-    # Agent always runs with CWD=CSC_ROOT so it can read/write WO journals directly.
-    # The temp repo (agent_repo) is passed as CSC_AGENT_REPO env var for code work.
-    spawn_cwd = str(CSC_ROOT)
+    # Agent runs from /opt — parent of both /opt/clones (temp repos) and /opt/csc (WO files).
+    # Gemini's sandbox will cover both locations. Claude reads WO at abs path directly.
+    spawn_cwd = "/opt"
 
     work_orders_relative = str(Path("ops") / "agents" / agent_name / "queue" / "work" / "orders.md")
 
