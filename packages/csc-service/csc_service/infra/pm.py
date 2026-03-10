@@ -615,6 +615,64 @@ def mark_failed(filename: str):
 # Main cycle
 # ======================================================================
 
+def monitor_julius_plans() -> None:
+    """Check pending Jules plans and forward approval decisions.
+
+    Iterates over julius_sessions state entries whose state is
+    'pending_approval'. For each, checks whether the plan-review agent has
+    written a decision file. If APPROVE, calls julius.approve_plan_via_api();
+    if DENY, records the denial reason and marks the session denied.
+
+    Called from run_cycle() or directly by the service main loop.
+    """
+    if _svc is None:
+        return
+
+    try:
+        from csc_service.clients.julius.julius import Julius
+    except ImportError:
+        _log("Julius client not available, skipping plan approval check", "WARN")
+        return
+
+    julius = Julius()
+
+    active_sessions = _svc.get_data("julius_sessions") or {}
+    if not active_sessions:
+        return
+
+    changed = False
+    for session_id, info in list(active_sessions.items()):
+        if info.get("state") != "pending_approval":
+            continue
+
+        decision = julius.check_plan_approval(session_id)
+        if decision is None:
+            continue  # Still pending review
+
+        if decision.get("decision") == "APPROVE":
+            _log(f"Plan approved: {session_id} — {decision.get('reason', '')}")
+            # Attempt to tell Jules to proceed if API method exists
+            if hasattr(julius, "approve_plan_via_api"):
+                try:
+                    julius.approve_plan_via_api(session_id)
+                except Exception as e:
+                    _log(f"approve_plan_via_api failed for {session_id}: {e}", "WARN")
+            info["state"] = "executing"
+        else:
+            _log(
+                f"Plan denied: {session_id} — {decision.get('reason', 'no reason')}",
+                "WARN",
+            )
+            info["state"] = "denied"
+            info["denial_reason"] = decision.get("reason", "")
+
+        active_sessions[session_id] = info
+        changed = True
+
+    if changed:
+        _svc.put_data("julius_sessions", active_sessions)
+
+
 def run_cycle() -> list:
     """One PM cycle. Assigns at most ONE workorder.
 
