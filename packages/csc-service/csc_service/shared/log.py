@@ -23,6 +23,12 @@ class Log(Root):
         self.log_file = f"{self.name}.log"
         #print(f"{self.name}->",end=None)
 
+    @classmethod
+    def set_platform_log_dir(cls, log_dir):
+        """Stub: platform.py calls this to redirect logs to a platform-detected dir.
+        Full implementation belongs in the porting WO."""
+        pass
+
     def log(self, message: str):
         """
         Logs a message to the central project log file and prints to console.

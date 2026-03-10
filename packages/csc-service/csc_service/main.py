@@ -16,12 +16,16 @@ from pathlib import Path
 def main():
     args = sys.argv[1:]
     
-    # Walk up to find project root
+    # Walk up to find project root: prefer csc-service.json (config), fall back to CLAUDE.md
     csc_root = Path(__file__).resolve().parent
+    claude_md_stop = None
     for _ in range(10):
-        if (csc_root / "CLAUDE.md").exists() or (csc_root / "csc-service.json").exists():
+        if (csc_root / "csc-service.json").exists():
             break
+        if (csc_root / "CLAUDE.md").exists() and claude_md_stop is None:
+            claude_md_stop = csc_root  # remember but keep looking for csc-service.json
         if csc_root == csc_root.parent:
+            csc_root = claude_md_stop or csc_root
             break
         csc_root = csc_root.parent
     work_dir = csc_root

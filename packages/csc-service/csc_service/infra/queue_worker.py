@@ -102,7 +102,11 @@ def _initialize_paths(work_dir_arg=None):
                 CSC_ROOT = p
 
     # ops/agents/ is authoritative (ops is a submodule of csc)
-    AGENTS_DIR = CSC_ROOT / "ops" / "agents"
+    # Also check parent (when csc_root is the irc submodule, parent is the csc umbrella)
+    _agents_candidate = CSC_ROOT / "ops" / "agents"
+    if not _agents_candidate.exists():
+        _agents_candidate = CSC_ROOT.parent / "ops" / "agents"
+    AGENTS_DIR = _agents_candidate
 
     # ops/wo/ is the canonical workorder queue (ops submodule)
     # Fall back to wo/ or workorders/ for compat with older layouts
@@ -112,6 +116,7 @@ def _initialize_paths(work_dir_arg=None):
             CSC_ROOT / "wo",
             CSC_ROOT / "workorders",
             CSC_ROOT / "prompts",
+            CSC_ROOT.parent / "ops" / "wo",  # parent when csc_root is irc submodule
         ]:
             if candidate.exists():
                 return candidate

@@ -44,12 +44,10 @@ DONE_DIR = None
 AGENTS = [
     {"name": "gemini-2.5-flash", "role": "docs-and-tests",
      "good_for": ["docs", "test-fix", "validation"]},
-    {"name": "gemini-2.5-pro-preview", "role": "code",
-     "good_for": ["feature", "refactor", "simple-fix", "complex-fix"]},
-    {"name": "gemini-3.1-pro-preview", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture"]},
-    {"name": "haiku", "role": "audit",
-     "good_for": ["audit"]},
+    {"name": "gemini-2.5-pro", "role": "code",
+     "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "audit"]},
+    {"name": "sonnet", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
     {"name": "opus", "role": "debug",
      "good_for": ["debug", "push-fail"]},
 ]
@@ -59,10 +57,9 @@ VALID_AGENTS = {a["name"] for a in AGENTS}
 
 # Escalation path: current_agent -> next_agent
 ESCALATION = {
-    "gemini-2.5-flash": "gemini-2.5-pro-preview",
-    "gemini-2.5-pro-preview": "gemini-3.1-pro-preview",
-    "gemini-3.1-pro-preview": "haiku",
-    "haiku": "opus",
+    "gemini-2.5-flash": "gemini-2.5-pro",
+    "gemini-2.5-pro": "sonnet",
+    "sonnet": "opus",
     "opus": None,  # flag for human review
 }
 
@@ -101,9 +98,18 @@ def setup(work_dir: Path):
     # ops/agents/ is where agent configs live; fall back to agents/ for compat
     _agents_candidate = WORK_DIR / "ops" / "agents"
     AGENTS_DIR = _agents_candidate if _agents_candidate.exists() else WORK_DIR / "agents"
-    # wo/ is the canonical queue dir; fall back to workorders/ for compat
-    _wo = WORK_DIR / "wo"
-    _base = _wo if _wo.exists() else WORK_DIR / "workorders"
+    # Resolve workorder base: ops/wo/ under WORK_DIR, then check parent (submodule layout)
+    def _resolve_wo_base():
+        for candidate in [
+            WORK_DIR / "ops" / "wo",
+            WORK_DIR / "wo",
+            WORK_DIR / "workorders",
+            WORK_DIR.parent / "ops" / "wo",  # parent when work_dir is irc submodule
+        ]:
+            if candidate.exists():
+                return candidate
+        return WORK_DIR / "ops" / "wo"  # will be created on first use
+    _base = _resolve_wo_base()
     READY_DIR = _base / "ready"
     WIP_DIR   = _base / "wip"
     DONE_DIR  = _base / "done"
@@ -301,7 +307,7 @@ def pick_agent(category: str, filename: str = "", state_entry: dict = None) -> s
     for agent in AGENTS:
         if category in agent["good_for"]:
             return agent["name"]
-    return "gemini-2.5-pro-preview"
+    return "gemini-2.5-pro"
 
 
 # ======================================================================
