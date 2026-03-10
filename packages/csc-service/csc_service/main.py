@@ -83,6 +83,10 @@ def main():
                     from csc_service.infra import pm
                     pm.setup(work_dir)
                     pm.run_cycle()
+                    # If PM just assigned something, pick it up immediately
+                    # rather than waiting for the next poll tick
+                    if enable_queue_worker:
+                        queue_worker.run_cycle(work_dir)
 
                 if enable_pr_review:
                     from csc_service.infra import pr_review
