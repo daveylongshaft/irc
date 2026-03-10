@@ -902,6 +902,9 @@ def spawn_agent(agent_name, prompt_filename, agent_repo=None):
         log_fh = open(agent_log, 'w', encoding='utf-8')
         child_env = os.environ.copy()
         child_env["CSC_AGENT_NAME"] = agent_name
+        child_env["CSC_ROOT"] = str(CSC_ROOT)  # pass correct CSC_ROOT to run_agent.sh
+        child_env["CSC_AGENTS_DIR"] = str(AGENTS_DIR)
+        child_env["CSC_WIP_DIR"] = str(WIP_DIR)
         if agent_repo:
             child_env["CSC_AGENT_REPO"] = str(agent_repo)
 

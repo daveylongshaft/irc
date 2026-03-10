@@ -594,7 +594,12 @@ class agent( Service ):
                 self.log(f"WARNING: {script.name} not found at {script}")
                 return
 
-            cmd = [str(script), str(agent_dir), workorder_filename]
+            # Compute WIP dir relative to PROJECT_ROOT for correct path in orders.md
+            try:
+                wip_rel = str(self.WIP_DIR.relative_to(self.PROJECT_ROOT))
+            except ValueError:
+                wip_rel = "workorders/wip"
+            cmd = [str(script), str(agent_dir), workorder_filename, wip_rel]
             if script.suffix == ".sh":
                 cmd = ["bash"] + cmd
 
