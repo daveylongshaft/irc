@@ -153,3 +153,11 @@ writing test for channel normalization
 COMPLETE
 deleting stale test log
 running refresh-maps
+START
+reading packages/csc-service/csc_service/server/server_message_handler.py to understand the code
+implementing privmsg and notice normalization fix
+checking for similar issues in _handle_notice
+writing test for channel normalization
+COMPLETE
+running refresh-maps
+deleting stale test log
