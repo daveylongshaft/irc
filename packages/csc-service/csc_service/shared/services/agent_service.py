@@ -594,12 +594,10 @@ class agent( Service ):
                 self.log(f"WARNING: {script.name} not found at {script}")
                 return
 
-            # Compute WIP dir relative to PROJECT_ROOT for correct path in orders.md
-            try:
-                wip_rel = str(self.WIP_DIR.relative_to(self.PROJECT_ROOT))
-            except ValueError:
-                wip_rel = "workorders/wip"
-            cmd = [str(script), str(agent_dir), workorder_filename, wip_rel]
+            # Compute absolute WIP file path for correct path in orders.md
+            # Agents run in a temp clone of irc.git so they need the absolute path
+            wip_abs = str(self.WIP_DIR / workorder_filename)
+            cmd = [str(script), str(agent_dir), workorder_filename, wip_abs]
             if script.suffix == ".sh":
                 cmd = ["bash"] + cmd
 

@@ -203,6 +203,33 @@ def ensure_agent_temp_repo(agent_name):
     return repo
 
 
+def create_agent_temp_repo(agent_name, wo_stem):
+    """Create a unique temp repo for this agent+WO combination.
+
+    Each workorder gets its own isolated clone so multiple agents can run
+    concurrently without filesystem conflicts.
+
+    Returns the Path to the newly cloned repo, or None if creation fails.
+    """
+    ts = int(time.time())
+    # Sanitize wo_stem for filesystem use
+    safe_stem = re.sub(r'[^\w-]', '_', wo_stem)[:40]
+    repo = CSC_ROOT / "tmp" / agent_name / f"{safe_stem}-{ts}" / "repo"
+    repo.mkdir(parents=True, exist_ok=True)
+
+    irc_remote = _get_irc_remote()
+    log(f"Cloning irc.git to {repo} (depth=1)")
+    result = subprocess.run(
+        ["git", "clone", "--depth=1", irc_remote, str(repo)],
+        capture_output=True, text=True, timeout=120
+    )
+    if result.returncode != 0:
+        log(f"ERROR: git clone failed for {agent_name}: {result.stderr}", "ERROR")
+        return None
+    log(f"Cloned irc.git to {repo}")
+    return repo
+
+
 def git_pull_in_repo(repo_path, label=""):
     """Run git pull in the specified repo path.
 
@@ -513,7 +540,9 @@ def scan_pending_work():
             # Extract workorder filename from orders.md
             try:
                 content = orders_md_path.read_text(encoding='utf-8', errors='ignore')
-                match = re.search(r'(?:ops/wo/wip|wo/wip|workorders/wip)/([^\s\n]+\.md)', content)
+                # Match both absolute paths (/opt/.../wip/PROMPT_foo.md)
+                # and relative paths (ops/wo/wip/PROMPT_foo.md)
+                match = re.search(r'(?:ops/wo/wip|wo/wip|workorders/wip|/wip)/([^\s\n]+\.md)', content)
                 if not match:
                     continue
 
@@ -825,12 +854,13 @@ def build_full_prompt(agent_name, prompt_filename):
         for f in sorted(ctx_dir.glob("*.md")):
             parts.append(f"=== {f.name} ===\n{f.read_text(encoding='utf-8')}")
 
-    # 3. System rule (journal to WIP)
+    # 3. System rule (journal to WIP — use absolute path since agent runs in irc.git clone)
+    wip_abs = str(WIP_DIR / prompt_filename)
     sys_rule = (
-        f"SYSTEM RULE: Journal every step to ops/wo/wip/{prompt_filename} "
-        f"BEFORE doing it. Use: echo '<step>' >> ops/wo/wip/{prompt_filename}. "
+        f"SYSTEM RULE: Journal every step to {wip_abs} "
+        f"BEFORE doing it. Use: echo '<step>' >> {wip_abs}. "
         f"Do NOT touch git. Do NOT move files. Do NOT run tests. "
-        f"When done, echo 'COMPLETE' >> ops/wo/wip/{prompt_filename} and exit."
+        f"When done, echo 'COMPLETE' >> {wip_abs} and exit."
     )
     parts.append(sys_rule)
 
@@ -1116,8 +1146,17 @@ def process_work():
             # Track git success - if git ops fail and aren't deferred, don't move WIP
             git_sync_success = True
 
-            # Commit + push from agent's TEMP REPO (where agent was working)
-            agent_repo = get_agent_temp_repo(agent_name)
+            # Commit + push from agent's TEMP REPO (where agent was working).
+            # Read the per-WO repo path written at spawn time; fall back to legacy path.
+            repo_file = work_dir / f"{prompt_filename}.repo"
+            if repo_file.exists():
+                try:
+                    agent_repo = Path(repo_file.read_text(encoding='utf-8').strip())
+                    repo_file.unlink(missing_ok=True)
+                except Exception:
+                    agent_repo = get_agent_temp_repo(agent_name)
+            else:
+                agent_repo = get_agent_temp_repo(agent_name)
             if (agent_repo / ".git").exists():
                 agent_summary = get_wip_summary(prompt_filename)
                 commit_msg_agent = (
@@ -1286,6 +1325,9 @@ def process_work():
                 orders_out_name = f"orders-{ts}.md"
                 shutil.move(str(orders_file), str(out_dir / orders_out_name))
             pid_file.unlink(missing_ok=True)
+            # Clean up the per-WO repo path file if it still exists
+            repo_file_cleanup = work_dir / f"{prompt_filename}.repo"
+            repo_file_cleanup.unlink(missing_ok=True)
 
             # Copy agent log to queue/out/ for debugging
             for log_file in LOGS_DIR.glob(f"agent_*_{Path(prompt_filename).stem}.log"):
@@ -1327,7 +1369,9 @@ def process_inbox():
     8. Spawn agent to work non-interactively
     9. Pop the processed item from the list
     """
-    # Check if any agent already has work in progress
+    # Build set of agents that are currently busy (have live PID files).
+    # Also clean up orphaned work files (orders.md without .pid) along the way.
+    busy_agents = set()
     for agent_dir in sorted(AGENTS_DIR.iterdir()):
         if not agent_dir.is_dir():
             continue
@@ -1339,22 +1383,33 @@ def process_inbox():
         if not work_dir.exists():
             continue
 
-        pid_files = list(work_dir.glob("*.pid"))
-        if pid_files:
-            # This agent has active work with a tracked PID - skip inbox
-            log(f"Agent {agent_name} has active work in queue/work/ ({len(pid_files)} PID files), skipping inbox")
-            return
+        live_pids = []
+        other_files = []
+        for f in work_dir.iterdir():
+            if f.is_file() and f.suffix == '.pid':
+                try:
+                    pid = int(f.read_text().strip())
+                    if is_pid_alive(pid):
+                        live_pids.append(f)
+                    else:
+                        f.unlink(missing_ok=True)  # dead PID, clean up
+                except Exception:
+                    f.unlink(missing_ok=True)
+            elif f.is_file():
+                other_files.append(f)
 
-        # Check for orphaned files (orders.md without .pid) and clean them up
-        orphans = [f for f in work_dir.iterdir() if f.is_file()]
-        if orphans:
+        if live_pids:
+            busy_agents.add(agent_name)
+            log(f"Agent {agent_name} is busy ({len(live_pids)} live PID files), skipping for now")
+        elif other_files:
+            # Orphaned files (e.g. orders.md without a .pid) — clean up
             out_dir = agent_queue_dir(agent_name, "out")
             out_dir.mkdir(parents=True, exist_ok=True)
-            for orphan in orphans:
+            for orphan in other_files:
                 ts = int(time.time())
                 dest_name = f"{orphan.stem}-orphan-{ts}{orphan.suffix}"
                 shutil.move(str(orphan), str(out_dir / dest_name))
-                log(f"Cleaned up orphaned file in {agent_name}/queue/work/: {orphan.name} -> out/{dest_name}", "WARN")
+                log(f"Cleaned up orphaned {orphan.name} from {agent_name}/queue/work/ -> out/{dest_name}", "WARN")
 
     # Load pending work list or rescan if empty
     pending = load_pending_list()
@@ -1363,8 +1418,21 @@ def process_inbox():
         if not pending:
             return  # Nothing queued anywhere
 
-    # Take the first (oldest) item from the pending list
-    item = pending[0]
+    # Find the first pending item whose agent is NOT currently busy
+    item = None
+    for candidate in pending:
+        if candidate["agent"] not in busy_agents:
+            item = candidate
+            break
+
+    if item is None:
+        log(f"All pending agents are busy ({busy_agents}), waiting")
+        return
+
+    # Remove item from pending list now that it will be processed
+    pending.remove(item)
+    save_pending_list(pending)
+
     agent_name = item["agent"]
     workorder_filename = item["workorder"]
 
@@ -1506,8 +1574,9 @@ def process_inbox():
         shutil.move(str(work_file), str(orders_md_path))
         return
 
-    # Ensure agent temp repo exists and pull latest (gets orders.md + WIP)
-    agent_repo = ensure_agent_temp_repo(agent_name)
+    # Create a unique per-WO temp repo clone of irc.git for this agent run
+    wo_stem = Path(workorder_filename).stem
+    agent_repo = create_agent_temp_repo(agent_name, wo_stem)
     if agent_repo is None:
         log(f"ERROR: Could not create temp repo for {agent_name}, reverting orders.md", "ERROR")
         in_dir = agent_queue_dir(agent_name, "in")
@@ -1517,52 +1586,6 @@ def process_inbox():
         except Exception:
             pass
         return
-
-    # Pull latest into agent temp repo (gets orders.md and WIP file)
-    # git_pull_in_repo handles detached HEAD and interrupted rebase internally
-    pull_ok = git_pull_in_repo(agent_repo, label=f"agent {agent_name} temp repo")
-    if not pull_ok:
-        log(f"ERROR: Git pull failed in agent temp repo for {agent_name} — cleaning up broken repo", "ERROR")
-
-        # ANTI-JAMMING: Move broken repo to trash, clone fresh, continue in SAME CYCLE
-        try:
-            trash_dir = agent_repo.parent / ".trash"
-            trash_dir.mkdir(parents=True, exist_ok=True)
-            ts = int(time.time())
-            trash_dest = trash_dir / f"{agent_repo.name}-{ts}"
-
-            # Move broken repo to trash
-            if agent_repo.exists():
-                shutil.move(str(agent_repo), str(trash_dest))
-                log(f"Moved broken repo to trash: {trash_dest.name}", "WARN")
-
-            # Clone fresh copy
-            agent_repo = ensure_agent_temp_repo(agent_name)
-            if agent_repo is None:
-                log(f"ERROR: Could not recreate temp repo for {agent_name}", "ERROR")
-                in_dir = agent_queue_dir(agent_name, "in")
-                in_dir.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(work_file), str(in_dir / "orders.md"))
-                return
-            log(f"Cloned fresh repo for {agent_name}: {agent_repo}", "WARN")
-
-            # Retry git pull on fresh repo
-            pull_ok = git_pull_in_repo(agent_repo, label=f"agent {agent_name} temp repo (fresh)")
-            if not pull_ok:
-                log(f"ERROR: Git pull still failed after cleanup — moving orders.md back to queue/in/", "ERROR")
-                in_dir = agent_queue_dir(agent_name, "in")
-                in_dir.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(work_file), str(in_dir / "orders.md"))
-                return
-        except Exception as e:
-            log(f"ERROR: Failed to cleanup broken repo: {e}", "ERROR")
-            in_dir = agent_queue_dir(agent_name, "in")
-            in_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                shutil.move(str(work_file), str(in_dir / "orders.md"))
-            except:
-                pass
-            return
 
     # Verify orders.md exists in the WORKING TREE (agents run from CSC_ROOT, not temp repo)
     # orders.md is in ops submodule, not irc.git clone — check CSC_ROOT directly
@@ -1605,15 +1628,14 @@ def process_inbox():
                 log(f"ERROR: Failed to revert orders.md: {e}", "ERROR")
             return
 
-        # Write PID file
+        # Write PID file and repo path file (so process_work can find the unique repo)
         pid_file = work_dir / f"{workorder_filename}.pid"
         pid_file.write_text(str(pid), encoding='utf-8')
+        repo_file = work_dir / f"{workorder_filename}.repo"
+        repo_file.write_text(str(agent_repo), encoding='utf-8')
 
         write_agent_data(agent_name, pid, workorder_filename, agent_log)
         log(f"Started {agent_name} (PID {pid}) for {workorder_filename}")
-
-        # Pop this item off the pending list (now that it's being processed)
-        save_pending_list(pending[1:])
     else:
         log(f"ERROR: Failed to spawn agent, reverting", "ERROR")
         # Move orders.md back to queue/in/
