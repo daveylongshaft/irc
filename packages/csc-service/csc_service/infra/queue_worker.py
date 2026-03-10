@@ -1408,43 +1408,65 @@ def process_inbox():
         log(f"ERROR: Failed to move orders.md: {e}", "ERROR")
         return
 
-    # Git commit and push the assignment from MAIN REPO
-    # Stage agents/ (queue files) and workorders/ or prompts/ (WIP file)
-    prompts_dir_name = PROMPTS_BASE.name  # "workorders" or "prompts"
-
     if not defer_git_sync():
+        # Determine the git repo that contains AGENTS_DIR (may be a submodule)
+        # Walk up from AGENTS_DIR to find the nearest .git dir/file
+        def _find_git_root(path):
+            p = Path(path)
+            for _ in range(10):
+                if (p / ".git").exists():
+                    return p
+                if p == p.parent:
+                    break
+                p = p.parent
+            return None
+
+        ops_git_root = _find_git_root(AGENTS_DIR)
+        if ops_git_root is None:
+            ops_git_root = CSC_ROOT
+
+        # Paths relative to the ops git root
+        try:
+            agents_rel = str(AGENTS_DIR.relative_to(ops_git_root))
+        except ValueError:
+            agents_rel = "agents"
+        try:
+            prompts_rel = str(PROMPTS_BASE.relative_to(ops_git_root))
+        except ValueError:
+            prompts_rel = PROMPTS_BASE.name
+
+        # Stage and commit inside the ops git root
         try:
             result = subprocess.run(
-                ["git", "add", "ops/agents/", f"{prompts_dir_name}/"],
-                cwd=str(CSC_ROOT),
+                ["git", "add", f"{agents_rel}/", f"{prompts_rel}/"],
+                cwd=str(ops_git_root),
                 capture_output=True,
                 text=True,
                 timeout=30
             )
-            log(f"git add agents/ {prompts_dir_name}/ completed")
+            log(f"git add {agents_rel}/ {prompts_rel}/ completed")
         except Exception as e:
-            log(f"ERROR: Failed to git add agents/ or {prompts_dir_name}/: {e}", "ERROR")
+            log(f"ERROR: Failed to git add: {e}", "ERROR")
             return
 
-        # Git commit
         try:
             result = subprocess.run(
                 ["git", "commit", "-m", "chore: Assigning workorder to agent"],
-                cwd=str(CSC_ROOT),
+                cwd=str(ops_git_root),
                 capture_output=True,
                 text=True,
                 timeout=30
             )
             log(f"git commit completed: {result.stdout.strip()}")
+            committed = result.returncode == 0
         except Exception as e:
             log(f"ERROR: Failed to git commit workorder assignment: {e}", "ERROR")
             return
 
-        # Git push
         try:
             result = subprocess.run(
                 ["git", "push"],
-                cwd=str(CSC_ROOT),
+                cwd=str(ops_git_root),
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -1453,6 +1475,29 @@ def process_inbox():
         except Exception as e:
             log(f"ERROR: Failed to git push workorder assignment: {e}", "ERROR")
             return
+
+        # If ops_git_root is a submodule of CSC_ROOT, update the parent submodule pointer
+        if ops_git_root != CSC_ROOT and committed:
+            try:
+                ops_rel = str(ops_git_root.relative_to(CSC_ROOT))
+                subprocess.run(
+                    ["git", "add", ops_rel],
+                    cwd=str(CSC_ROOT),
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["git", "commit", "-m", "chore: update ops submodule pointer"],
+                    cwd=str(CSC_ROOT),
+                    capture_output=True, text=True, timeout=30
+                )
+                subprocess.run(
+                    ["git", "push"],
+                    cwd=str(CSC_ROOT),
+                    capture_output=True, text=True, timeout=30
+                )
+                log(f"Updated parent submodule pointer for {ops_rel}")
+            except Exception as e:
+                log(f"WARN: Failed to update parent submodule pointer: {e}", "WARN")
     else:
         log("Deferring assignment commit/push until batch completion")
         shutil.move(str(work_file), str(orders_md_path))
@@ -1516,10 +1561,11 @@ def process_inbox():
                 pass
             return
 
-    # Verify orders.md actually exists in the temp repo before spawning
-    temp_orders = agent_repo / "ops" / "agents" / agent_name / "queue" / "work" / "orders.md"
-    if not temp_orders.exists():
-        log(f"ERROR: orders.md not found in temp repo after pull ({temp_orders})", "ERROR")
+    # Verify orders.md exists in the WORKING TREE (agents run from CSC_ROOT, not temp repo)
+    # orders.md is in ops submodule, not irc.git clone — check CSC_ROOT directly
+    main_orders = AGENTS_DIR / agent_name / "queue" / "work" / "orders.md"
+    if not main_orders.exists():
+        log(f"ERROR: orders.md not found in working tree ({main_orders})", "ERROR")
         in_dir = agent_queue_dir(agent_name, "in")
         in_dir.mkdir(parents=True, exist_ok=True)
         try:

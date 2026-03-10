@@ -36,7 +36,16 @@ class agent( Service ):
 
     @property
     def PROMPTS_BASE(self):
-        return self.WORKORDERS_BASE if self.WORKORDERS_BASE.exists() else self.LEGACY_PROMPTS_BASE
+        # Check candidates in priority order
+        for candidate in [
+            self.WORKORDERS_BASE,                          # workorders/
+            _PROJECT_ROOT / "ops" / "wo",                 # ops/wo/ (ops submodule)
+            _PROJECT_ROOT.parent / "ops" / "wo",          # parent/ops/wo/ (irc submodule case)
+            self.LEGACY_PROMPTS_BASE,                     # prompts/
+        ]:
+            if candidate.exists():
+                return candidate
+        return self.WORKORDERS_BASE
 
     @property
     def READY_DIR(self):
