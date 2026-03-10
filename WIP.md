@@ -146,3 +146,10 @@ The fix would be validated by:
 2. Verifying broadcast output normalizes to: `PRIVMSG #general :hello`
 3. Confirming all channel members still receive the message
 4. Running the full test suite to ensure no regressions
+START
+implementing privmsg normalization fix
+checking for similar issues in _handle_notice
+writing test for channel normalization
+COMPLETE
+deleting stale test log
+running refresh-maps

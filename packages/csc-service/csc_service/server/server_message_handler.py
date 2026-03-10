@@ -517,9 +517,10 @@ class MessageHandler:
                                    f"{target} :Cannot send to channel (+m)")
                 return
 
-            out = format_irc_message(prefix, "PRIVMSG", [target], text) + "\r\n"
+            normalized_target = target.lower()
+            out = format_irc_message(prefix, "PRIVMSG", [normalized_target], text) + "\r\n"
             self.server.broadcast_to_channel(target, out, exclude=addr)
-            self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
+            self.server.chat_buffer.append(normalized_target, nick, "PRIVMSG", text)
 
             # Check for embedded service command (AI ...)
             if text.upper().startswith("AI "):
@@ -555,9 +556,10 @@ class MessageHandler:
         if target.startswith("#"):
             channel = self.server.channel_manager.get_channel(target)
             if channel and channel.has_member(nick):
-                out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"
+                normalized_target = target.lower()
+                out = format_irc_message(prefix, "NOTICE", [normalized_target], text) + "\r\n"
                 self.server.broadcast_to_channel(target, out, exclude=addr)
-                self.server.chat_buffer.append(target, nick, "NOTICE", text)
+                self.server.chat_buffer.append(normalized_target, nick, "NOTICE", text)
         else:
             self._maybe_replay_pm_buffer(target, nick)
             out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"
