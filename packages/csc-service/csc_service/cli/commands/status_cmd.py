@@ -8,6 +8,7 @@ SERVICE_NAMES = {
     "enable_queue_worker": "queue-worker",
     "enable_test_runner": "test-runner",
     "enable_pm": "pm",
+    "enable_pr_review": "pr-reviewer",
     "enable_server": "server",
     "enable_bridge": "bridge",
 }

@@ -8,6 +8,7 @@ SERVICE_KEY_MAP = {
     "queue-worker": "enable_queue_worker",
     "test-runner": "enable_test_runner",
     "pm": "enable_pm",
+    "pr-reviewer": "enable_pr_review",
     "server": "enable_server",
     "bridge": "enable_bridge",
 }
