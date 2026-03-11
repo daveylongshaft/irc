@@ -76,14 +76,16 @@ class Log(Root):
         log_entry = f"[{timestamp}] [{class_name}] {message}\n"
 
         # Print to the local console for immediate feedback
-        print( log_entry.strip() )
+        if not os.environ.get("CSC_QUIET"):
+            print( log_entry.strip() )
 
         try:
             log_path = _get_logs_dir() / self.log_file
             with open(log_path, "a") as f:
                 f.write(log_entry)
         except Exception as e:
-            print(f"CRITICAL: Failed to write to log file '{self.log_file}': {e}")
+            if not os.environ.get("CSC_QUIET"):
+                print(f"CRITICAL: Failed to write to log file '{self.log_file}': {e}")
 
 
     def help(self):

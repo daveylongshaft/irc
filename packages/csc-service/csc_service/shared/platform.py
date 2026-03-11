@@ -1215,6 +1215,53 @@ class Platform(Version):
         os.environ['CSC_BIN'] = self.get_abs_root_path(['irc', 'bin'])
 
 
-if __name__ == "__main__":
+def _platform_cli(args=None):
+    """CLI entry point: csc-platform [subcommand]
+
+    Subcommands:
+      (none)          Dump full platform_data JSON
+      env             Print shell export statements for all CSC_ env vars
+      get_etc_dir     Print the etc/ directory path
+      get_logs_dir    Print the logs/ directory path
+      get_root        Print the project root path
+      get_tmp         Print the tmp/run path
+    """
+    import sys
+    argv = (args or sys.argv)[1:]
+    debug = "--debug" in argv
+    argv = [a for a in argv if a != "--debug"]
+
+    if not debug:
+        os.environ["CSC_QUIET"] = "1"
     p = Platform()
-    print(json.dumps(p.platform_data, indent=2, default=str))
+    p.export_env_paths()
+
+    cmd = argv[0] if argv else ""
+
+    if cmd == "env":
+        # Shell-sourceable env exports: eval $(csc-platform env)
+        pairs = {
+            "CSC_ROOT":       str(Platform.PROJECT_ROOT),
+            "CSC_ETC":        str(Platform.get_etc_dir()),
+            "CSC_LOGS":       str(Platform.get_logs_dir()),
+            "CSC_TMP":        p.get_abs_tmp_path([]),
+            "CSC_OPS_WO":     p.get_abs_root_path(["ops", "wo"]),
+            "CSC_OPS_AGENTS": p.get_abs_root_path(["ops", "agents"]),
+            "CSC_BIN":        p.get_abs_root_path(["irc", "bin"]),
+        }
+        for k, v in pairs.items():
+            print(f'export {k}="{v}"')
+    elif cmd == "get_etc_dir":
+        print(Platform.get_etc_dir())
+    elif cmd == "get_logs_dir":
+        print(Platform.get_logs_dir())
+    elif cmd == "get_root":
+        print(Platform.PROJECT_ROOT)
+    elif cmd == "get_tmp":
+        print(p.get_abs_tmp_path(["run"]))
+    else:
+        print(json.dumps(p.platform_data, indent=2, default=str))
+
+
+if __name__ == "__main__":
+    _platform_cli()
