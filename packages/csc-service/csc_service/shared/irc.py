@@ -12,8 +12,15 @@ Provides:
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-# Server identity
-SERVER_NAME = "csc-server"
+# Server identity — generated once per install from hostname+MAC, persisted in server_name file
+def _load_server_name() -> str:
+    try:
+        from csc_service.shared.platform import Platform
+        return Platform.get_server_shortname()
+    except Exception:
+        return "csc-server"
+
+SERVER_NAME = _load_server_name()
 
 # ---------------------------------------------------------------------------
 # RFC 2812 Numeric Reply Constants

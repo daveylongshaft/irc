@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import time
 import threading
@@ -18,11 +19,18 @@ class Client(Network):
     UDP client with IRC protocol support, identity, macros, aliases, and text-file uploads.
     """
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, input_file=None, output_file=None):
         """
         Initializes the instance.
+
+        Args:
+            config_path:  Path to JSON config file.
+            input_file:   Read commands from this file/FIFO instead of stdin.
+            output_file:  Write server output to this file in addition to stdout.
         """
         self.config_file = Path(config_path or "client_config.json")
+        self.input_file  = input_file
+        self.output_file = output_file
 
         # Initialize the full parent chain first (Data → Version → Network).
         # This ensures _storage_lock and other base attributes exist before
@@ -456,13 +464,29 @@ class Client(Network):
     # ==========================================================
     # MAIN LOOP
     # ==========================================================
-    def run(self):
-        """Starts listener thread and handles input."""
+    def _write_to_output(self, text):
+        """Write text to output_file if set, always also print to stdout."""
+        print(text)
+        if self.output_file:
+            try:
+                with open(self.output_file, "a", encoding="utf-8") as f:
+                    f.write(text + "\n")
+            except Exception as e:
+                self.log(f"[Client] output_file write error: {e}")
+
+    def run(self, interactive=True):
+        """Starts listener thread and handles input.
+
+        Args:
+            interactive: If False, skip the welcome prompt and run headlessly
+                         (used with --detach/--fifo daemon mode).
+        """
         self.start_listener()
         self.identify()
 
-        print(f"\nWelcome, {self.name}! Type messages and press Enter.")
-        print("Use /help for a list of commands.\n")
+        if interactive:
+            print(f"\nWelcome, {self.name}! Type messages and press Enter.")
+            print("Use /help for a list of commands.\n")
 
         input_thread = threading.Thread(target=self._input_loop, daemon=True)
         input_thread.start()
@@ -479,13 +503,47 @@ class Client(Network):
         finally:
             self._running = False
             self.close()
-            print("\nDisconnected from server.")
+            if interactive:
+                print("\nDisconnected from server.")
 
     # ==========================================================
     # INPUT HANDLING
     # ==========================================================
+    def _is_fifo(self):
+        """Return True if input_file is a POSIX FIFO."""
+        import stat as _stat
+        try:
+            return _stat.S_ISFIFO(os.stat(self.input_file).st_mode)
+        except OSError:
+            return False
+
+    def _input_loop_file(self):
+        """Input loop for --infile / --fifo mode.
+
+        For a regular file: read once and return.
+        For a FIFO: reopen after each EOF so the pipe stays alive indefinitely.
+        """
+        is_fifo = self._is_fifo()
+        while self._running:
+            try:
+                with open(self.input_file, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        if not self._running:
+                            return
+                        line = line.strip()
+                        if line:
+                            self.process_command(line)
+                            time.sleep(0.05)
+            except Exception as e:
+                self.log(f"[Client] input_file read error: {e}")
+                time.sleep(1)
+            if not is_fifo:
+                return  # plain file: read once then stop
+
     def _input_loop(self):
         """Handles blocking user input in a separate thread."""
+        if self.input_file:
+            return self._input_loop_file()
         in_file_paste_mode = False
         pasted_lines = []
 

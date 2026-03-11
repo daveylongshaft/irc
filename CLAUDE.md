@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> -- refer to my_tool_pouch.md for things that I can do --
+
 ---
 
 ## Project Overview

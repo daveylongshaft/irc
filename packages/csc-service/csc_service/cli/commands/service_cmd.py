@@ -18,8 +18,8 @@ UNIT_MAP = {
     "test-runner":  ("csc-service.service",  "user"),
     "pm":           ("csc-service.service",  "user"),
     "pr-reviewer":  ("csc-service.service",  "user"),
-    "server":       ("csc-server.service",   "system"),
-    "bridge":       ("csc-bridge.service",   "system"),
+    "server":       ("csc-server.service",   "user"),
+    "bridge":       ("csc-bridge.service",   "user"),
 }
 
 
