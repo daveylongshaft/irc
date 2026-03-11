@@ -1,0 +1,22 @@
+[Unit]
+Description=CSC GitHub Webhook Listener
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+UMask=0002
+Type=simple
+User={USER}
+Group={GROUP}
+WorkingDirectory={INSTALL_DIR}
+ExecStart={PYTHON} -m csc_service.infra.webhook_listener
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csc-webhook
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile={INSTALL_DIR}/.env
+
+[Install]
+WantedBy=multi-user.target
