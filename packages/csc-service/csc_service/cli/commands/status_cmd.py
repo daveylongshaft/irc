@@ -12,6 +12,7 @@ INPROC_SERVICES = {
     "enable_test_runner":  "test-runner",
     "enable_pm":           "pm",
     "enable_pr_review":    "pr-reviewer",
+    "enable_pki":          "pki",
 }
 
 # Services with their own systemd units (system scope, need sudo)

@@ -929,6 +929,93 @@ class Platform(Version):
         return (len(reasons) == 0, reasons)
 
     # ------------------------------------------------------------------
+    # S2S Certificate Checking
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def check_s2s_cert(cls, config=None):
+        """Check the S2S TLS certificate status.
+
+        Reads ``s2s_cert`` path from csc-service.json (or the provided config
+        dict) and validates the certificate.
+
+        Returns:
+            tuple: (ok: bool, reason: str)
+                - ok=True, reason="valid" if cert is present and not expiring
+                - ok=False, reason describing the issue otherwise
+        """
+        import subprocess as _sp
+
+        # Load config if not provided
+        if config is None:
+            config_file = cls.PROJECT_ROOT / "csc-service.json"
+            if config_file.exists():
+                try:
+                    config = json.loads(config_file.read_text(encoding="utf-8"))
+                except Exception:
+                    config = {}
+            else:
+                config = {}
+
+        cert_path = config.get("s2s_cert", "")
+        if not cert_path:
+            return (False, "s2s_cert not configured in csc-service.json")
+
+        cert_file = Path(cert_path)
+        if not cert_file.exists():
+            return (False, f"certificate file not found: {cert_path}")
+
+        # Check if cert is valid (not expired)
+        try:
+            result = _sp.run(
+                ["openssl", "x509", "-in", str(cert_file),
+                 "-noout", "-checkend", "0"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                return (False, "certificate has expired")
+        except FileNotFoundError:
+            return (False, "openssl not found — cannot validate certificate")
+        except Exception as e:
+            return (False, f"error checking certificate: {e}")
+
+        # Check if cert expires within 30 days (2592000 seconds)
+        try:
+            result = _sp.run(
+                ["openssl", "x509", "-in", str(cert_file),
+                 "-noout", "-checkend", "2592000"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                return (True, "certificate expiring within 30 days — renewal recommended")
+        except Exception:
+            pass
+
+        # Check CRL revocation
+        crl_path = config.get("s2s_crl", "")
+        if crl_path and Path(crl_path).exists():
+            try:
+                serial_result = _sp.run(
+                    ["openssl", "x509", "-in", str(cert_file),
+                     "-noout", "-serial"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if serial_result.returncode == 0:
+                    serial = serial_result.stdout.strip().split("=")[-1]
+                    crl_result = _sp.run(
+                        ["openssl", "crl", "-in", crl_path,
+                         "-noout", "-text"],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if crl_result.returncode == 0:
+                        if serial.upper() in crl_result.stdout.upper():
+                            return (False, f"certificate serial {serial} is revoked in CRL")
+            except Exception:
+                pass
+
+        return (True, "valid")
+
+    # ------------------------------------------------------------------
     # Refresh
     # ------------------------------------------------------------------
 
