@@ -105,8 +105,29 @@ def install(args, config_manager):
             continue
         seen.add(unit)
         if IS_WINDOWS:
-            ok, msg = _sc_run(unit.replace(".service", ""), "start")
-            print(f"{'OK' if ok else 'FAIL'} {unit}: {msg}")
+            from csc_service.shared.platform_service_windows import WindowsServiceProvider, WindowsServiceDetector
+            from csc_service.shared.platform import Platform
+            
+            svc_name = unit.replace(".service", "")
+            win_svc_name = f"CSC-{svc_name.upper()}"
+            provider = WindowsServiceProvider(Platform.PROJECT_ROOT)
+            
+            if not WindowsServiceDetector.service_exists(win_svc_name):
+                # Map internal name to module
+                module_map = {
+                    "csc-service": "csc_service.main",
+                    "csc-server": "csc_server.main",
+                    "csc-bridge": "csc_bridge.main",
+                }
+                module = module_map.get(svc_name, "csc_service.main")
+                print(f"Installing {win_svc_name}...")
+                ok, msg = provider.install(svc_name, module)
+                if not ok:
+                    print(f"FAIL install {unit}: {msg}")
+                    continue
+            
+            ok, msg = provider.start(svc_name)
+            print(f"{'OK' if ok else 'FAIL'} start {unit}: {msg}")
         else:
             r = _systemctl(scope, "enable", "--now", unit)
             print(f"{'OK' if r.returncode==0 else 'FAIL'} enable+start {unit} ({scope})")
