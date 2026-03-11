@@ -135,39 +135,58 @@ class Server(Service):
 
     @property
     def oper_credentials(self):
-        """Backward-compatible property: returns {oper_name: password} from olines."""
-        return {name: info["password"] for name, info in self.storage.get_olines().items()}
+        """Dynamic property: returns olines dict (v2) for backward compat callers."""
+        return self.storage.load_opers().get("olines", {})
 
     @property
     def opers(self):
-        """Dynamic property: returns set of active oper nicks (lowercase)."""
-        info = self.storage.get_active_opers_info()
-        return set(info.keys())
+        """Set of lowercase nicks currently holding any oper status."""
+        active = self.storage.load_opers().get("active_opers", [])
+        result = set()
+        for entry in active:
+            if isinstance(entry, dict):
+                result.add(entry.get("nick", "").lower())
+            else:
+                result.add(str(entry).lower())
+        return result
 
     @property
     def active_opers_info(self):
         """Dynamic property: returns {nick_lower: {nick, oper_name, flags, class}}."""
         return self.storage.get_active_opers_info()
 
-    def oper_has_flag(self, nick, flag):
-        """Check if an active oper nick has a specific privilege flag.
+    @property
+    def protect_local_opers(self):
+        """Whether remote opers without O flag can KILL local opers."""
+        return self.storage.load_opers().get("protect_local_opers", True)
 
-        Args:
-            nick: The IRC nick to check (case-insensitive).
-            flag: One of: kill, ban, rehash, shutdown, setmotd, stats,
-                  localconfig, trust, global, connect, squit.
-        Returns:
-            True if nick is an active oper with the given flag.
-        """
-        return flag in self.storage.get_oper_flags(nick)
+    def _oper_has_flag(self, nick, flag):
+        """Return True if nick is an active oper with the given flag."""
+        return flag in self.storage.get_oper_flags(nick.lower())
+
+    def oper_has_flag(self, nick, flag):
+        """Public alias for _oper_has_flag (used by message handler)."""
+        return self._oper_has_flag(nick, flag)
 
     def get_olines(self):
-        """Return the olines configuration dict.
-
-        Returns:
-            {oper_name: {password, host, class, flags}} loaded from disk/conf.
-        """
+        """Return the olines configuration dict."""
         return self.storage.get_olines()
+
+    def is_local_oper(self, nick):
+        """Local oper: any oper flag (o, O, a, A)."""
+        return bool(self.storage.get_oper_flags(nick.lower()))
+
+    def is_global_oper(self, nick):
+        """Global oper: O flag."""
+        return self._oper_has_flag(nick, "O")
+
+    def is_server_admin(self, nick):
+        """Server admin: a or A flag."""
+        return self._oper_has_flag(nick, "a") or self._oper_has_flag(nick, "A")
+
+    def is_net_admin(self, nick):
+        """Network admin: A flag."""
+        return self._oper_has_flag(nick, "A")
 
     @property
     def wakewords(self):

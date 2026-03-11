@@ -853,6 +853,74 @@ class Platform(Version):
         except (OSError, json.JSONDecodeError):
             return {}
 
+    # Curated vocabulary for server name generation.
+    # Both parts are selected by hash — elegant, discrete, consistent.
+    # Words chosen to be professional, single/double syllable, non-specific.
+    _NAME_WORDS = [
+        "anchor", "apex",    "arbor",   "arch",    "basin",   "beacon",
+        "brace",  "cairn",   "canopy",  "cedar",   "chapel",  "haven",
+        "crown",  "depth",   "drift",   "ember",   "fern",    "forge",
+        "crest",  "helm",    "hollow",  "inlet",   "keep",    "keel",
+        "lantern","ledge",   "lens",    "loft",    "mantle",  "mesa",
+        "mist",   "mooring", "nexus",   "nook",    "oak",     "prow",
+        "reach",  "reef",    "ridge",   "rime",    "rise",    "sage",
+        "seam",   "shoal",   "shore",   "sill",    "slate",   "solace",
+        "spire",  "stem",    "still",   "stone",   "strand",  "summit",
+        "terrace","tide",    "timber",  "tract",   "vale",    "vault",
+        "ward",   "weir",    "well",    "meridian",
+    ]
+
+    @classmethod
+    def get_server_shortname(cls) -> str:
+        """Return this server's unique shortname, generating and persisting it on first call.
+
+        Format: ``<word>.<4hex>``  e.g. ``haven.cbef``
+
+        Both parts are deterministically derived from hardware identity:
+        - Word:   selected from a curated vocabulary using the first byte of
+                  MD5(hostname:mac) — always elegant, never hostname-dependent
+        - Suffix: next 4 hex chars of the same digest — unique per machine
+
+        MAC is read via ``uuid.getnode()`` — cross-platform (Linux/macOS/Windows).
+
+        Stored in ``PROJECT_ROOT/server_name`` — written once on first startup,
+        never overwritten.  Delete the file to force regeneration.
+        Safe to call before Platform is instantiated.
+        """
+        name_file = cls.PROJECT_ROOT / "server_name"
+        # Persisted — never regenerate
+        if name_file.exists():
+            name = name_file.read_text(encoding="utf-8").strip()
+            if name:
+                return name
+
+        import hashlib
+        import uuid as _uuid
+
+        try:
+            full_host = socket.gethostname().lower()
+        except Exception:
+            full_host = "localhost"
+
+        mac_hex = f"{_uuid.getnode():012x}"
+        seed = f"{full_host}:{mac_hex}"
+        digest = hashlib.md5(seed.encode()).digest()
+
+        # Byte 0 → word index, bytes 1–2 → 4-char hex suffix
+        word = cls._NAME_WORDS[digest[0] % len(cls._NAME_WORDS)]
+        suffix = digest[1:3].hex()   # 4 lowercase hex chars, always
+
+        shortname = f"{word}.{suffix}"
+
+        try:
+            tmp = name_file.with_suffix(".tmp")
+            tmp.write_text(shortname + "\n", encoding="utf-8")
+            tmp.replace(name_file)
+        except Exception:
+            pass
+
+        return shortname
+
     # ------------------------------------------------------------------
     # Capability checking (used by prompt routing)
     # ------------------------------------------------------------------

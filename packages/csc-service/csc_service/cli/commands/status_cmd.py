@@ -1,7 +1,10 @@
 """Status commands: status, show."""
 import json
 import os
+import re
 import subprocess
+import time
+from pathlib import Path
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -15,11 +18,11 @@ INPROC_SERVICES = {
     "enable_pki":          "pki",
 }
 
-# Services with their own systemd units (system scope, need sudo)
-# name -> (unit_name, scope)  scope: "system" or "user"
+# Services with their own systemd user units
+# name -> (unit_name, scope, config_key)
 UNIT_SERVICES = {
-    "server": ("csc-server.service", "system"),
-    "bridge": ("csc-bridge.service", "system"),
+    "server": ("csc-server.service", "user", "enable_server"),
+    "bridge": ("csc-bridge.service", "user", "enable_bridge"),
 }
 
 # Parent unit wrapping the in-proc services
@@ -38,7 +41,6 @@ def _systemd_active(unit, scope="user"):
         r = subprocess.run(cmd, capture_output=True, timeout=5)
         if r.returncode == 0:
             return "active"
-        # Get actual state string
         cmd2 = ["systemctl"]
         if scope == "user":
             cmd2.append("--user")
@@ -49,13 +51,23 @@ def _systemd_active(unit, scope="user"):
         return "unknown"
 
 
-def _windows_service_state(svc_name):
-    """Check Windows service state via sc query."""
+def _systemd_pid(unit, scope="user"):
+    """Return MainPID for a systemd unit, or None."""
     try:
-        r = subprocess.run(
-            ["sc", "query", svc_name],
-            capture_output=True, text=True, timeout=5
-        )
+        cmd = ["systemctl"]
+        if scope == "user":
+            cmd.append("--user")
+        cmd += ["show", unit, "--property=MainPID", "--value"]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        pid = r.stdout.strip()
+        return int(pid) if pid and pid != "0" else None
+    except Exception:
+        return None
+
+
+def _windows_service_state(svc_name):
+    try:
+        r = subprocess.run(["sc", "query", svc_name], capture_output=True, text=True, timeout=5)
         if "RUNNING" in r.stdout:
             return "active"
         if "STOPPED" in r.stdout:
@@ -65,21 +77,237 @@ def _windows_service_state(svc_name):
         return "unknown"
 
 
-def _fmt(name, runtime_state, cfg_enabled=None):
-    """Format one status line."""
-    state_color = {
-        "active":   "active",
-        "inactive": "inactive",
-        "failed":   "FAILED",
-        "unknown":  "unknown",
-    }.get(runtime_state, runtime_state)
+def _ss_ports_for_pid(pid):
+    """Return list of (proto, local_addr) tuples for a PID using ss.
 
-    parts = [f"  {name:22s} {state_color}"]
-    if cfg_enabled is not None and not cfg_enabled and runtime_state == "active":
-        parts.append("(config: disabled — restart to apply)")
-    elif cfg_enabled is not None and cfg_enabled and runtime_state != "active":
-        parts.append("(config: enabled — may need restart)")
-    return "".join(parts)
+    ss output columns: Netid State Recv-Q Send-Q Local:Port Peer:Port [users]
+    idx:               0     1     2      3      4          5
+    """
+    if IS_WINDOWS or pid is None:
+        return []
+    results = []
+    try:
+        # With -H (no header), Netid col is omitted.
+        # Columns: State Recv-Q Send-Q Local:Port Peer:Port [users]
+        # idx:     0     1      2      3          4
+        r = subprocess.run(["ss", "-Hnlup"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            if f"pid={pid}" not in line:
+                continue
+            parts = line.split()
+            local = parts[3] if len(parts) > 3 else "?"
+            results.append(("udp", local))
+        r2 = subprocess.run(["ss", "-Hnltp"], capture_output=True, text=True, timeout=5)
+        for line in r2.stdout.splitlines():
+            if f"pid={pid}" not in line:
+                continue
+            parts = line.split()
+            local = parts[3] if len(parts) > 3 else "?"
+            results.append(("tcp", local))
+    except Exception:
+        pass
+    return results
+
+
+def _server_stats():
+    """Read server state files and return a dict of stats."""
+    stats = {"clients": 0, "channels": 0, "links": 0, "shortname": "csc-server", "uptime": None}
+    try:
+        from csc_service.shared.irc import SERVER_NAME
+        stats["shortname"] = SERVER_NAME
+    except Exception:
+        pass
+
+    # Uptime from systemd
+    try:
+        r = subprocess.run(
+            ["systemctl", "--user", "show", "csc-server.service",
+             "--property=ActiveEnterTimestamp", "--value"],
+            capture_output=True, text=True, timeout=5
+        )
+        ts_str = r.stdout.strip()
+        if ts_str:
+            from datetime import datetime
+            import locale
+            # Format: "Wed 2026-03-11 01:53:28 CDT"
+            # Strip weekday and timezone, parse middle part
+            parts = ts_str.split()
+            if len(parts) >= 3:
+                try:
+                    dt = datetime.strptime(f"{parts[1]} {parts[2]}", "%Y-%m-%d %H:%M:%S")
+                    elapsed = time.time() - dt.timestamp()
+                    h = int(elapsed // 3600)
+                    m = int((elapsed % 3600) // 60)
+                    s = int(elapsed % 60)
+                    if h >= 24:
+                        d = h // 24
+                        h = h % 24
+                        stats["uptime"] = f"{d}d {h}h {m}m"
+                    elif h > 0:
+                        stats["uptime"] = f"{h}h {m}m {s}s"
+                    else:
+                        stats["uptime"] = f"{m}m {s}s"
+                except Exception:
+                    stats["uptime"] = ts_str
+    except Exception:
+        pass
+
+    # Read from run-dir JSON files
+    try:
+        from csc_service.shared.platform import Platform
+        run_dir = Platform.PROJECT_ROOT / "tmp" / "csc" / "run"
+
+        ch_file = run_dir / "channels.json"
+        if ch_file.exists():
+            d = json.loads(ch_file.read_text())
+            channels = d.get("channels", {})
+            stats["channels"] = len(channels)
+            # Count connected clients: unique nicks across all channel member lists
+            connected = set()
+            for ch in channels.values():
+                for nick in ch.get("members", {}):
+                    connected.add(nick)
+            stats["clients"] = len(connected)
+
+        # S2S links — check for a links state file
+        links_file = run_dir / "links.json"
+        if links_file.exists():
+            d = json.loads(links_file.read_text())
+            stats["links"] = len(d.get("links", {}))
+    except Exception:
+        pass
+
+    return stats
+
+
+def _net_info_server(state):
+    """Return port and stats lines for csc-server."""
+    if state != "active":
+        return []
+    pid = _systemd_pid("csc-server.service", "user")
+    ports = _ss_ports_for_pid(pid)
+    lines = []
+    if ports:
+        for proto, local in ports:
+            if proto == "udp":
+                lines.append(f"    UDP {local}  (IRC server)")
+    else:
+        lines.append("    UDP 0.0.0.0:9525  (IRC server)")
+
+    s = _server_stats()
+    uptime_str = f"  up {s['uptime']}" if s["uptime"] else ""
+    lines.append(f"    {s['shortname']}  — "
+                 f"{s['clients']} client(s)  {s['channels']} channel(s)  "
+                 f"{s['links']} link(s){uptime_str}")
+    return lines
+
+
+def _net_info_bridge(state):
+    """Return port info lines for csc-bridge."""
+    if state != "active":
+        return []
+    pid = _systemd_pid("csc-bridge.service", "user")
+    raw = _ss_ports_for_pid(pid)
+
+    # Determine upstream target from live UDP connections (non-listening bound sockets)
+    upstream = "127.0.0.1:9525"
+    try:
+        r = subprocess.run(["ss", "-Hunp"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            if pid and f"pid={pid}" in line:
+                parts = line.split()
+                # udp UNCONN local peer  -> peer is upstream
+                if len(parts) >= 5 and parts[4] not in ("0.0.0.0:*", "*:*", "[::]:*"):
+                    upstream = parts[4]
+                    break
+    except Exception:
+        pass
+
+    lines = []
+    if raw:
+        for proto, local in raw:
+            if proto == "tcp":
+                lines.append(f"    TCP {local}  →  UDP {upstream}")
+            elif proto == "udp":
+                lines.append(f"    UDP {local}  →  UDP {upstream}")
+    else:
+        lines = [
+            f"    TCP 0.0.0.0:9667  →  UDP {upstream}  (IRC clients)",
+            f"    TCP 0.0.0.0:9666  →  UDP {upstream}  (IRC clients)",
+            f"    UDP 127.0.0.1:9526  →  UDP {upstream}  (native CSC)",
+        ]
+    return lines
+
+
+def _fifo_clients():
+    """Scan /proc for running csc-client --fifo processes.
+    Returns list of dicts: {pid, server, infile, outfile}
+    """
+    if IS_WINDOWS:
+        return []
+    clients = []
+    try:
+        proc_dirs = [d for d in os.listdir("/proc") if d.isdigit()]
+    except Exception:
+        return []
+
+    for pid_str in proc_dirs:
+        try:
+            cmdline_path = f"/proc/{pid_str}/cmdline"
+            with open(cmdline_path, "rb") as f:
+                raw = f.read()
+            args = raw.decode(errors="replace").split("\x00")
+            if not any("csc-client" in a for a in args):
+                continue
+
+            infile = None
+            outfile = None
+            server = None
+            is_fifo = "--fifo" in args
+
+            for i, a in enumerate(args):
+                if a == "--infile" and i + 1 < len(args):
+                    infile = args[i + 1]
+                if a == "--outfile" and i + 1 < len(args):
+                    outfile = args[i + 1]
+
+            if is_fifo and infile is None:
+                # Default FIFO path
+                from pathlib import Path
+                try:
+                    from csc_service.shared.platform import Platform
+                    run_dir = Platform.PROJECT_ROOT / "tmp" / "csc" / "run"
+                except Exception:
+                    run_dir = Path("/opt/csc/tmp/csc/run")
+                infile = str(run_dir / "client.in")
+                if outfile is None:
+                    outfile = str(run_dir / "client.out")
+
+            # Try to find server connection from /proc/pid/net/udp or config
+            try:
+                from csc_service.shared.platform import Platform
+                cfg_path = Platform.PROJECT_ROOT / "tmp" / "csc" / "run" / "settings.json"
+                if cfg_path.exists():
+                    cfg = json.loads(cfg_path.read_text())
+                    host = cfg.get("server_host", "127.0.0.1")
+                    port = cfg.get("server_port", 9525)
+                    server = f"{host}:{port}"
+            except Exception:
+                pass
+
+            if server is None:
+                server = "127.0.0.1:9525"
+
+            if is_fifo or infile:
+                clients.append({
+                    "pid": pid_str,
+                    "server": server,
+                    "infile": infile,
+                    "outfile": outfile,
+                })
+        except Exception:
+            continue
+    return clients
 
 
 def status(args, config_manager):
@@ -97,23 +325,43 @@ def status(args, config_manager):
     parent_state = _systemd_active(*PARENT_UNIT)
     print(f"\n  {'csc-service':22s} {parent_state}  (user unit — wraps in-proc services)")
 
-    # In-process services (config-controlled threads inside csc-service)
+    # In-process services
     print()
     for key, name in INPROC_SERVICES.items():
         enabled = cfg.get(key, False)
         cfg_str = "enabled" if enabled else "disabled"
-        # Runtime = only meaningful if parent is active
         if parent_state == "active":
             rt = "running" if enabled else "idle"
         else:
             rt = "stopped (parent down)"
         print(f"  {name:22s} {cfg_str:10s}  [{rt}]")
 
-    # Standalone system units
+    # Standalone user units with port info
     print()
-    for name, (unit, scope) in UNIT_SERVICES.items():
+    for name, (unit, scope, cfg_key) in UNIT_SERVICES.items():
+        enabled = cfg.get(cfg_key, False)
+        cfg_str = "enabled" if enabled else "disabled"
         state = _systemd_active(unit, scope)
-        print(f"  {name:22s} {state:10s}  [{scope} unit: {unit}]")
+        print(f"  {name:22s} {cfg_str:10s}  [{state}]")
+        if state == "active":
+            if name == "server":
+                for line in _net_info_server(state):
+                    print(line)
+            elif name == "bridge":
+                for line in _net_info_bridge(state):
+                    print(line)
+
+    # FIFO / file-mode clients
+    fifo_clients = _fifo_clients()
+    if fifo_clients:
+        print()
+        print("  FIFO Clients:")
+        for c in fifo_clients:
+            print(f"    PID {c['pid']:8s}  connected → {c['server']}")
+            if c['infile']:
+                print(f"               in:  {c['infile']}")
+            if c['outfile']:
+                print(f"               out: {c['outfile']}")
 
     # AI clients
     clients = cfg.get("clients", {})
@@ -132,9 +380,17 @@ def status(args, config_manager):
 def _show_service_status(service, cfg):
     """Show status for a single named service."""
     if service in UNIT_SERVICES:
-        unit, scope = UNIT_SERVICES[service]
+        unit, scope, cfg_key = UNIT_SERVICES[service]
+        enabled = cfg.get(cfg_key, False)
         state = _systemd_active(unit, scope)
-        print(f"{service}: {state}  ({scope} unit: {unit})")
+        print(f"{service}: {'enabled' if enabled else 'disabled'}  [{state}]  (user unit: {unit})")
+        if state == "active":
+            if service == "server":
+                for line in _net_info_server(state):
+                    print(line)
+            elif service == "bridge":
+                for line in _net_info_bridge(state):
+                    print(line)
         return
 
     key_map = {v: k for k, v in INPROC_SERVICES.items()}
@@ -183,8 +439,8 @@ def show(args, config_manager):
         return
 
     if service in UNIT_SERVICES:
-        unit, scope = UNIT_SERVICES[service]
-        print(json.dumps({service: {"unit": unit, "scope": scope}}, indent=2))
+        unit, scope, cfg_key = UNIT_SERVICES[service]
+        print(json.dumps({service: {"unit": unit, "scope": scope, "enabled": cfg.get(cfg_key, False)}}, indent=2))
         return
 
     print(f"Unknown service: {service}")
