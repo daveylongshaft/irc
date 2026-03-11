@@ -40,7 +40,7 @@ class TestPKIServiceToken(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service._load_tokens")
     def test_token_generates_for_new_shortname(self, mock_load, mock_save, mock_file):
         """Test that TOKEN command generates a token for a new shortname."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_load.return_value = {}
         mock_file.__class__ = type(self.token_file)
@@ -61,7 +61,7 @@ class TestPKIServiceToken(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service._load_tokens")
     def test_token_rejects_duplicate_active(self, mock_load, mock_save):
         """Test that TOKEN rejects when an active token already exists."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_load.return_value = {
             "existing_token": {
@@ -81,7 +81,7 @@ class TestPKIServiceToken(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service._load_tokens")
     def test_token_allows_after_used(self, mock_load, mock_save):
         """Test that TOKEN allows a new token if previous was used."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_load.return_value = {
             "old_token": {
@@ -99,7 +99,7 @@ class TestPKIServiceToken(unittest.TestCase):
 
     def test_token_missing_shortname(self):
         """Test that TOKEN without shortname returns usage."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         service = pki(self.mock_server)
         result = service.token()
@@ -116,7 +116,7 @@ class TestPKIServiceList(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service.ISSUED_DIR")
     def test_list_no_certs(self, mock_dir):
         """Test LIST when no certs are issued."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_dir.exists.return_value = False
 
@@ -129,7 +129,7 @@ class TestPKIServiceList(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service.ISSUED_DIR")
     def test_list_with_certs(self, mock_dir, mock_run):
         """Test LIST with issued certificates."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_dir.exists.return_value = True
 
@@ -159,7 +159,7 @@ class TestPKIServiceRevoke(unittest.TestCase):
 
     def test_revoke_missing_shortname(self):
         """Test REVOKE without shortname returns usage."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         service = pki(self.mock_server)
         result = service.revoke()
@@ -169,7 +169,7 @@ class TestPKIServiceRevoke(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service.ISSUED_DIR")
     def test_revoke_nonexistent_cert(self, mock_dir):
         """Test REVOKE with non-existent certificate."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_cert = MagicMock()
         mock_cert.exists.return_value = False
@@ -193,7 +193,7 @@ class TestPKIServiceStatus(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service.CA_CRT")
     def test_status_no_ca(self, mock_ca, mock_crl, mock_issued, mock_tokens):
         """Test STATUS when CA is not present."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_ca.exists.return_value = False
         mock_crl.exists.return_value = False
@@ -213,7 +213,7 @@ class TestPKIServiceStatus(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service.CA_CRT")
     def test_status_with_ca(self, mock_ca, mock_crl, mock_issued, mock_tokens, mock_run):
         """Test STATUS when CA is present."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_ca.exists.return_value = True
         mock_crl.exists.return_value = False
@@ -247,7 +247,7 @@ class TestPKIServicePending(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service._load_tokens")
     def test_pending_no_tokens(self, mock_load, mock_save):
         """Test PENDING with no active tokens."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_load.return_value = {}
 
@@ -260,7 +260,7 @@ class TestPKIServicePending(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service._load_tokens")
     def test_pending_with_tokens(self, mock_load, mock_save):
         """Test PENDING with active tokens."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         now = time.time()
         mock_load.return_value = {
@@ -292,7 +292,7 @@ class TestPKIServiceDefault(unittest.TestCase):
 
     def test_default_shows_help(self):
         """Test default handler returns command help."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         service = pki(self.mock_server)
         result = service.default()
@@ -355,7 +355,7 @@ class TestEnrollmentServerEnroll(unittest.TestCase):
     @patch("csc_service.shared.services.pki_service._load_tokens")
     def test_token_normalizes_shortname(self, mock_load, mock_save):
         """Test that shortname is normalized to lowercase."""
-        from csc_service.shared.services.pki_service import pki
+        from csc_service.shared.services.pki_service import Pki as pki
 
         mock_load.return_value = {}
 

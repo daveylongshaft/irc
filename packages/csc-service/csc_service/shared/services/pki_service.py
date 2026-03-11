@@ -84,7 +84,7 @@ def _prune_expired(tokens):
     return len(expired)
 
 
-class pki(Service):
+class Pki(Service):
     """PKI certificate management service for S2S TLS links."""
 
     def _require_flag(self, flag_list=("a", "A")):
