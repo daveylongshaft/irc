@@ -12,20 +12,27 @@ class ConfigManager:
     def _resolve_config_path(self, config_file):
         if config_file:
             return Path(config_file)
-        
-        # Check environment variable
+
+        # Explicit env var override
         if "CSC_CONFIG_FILE" in os.environ:
             return Path(os.environ["CSC_CONFIG_FILE"])
 
-        # Find in current or parent directories
-        p = Path.cwd()
-        while p != p.parent:
-            cfg = p / "csc-service.json"
+        # CSC_ETC env var (set by Platform.export_paths)
+        csc_etc = os.environ.get("CSC_ETC", "")
+        if csc_etc:
+            cfg = Path(csc_etc) / "csc-service.json"
             if cfg.exists():
                 return cfg
+
+        # Walk up from cwd — check etc/ subdir first, then directory itself
+        p = Path.cwd()
+        while p != p.parent:
+            for candidate in (p / "etc" / "csc-service.json", p / "csc-service.json"):
+                if candidate.exists():
+                    return candidate
             p = p.parent
-        
-        return Path.cwd() / "csc-service.json"
+
+        return Path.cwd() / "etc" / "csc-service.json"
 
     def load_config(self):
         if self.config_file.exists():

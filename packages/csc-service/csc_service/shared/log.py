@@ -1,32 +1,63 @@
+import os
 import time
+from pathlib import Path
 from csc_service.shared.root import Root
+
+
+def _get_logs_dir() -> Path:
+    """Resolve logs directory without requiring Platform() to be instantiated.
+
+    Resolution order (never raises):
+    1. CSC_LOGS env var (set by Platform.export_paths())
+    2. platform.json runtime.temp_root → derive PROJECT_ROOT → PROJECT_ROOT/logs
+    3. Walk up from this file to find csc-service.json → PROJECT_ROOT/logs
+    4. Fall back to current working directory
+    """
+    # 1. Env var — fastest path, set once Platform is up
+    env = os.environ.get("CSC_LOGS", "")
+    if env:
+        try:
+            p = Path(env)
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception:
+            pass
+
+    # 2 & 3. Walk up from this file to find PROJECT_ROOT
+    try:
+        here = Path(__file__).resolve().parent
+        for _ in range(12):
+            if (here / "csc-service.json").exists() or (here / "etc" / "csc-service.json").exists():
+                p = here / "logs"
+                p.mkdir(parents=True, exist_ok=True)
+                return p
+            if here == here.parent:
+                break
+            here = here.parent
+    except Exception:
+        pass
+
+    # 4. Fallback — write next to process cwd
+    return Path.cwd()
+
 
 class Log(Root):
     """
     Extends the root class.
 
-    Provides a standardize  d base for testing (`help` and `test` methods),
-    intended to be overridden by all higher-level classes.
+    Provides a standardized base for logging, intended to be overridden by
+    all higher-level classes.
     """
 
-    def __init__(self,server = None):
-        """
-        Initializes the Log class.
-
-        - What it does: Sets the instance name and defines the log file path.
-        - Arguments: None.
-        - What calls it: Called by the `__init__` method of its direct subclass, `Data`.
-        - What it calls: `super().__init__()`.
-        """
+    def __init__(self, server=None):
         super().__init__()
         self.name = "log"
         self.log_file = f"{self.name}.log"
-        #print(f"{self.name}->",end=None)
 
     @classmethod
     def set_platform_log_dir(cls, log_dir):
-        """Stub: platform.py calls this to redirect logs to a platform-detected dir.
-        Full implementation belongs in the porting WO."""
+        """Called by Platform after path detection — no-op here since log.py
+        resolves its own path via _get_logs_dir() on every write."""
         pass
 
     def log(self, message: str):
@@ -48,12 +79,11 @@ class Log(Root):
         print( log_entry.strip() )
 
         try:
-            # Append the log entry to the project's log file.
-            with open( self.log_file, "a" ) as f:
-                f.write( log_entry )
+            log_path = _get_logs_dir() / self.log_file
+            with open(log_path, "a") as f:
+                f.write(log_entry)
         except Exception as e:
-            # If logging fails, print a critical error to the console.
-            print( f"CRITICAL: Failed to write to log file '{self.log_file}': {e}" )
+            print(f"CRITICAL: Failed to write to log file '{self.log_file}': {e}")
 
 
     def help(self):

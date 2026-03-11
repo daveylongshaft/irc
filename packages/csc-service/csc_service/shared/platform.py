@@ -748,9 +748,36 @@ class Platform(Version):
     # Persistence
     # ------------------------------------------------------------------
 
+    @classmethod
+    def get_etc_dir(cls) -> Path:
+        """Return the persistent config directory (PROJECT_ROOT/etc), creating it if needed."""
+        p = cls.PROJECT_ROOT / "etc"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @classmethod
+    def get_logs_dir(cls) -> Path:
+        """Return the logs directory (PROJECT_ROOT/logs), creating it if needed."""
+        p = cls.PROJECT_ROOT / "logs"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    def get_abs_etc_path(self, components) -> str:
+        """Return absolute path under etc/ (platform-native separators).
+
+        Args:
+            components: list of path components, e.g., ['olines.conf']
+        Returns:
+            str: Absolute path under PROJECT_ROOT/etc/
+        """
+        p = self.get_etc_dir()
+        for comp in components:
+            p = p / comp
+        return str(p)
+
     def _get_platform_json_path(self):
-        """Get the path for platform.json (in project root)."""
-        return self.PROJECT_ROOT / self.PLATFORM_JSON_FILENAME
+        """Get the path for platform.json (in etc/)."""
+        return self.get_etc_dir() / self.PLATFORM_JSON_FILENAME
 
     def _persist_platform(self):
         """Write platform data to platform.json atomically."""
@@ -1014,14 +1041,16 @@ class Platform(Version):
         """
         import subprocess as _sp
 
-        # Load config if not provided
+        # Load config if not provided — check etc/ first, fall back to root
         if config is None:
-            config_file = cls.PROJECT_ROOT / "csc-service.json"
-            if config_file.exists():
-                try:
-                    config = json.loads(config_file.read_text(encoding="utf-8"))
-                except Exception:
-                    config = {}
+            for candidate in [cls.get_etc_dir() / "csc-service.json",
+                               cls.PROJECT_ROOT / "csc-service.json"]:
+                if candidate.exists():
+                    try:
+                        config = json.loads(candidate.read_text(encoding="utf-8"))
+                        break
+                    except Exception:
+                        pass
             else:
                 config = {}
 
@@ -1176,12 +1205,13 @@ class Platform(Version):
         - CSC_LOGS: Logs directory
         """
         os.environ['CSC_ROOT'] = str(self.PROJECT_ROOT)
+        os.environ['CSC_ETC'] = str(self.get_etc_dir())
         os.environ['CSC_TMP'] = self.get_abs_tmp_path([])
         os.environ['CSC_OPS_WO'] = self.get_abs_root_path(['ops', 'wo'])
         os.environ['CSC_OPS_AGENTS'] = self.get_abs_root_path(['ops', 'agents'])
         os.environ['CSC_DOCS'] = self.get_abs_root_path(['docs'])
         os.environ['CSC_DOCS_TOOLS'] = self.get_abs_root_path(['docs', 'tools'])
-        os.environ['CSC_LOGS'] = self.get_abs_root_path(['logs'])
+        os.environ['CSC_LOGS'] = str(self.get_logs_dir())
         os.environ['CSC_BIN'] = self.get_abs_root_path(['irc', 'bin'])
 
 

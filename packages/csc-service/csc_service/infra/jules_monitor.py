@@ -55,14 +55,19 @@ class JulesMonitor(Data):
         if csc_root:
             self.csc_root = Path(csc_root).resolve()
         else:
-            p = Path(__file__).resolve().parent
-            for _ in range(10):
-                if (p / "CLAUDE.md").exists() or (p / "csc-service.json").exists():
-                    break
-                if p == p.parent:
-                    break
-                p = p.parent
-            self.csc_root = p
+            # Check CSC_ROOT env var first (set by Platform)
+            env_root = os.environ.get("CSC_ROOT", "")
+            if env_root:
+                self.csc_root = Path(env_root)
+            else:
+                p = Path(__file__).resolve().parent
+                for _ in range(10):
+                    if (p / "CLAUDE.md").exists() or (p / "etc" / "csc-service.json").exists() or (p / "csc-service.json").exists():
+                        break
+                    if p == p.parent:
+                        break
+                    p = p.parent
+                self.csc_root = p
 
     def _load_api_key(self) -> str:
         """Load Jules API key from environment or .env file.
@@ -87,7 +92,14 @@ class JulesMonitor(Data):
 
     def _load_config(self) -> None:
         """Load Jules config from csc-service.json."""
-        config_file = self.csc_root / "csc-service.json"
+        # Prefer CSC_ETC env var (set by Platform), fall back to etc/ then root
+        csc_etc = os.environ.get("CSC_ETC", "")
+        if csc_etc:
+            config_file = Path(csc_etc) / "csc-service.json"
+        else:
+            config_file = self.csc_root / "etc" / "csc-service.json"
+        if not config_file.exists():
+            config_file = self.csc_root / "csc-service.json"
         if not config_file.exists():
             return
         try:
