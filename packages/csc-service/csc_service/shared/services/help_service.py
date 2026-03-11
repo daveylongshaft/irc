@@ -1,17 +1,17 @@
 import inspect
 from csc_service.server.service import Service
 
-class help(Service):
+class Help(Service):
     def default(self, *args):
         if not args:
             # List all available services
-            services = ", ".join(self.server_instance.services.keys())
+            services = ", ".join(self.server.services.keys())
             return f"Available services: {services}"
         elif len(args) == 1:
             # List methods for the specified service
             service_name = args[0]
-            if service_name in self.server_instance.services:
-                service = self.server_instance.services[service_name]
+            if service_name in self.server.services:
+                service = self.server.services[service_name]
                 methods = [method for method in dir(service) if callable(getattr(service, method)) and not method.startswith("__")]
                 return f"Methods for {service_name}: {', '.join(methods)}"
             else:
@@ -20,8 +20,8 @@ class help(Service):
             # Show docstring for the specified method
             service_name = args[0]
             method_name = args[1]
-            if service_name in self.server_instance.services:
-                service = self.server_instance.services[service_name]
+            if service_name in self.server.services:
+                service = self.server.services[service_name]
                 if hasattr(service, method_name) and callable(getattr(service, method_name)):
                     method = getattr(service, method_name)
                     docstring = inspect.getdoc(method)

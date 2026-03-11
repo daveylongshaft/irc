@@ -20,5 +20,8 @@ if str(_project_root) not in sys.path:
 
 from server import Server
 
-if __name__ == "__main__":
+def main():
     Server().run()
+
+if __name__ == "__main__":
+    main()
