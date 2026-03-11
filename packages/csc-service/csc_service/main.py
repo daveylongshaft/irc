@@ -35,9 +35,8 @@ def main():
     from csc_service.shared.platform import Platform
     plat = Platform()
 
-    # Prefer CSC_ETC env var (set by Platform), fall back to etc/ then root
-    _etc = Path(os.environ.get("CSC_ETC", "") or (csc_root / "etc"))
-    config_file = _etc / "csc-service.json"
+    # Use Platform to get the etc/ path (handles Windows, Linux, Mac, etc.)
+    config_file = plat.get_etc_dir() / "csc-service.json"
     if not config_file.exists():
         config_file = csc_root / "csc-service.json"
     config = {}
