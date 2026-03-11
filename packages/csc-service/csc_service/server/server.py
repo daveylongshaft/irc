@@ -89,10 +89,10 @@ class Server(Service):
         self.nickserv_identified = {}  # addr -> identified_nick
 
         # Initialize persistent storage manager
-        # Use the system temp run directory as instructed
+        # Persistent server state (channels, users, opers, bans) lives in etc/
         from csc_service.shared.platform import Platform
         self.storage = PersistentStorageManager(
-            base_path=str(Platform().run_dir),
+            base_path=str(Platform.get_etc_dir()),
             log_func=self.log,
         )
 

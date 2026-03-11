@@ -16,11 +16,11 @@ from pathlib import Path
 def main():
     args = sys.argv[1:]
     
-    # Walk up to find project root: prefer csc-service.json (config), fall back to CLAUDE.md
+    # Walk up to find project root: check etc/csc-service.json and csc-service.json, fall back to CLAUDE.md
     csc_root = Path(__file__).resolve().parent
     claude_md_stop = None
     for _ in range(10):
-        if (csc_root / "csc-service.json").exists():
+        if (csc_root / "etc" / "csc-service.json").exists() or (csc_root / "csc-service.json").exists():
             break
         if (csc_root / "CLAUDE.md").exists() and claude_md_stop is None:
             claude_md_stop = csc_root  # remember but keep looking for csc-service.json
@@ -31,11 +31,15 @@ def main():
     work_dir = csc_root
     poll_interval = 60
 
-    # Initialize Platform layer first - this sets up global Log paths
+    # Initialize Platform layer first - this sets up CSC_ETC, CSC_LOGS, etc.
     from csc_service.shared.platform import Platform
     plat = Platform()
-    
-    config_file = csc_root / "csc-service.json"
+
+    # Prefer CSC_ETC env var (set by Platform), fall back to etc/ then root
+    _etc = Path(os.environ.get("CSC_ETC", "") or (csc_root / "etc"))
+    config_file = _etc / "csc-service.json"
+    if not config_file.exists():
+        config_file = csc_root / "csc-service.json"
     config = {}
     if config_file.exists():
         try:
