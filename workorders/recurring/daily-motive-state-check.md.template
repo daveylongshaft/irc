@@ -1,0 +1,81 @@
+# Daily: Motive State Alignment Check
+
+**Frequency:** Daily
+**Duration:** 10-15 minutes
+**Owner:** Daily reviewer (human or automated)
+
+---
+
+## Today's Motive State Check
+
+### Step 1: Run Alignment Script
+
+```bash
+python3 bin/check_motive_alignment.py
+```
+
+This generates a report showing:
+- Autonomy Score
+- Cross-Platform Score
+- Orchestration Score
+- Efficiency Score
+- Overall Alignment
+
+### Step 2: Review Today's Work
+
+Questions to answer:
+
+1. **What did we ship today?**
+   - [List completed tasks]
+
+2. **Does it move toward motive state?**
+   - Autonomy? [Y/N]
+   - Cross-Platform? [Y/N]
+   - Self-Orchestrating? [Y/N]
+   - Multi-AI Efficiency? [Y/N]
+
+3. **What's the biggest gap right now?**
+   - [Lowest-scoring pillar]
+   - [Why is it low?]
+
+4. **What should we prioritize next?**
+   - [Suggested work based on gaps]
+
+### Step 3: Decide Next Move
+
+Using the Decision Rubric from MOTIVE_STATE.md:
+
+| Work Item | Autonomy | Cross-Platform | Orchestration | Multi-AI | Decision |
+|-----------|----------|---|---|---|---|
+| [item 1] | Y/N | Y/N | Y/N | Y/N | ALIGNED / DISTRACTION |
+| [item 2] | Y/N | Y/N | Y/N | Y/N | ALIGNED / DISTRACTION |
+| [item 3] | Y/N | Y/N | Y/N | Y/N | ALIGNED / DISTRACTION |
+
+### Step 4: Document & Commit
+
+Update `logs/motive_state_progress.json` and commit with message:
+
+```
+chore: Daily motive state alignment check
+
+Autonomy: XX/100
+Cross-Platform: XX/100
+Orchestration: XX/100
+Efficiency: XX/100
+
+Overall Alignment: XX/100
+
+Biggest Gap: [pillar]
+Next Priority: [work item]
+```
+
+---
+
+## Success Criteria
+
+- [ ] Alignment script runs without errors
+- [ ] All four pillars measured
+- [ ] Report clearly shows which pillar needs work
+- [ ] Team can see alignment trend over time
+- [ ] Tomorrow's priority clear from today's report
+- [ ] Progress file updated
