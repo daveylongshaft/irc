@@ -47,6 +47,7 @@ def main():
     enable_queue_worker = config.get("enable_queue_worker", True)
     enable_pm = config.get("enable_pm", True)
     enable_pr_review = config.get("enable_pr_review", False)
+    enable_pki = config.get("enable_pki", False)
     enable_jules = config.get("jules", {}).get("enabled", False)
 
     from csc_service.infra import git_sync
@@ -91,6 +92,12 @@ def main():
                 if enable_pr_review:
                     from csc_service.infra import pr_review
                     pr_review.run_cycle(work_dir)
+
+                # Start PKI enrollment server if enabled (CA server only)
+                if enable_pki:
+                    from csc_service.pki import main as pki_main
+                    pki_main.start()
+                    print(f"[{ts()}] [csc-service] Started PKI enrollment server")
 
                 if enable_jules:
                     from csc_service.infra import jules_monitor
