@@ -21,6 +21,9 @@ if str(_project_root) not in sys.path:
 from server import Server
 
 def main():
+    # --daemon flag: force headless mode (no TTY client, pure network server)
+    if '--daemon' in sys.argv:
+        os.environ['CSC_HEADLESS'] = 'true'
     Server().run()
 
 if __name__ == "__main__":
