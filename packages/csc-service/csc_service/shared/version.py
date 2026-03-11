@@ -1,3 +1,98 @@
+"""
+File versioning system for the CSC shared package.
+
+Provides the Version class which extends Data with a complete file
+versioning system. Creates sequential backups of files in a dedicated
+'versions' directory with metadata tracking for restore operations.
+
+Module Overview:
+    This module defines the Version class, the fourth level in the CSC framework
+    inheritance hierarchy (Root -> Log -> Data -> Version -> Platform -> Network -> Service).
+    It provides automatic file versioning with incremental backups, metadata
+    tracking, and the ability to restore any previous version.
+
+Classes:
+    Version: Extends Data, adds file versioning and backup functionality
+
+Versioning Model:
+    - Each file gets a subdirectory under versions/ matching its relative path
+    - Example: "services/auth.py" -> "versions/services/auth.py/"
+    - Versions numbered sequentially: auth.py.1, auth.py.2, auth.py.3, etc.
+    - Metadata in versions.json tracks latest, active, and history
+    - No automatic cleanup - old versions persist until manually deleted
+
+Directory Structure:
+    project_root/
+        versions/
+            services/
+                auth.py/
+                    versions.json       # {"latest": 3, "active": 3, "history": {...}}
+                    auth.py.1           # First version backup
+                    auth.py.2           # Second version backup
+                    auth.py.3           # Current version backup
+            root.py/
+                versions.json
+                root.py.1
+
+Dependencies:
+    - json: For metadata serialization
+    - os: For file operations
+    - shutil: For file copying with metadata preservation
+    - pathlib.Path: For path manipulation
+    - .data.Data: Parent class providing storage functionality
+
+Thread Safety:
+    - NOT thread-safe: No locking around version operations
+    - Concurrent create_new_version() calls may corrupt metadata
+    - File operations themselves are atomic at OS level
+    - Metadata read-modify-write is NOT atomic
+
+Side Effects:
+    - Creates versions/ directory on initialization
+    - Creates subdirectories matching file structure
+    - Writes version backups to disk (with metadata preserved via shutil.copy2)
+    - Writes/updates versions.json metadata files
+    - May notify prompts service if available (via self.server.loaded_modules)
+    - Logs all operations via inherited log() method
+
+Data Integrity:
+    - Backup files are copies, original files unchanged until restore
+    - Metadata corruption possible if write interrupted
+    - No checksums or validation of backup integrity
+    - Restore operation overwrites original file (no safety net)
+
+Usage:
+    Typically used via Server or other high-level components:
+        version = Version()
+        version_num = version.create_new_version("/path/to/file.py")
+        version.restore_version("/path/to/file.py", "2")
+        version.restore_version("/path/to/file.py", "latest")
+
+Metadata Structure:
+    versions.json format:
+    {
+        "latest": 3,           // Highest version number created
+        "active": 3,           // Version number currently in use
+        "history": {
+            "1": "/full/path/to/file.py.1",
+            "2": "/full/path/to/file.py.2",
+            "3": "/full/path/to/file.py.3"
+        }
+    }
+
+Attributes (Instance):
+    name (str): Instance identifier, default "version"
+    project_root_dir (Path): Project root, parent of this file
+    version_backup_dir (Path): Main versions/ directory
+
+Parents:
+    - Subclassed by Platform class
+    - Used by ServerFileHandler for automatic versioning
+
+Children:
+    - Network, Service classes in the hierarchy
+"""
+
 import json
 import os
 import shutil
@@ -228,14 +323,14 @@ class Version( Data ):
             # Use the class's helper method to write the updated metadata back.
             self._write_version_info( file_backup_dir, version_info )
 
-            # Notify Workflow service if active
+            # Notify Prompts service if active
             try:
                 if hasattr(self, "server") and hasattr(self.server, "loaded_modules"):
-                    workflow = self.server.loaded_modules.get("workflow")
-                    if workflow:
-                        workflow.version_file(filepath)
+                    prompts = self.server.loaded_modules.get("prompts")
+                    if prompts:
+                        prompts.version_file(filepath)
             except Exception as e:
-                self.log(f"Warning: Failed to notify workflow service: {e}")
+                self.log(f"Warning: Failed to notify prompts service: {e}")
 
             self.log( f"SUCCESS: Created version {new_version_number} for {filepath}" )
             return new_version_number

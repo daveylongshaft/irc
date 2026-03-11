@@ -1,15 +1,22 @@
+import json
+import os
 import sys
+import socket
 import threading
 import time
 import traceback
-from csc_service.server.service import Service
-from csc_service.server.server_message_handler import MessageHandler
-from csc_service.server.server_file_handler import FileHandler
-from csc_service.server.server_console import ServerConsole
+import subprocess
+from pathlib import Path
+from service import Service
+from server_message_handler import MessageHandler
+from server_file_handler import FileHandler
+from server_console import ServerConsole
 from csc_service.shared.channel import ChannelManager
 from csc_service.shared.chat_buffer import ChatBuffer
 from csc_service.shared.irc import SERVER_NAME
 from csc_service.shared.crypto import is_encrypted, decrypt, encrypt
+from storage import PersistentStorageManager
+from server_s2s import ServerNetwork
 
 
 class Server(Service):
@@ -40,13 +47,15 @@ class Server(Service):
           `MessageHandler()`, `ServerConsole()`, `self.sock.bind()`,
           `self.start_listener()`, `self.log()`, `self.connect()`, `self.get_data()`.
         """
-        super().__init__()
+        super().__init__(self)
         self.name = "Server"
-        self.log_file = f"{self.name}.log"
+        # Use project root for consistent logging
+        self.log_file = str(Path(__file__).resolve().parent / f"{self.name}.log")
         #self.log("TEST LOG ENTRY")
         self.init_data()
         self.server_addr = (host, port)
         self.timeout = timeout
+        self.clients_lock = threading.Lock()
 
         self._running = True
 
@@ -56,16 +65,15 @@ class Server(Service):
         self.console = ServerConsole(self)
 
         # Bind and start listening
-        self.log_file = f"{self.name}.log"
+        self.log_file = str(Path(__file__).resolve().parent / f"{self.name}.log")
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(self.server_addr)
         self.start_listener()  # ensure we can receive data immediately
         self.log(f"[{self.name}] Bound to {self.server_addr} and listening.")
 
-        # Load persistent client registry
-        self.clients = {}  # Active connections (runtime memory)
-        self.clients_lock = threading.Lock()
-        self.client_registry = self.get_data("clients") or {}
-        self.log(f"[INIT] Loaded {len(self.client_registry)} persistent clients from data store.")
+        # Disconnected clients history for WHOWAS (last 100)
+        self.disconnected_clients = {}  # {nick: {user, realname, host, quit_time, quit_reason}}
+        self.max_disconnected_history = 100
 
         # IRC channel management
         self.channel_manager = ChannelManager()
@@ -74,24 +82,260 @@ class Server(Service):
         # Chat buffer for message logging and replay
         self.chat_buffer = ChatBuffer()
 
-        # Oper (IRC operator) credentials and active opers
-        self.oper_credentials = self.get_data("oper_credentials") or {
-            "admin": "changeme",
-            "Gemini": "gemini_oper_key",
-            "Claude": "claude_oper_key",
-        }
-        self.opers = set()  # nicks with current oper status
         self.encryption_keys = {} # addr -> aes_key
+
+        self.clients_lock = threading.Lock()
+
+        # NickServ: identified clients (session-only, not persisted)
+        self.nickserv_identified = {}  # addr -> identified_nick
+
+        # Initialize persistent storage manager
+        # Use the system temp run directory as instructed
+        from csc_service.shared.platform import Platform
+        self.storage = PersistentStorageManager(
+            base_path=str(Platform().run_dir),
+            log_func=self.log,
+        )
+
+        # Start cleanup loop
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.cleanup_thread.start()
+
+        # Start BotServ log monitor
+        self.botserv_thread = threading.Thread(target=self._botserv_log_monitor_loop, daemon=True)
+        self.botserv_thread.start()
+
+        # Start Syslog monitor
+        self.syslog_thread = threading.Thread(target=self._syslog_monitor_loop, daemon=True)
+        self.syslog_thread.start()
+
+        # Migrate from old snapshot system if needed, then restore
+        self.storage.migrate_from_snapshot(self)
+        self.storage.restore_all(self)
+
+        # Record startup time for S2S federation
+        self.startup_time = time.time()
+
+        # Run one cleanup pass immediately to prune any ghosts from previous runs
+        self._run_cleanup_once()
+
+        # Initialize S2S federation network
+        self.s2s_network = ServerNetwork(self)
+        self.s2s_network.start_listener()
+
+    @property
+    def client_registry(self):
+        """Dynamic property that reads client registry from disk."""
+        return self.storage.load_users().get("users", {})
+
+    @property
+    def oper_credentials(self):
+        """Dynamic property that reads oper credentials from disk."""
+        return self.storage.load_opers().get("credentials", {})
+
+    @property
+    def opers(self):
+        """Dynamic property that reads active opers from disk."""
+        return {nick.lower() for nick in self.storage.load_opers().get("active_opers", [])}
+
+    @property
+    def wakewords(self):
+        """Dynamic property that reads wakewords from disk on every access."""
+        path = os.path.join(self.storage.base_path, "wakewords.json")
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            return [w.lower() for w in data.get("words", [])]
+        except (OSError, json.JSONDecodeError, KeyError):
+            return []
+
+    def sync_from_disk(self):
+        """Reload state from disk ONLY if files have changed."""
+        changed = False
+        for key in self.storage.FILES:
+            if self.storage._has_changed(key):
+                changed = True
+                break
+        
+        if changed:
+            with self.clients_lock:
+                self.log("[STORAGE] Disk change detected, syncing state...")
+                self.storage.restore_all(self)
 
     # ======================================================================
     # Network Loop
     # ======================================================================
+
+    def _cleanup_loop(self):
+        """Periodic background loop to remove timed-out clients."""
+        self.log("[CLEANUP] Periodic cleanup loop started.")
+        while self._running:
+            time.sleep(30)  # Check every 30 seconds
+            self._run_cleanup_once()
+
+    def _botserv_log_monitor_loop(self):
+        """Background loop for BotServ log monitoring and echoing."""
+        self.log("[BOTSERV] Log monitor loop started.")
+        # Store file pointers to read only new lines
+        # Key: (channel, botnick, log_file) -> last_size
+        file_state = {}
+
+        while self._running:
+            try:
+                botserv_data = self.storage.load_botserv()
+                bots = botserv_data.get("bots", {})
+                
+                for key, bot in bots.items():
+                    if not bot.get("logs_enabled") or not bot.get("logs"):
+                        continue
+                    
+                    chan_name = bot["channel"]
+                    bot_nick = bot["botnick"]
+                    
+                    for log_file in bot["logs"]:
+                        if not os.path.exists(log_file):
+                            continue
+                        
+                        state_key = (chan_name, bot_nick, log_file)
+                        current_size = os.path.getsize(log_file)
+                        last_size = file_state.get(state_key)
+                        
+                        if last_size is None:
+                            # First time seeing this file, just record size
+                            file_state[state_key] = current_size
+                            continue
+                        
+                        if current_size > last_size:
+                            # New data appended
+                            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                                f.seek(last_size)
+                                new_lines = f.readlines()
+                            
+                            file_state[state_key] = current_size
+                            
+                            # Echo to channel
+                            if new_lines:
+                                prefix = f"{bot_nick}!bot@{SERVER_NAME}"
+                                filename = os.path.basename(log_file)
+                                for line in new_lines:
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    # Format: [filename] log line
+                                    text = f"[{filename}] {line}"
+                                    msg = f":{prefix} PRIVMSG {chan_name} :{text}\r\n"
+                                    self.broadcast_to_channel(chan_name, msg)
+                        elif current_size < last_size:
+                            # File truncated
+                            file_state[state_key] = current_size
+
+            except Exception as e:
+                self.log(f"[BOTSERV ERROR] Log monitor error: {e}")
+                # self.log(traceback.format_exc())
+            
+            time.sleep(2) # Poll every 2 seconds
+
+    def _syslog_monitor_loop(self):
+        """Background loop for monitoring syslog and echoing new lines to #syslog."""
+        self.log("[SYSLOG] Syslog monitor loop started.")
+        syslog_script = "/opt/csc/tools/syslog_monitor.py"
+        
+        # Ensure #syslog channel exists
+        self.channel_manager.ensure_channel("#syslog")
+
+        while self._running:
+            try:
+                if os.path.exists(syslog_script):
+                    # Execute the script to get new syslog lines
+                    result = subprocess.run(
+                        [sys.executable, syslog_script],
+                        capture_output=True,
+                        text=True,
+                        check=False # Don't raise exception on non-zero exit
+                    )
+
+                    if result.returncode == 0:
+                        new_lines = result.stdout.strip().split('\n')
+                        if new_lines and new_lines[0]: # Check for empty output
+                            prefix = f"syslog!bot@{SERVER_NAME}"
+                            for line in new_lines:
+                                text = line.strip()
+                                if not text:
+                                    continue
+                                # Format: [syslog] log line
+                                msg = f":{prefix} PRIVMSG #syslog :{text}\r\n"
+                                self.broadcast_to_channel("#syslog", msg)
+                    elif result.stderr:
+                        self.log(f"[SYSLOG ERROR] Syslog monitor script error: {result.stderr.strip()}")
+
+            except Exception as e:
+                self.log(f"[SYSLOG ERROR] Syslog monitor loop error: {e}")
+
+            time.sleep(60) # Poll every 60 seconds
+
+    def _run_cleanup_once(self):
+        """Runs the client cleanup logic once."""
+        try:
+            now = time.time()
+            inactive = []
+            with self.clients_lock:
+                for addr, info in list(self.clients.items()):
+                    last_seen = info.get("last_seen", 0)
+                    if now - last_seen > self.timeout:
+                        nick = info.get("name", "Unknown")
+                        inactive.append((addr, nick))
+
+            for addr, nick in inactive:
+                self.log(f"[CLEANUP] Removing inactive client {nick} @ {addr}")
+                if nick != "Unknown":
+                    # Use the canonical disconnect path: broadcasts QUIT,
+                    # cleans channels, registration, NickServ, WHOWAS history
+                    self.message_handler._server_kill(nick, "Ping timeout")
+                else:
+                    # Unregistered client — just drop the runtime entries
+                    self.clients.pop(addr, None)
+                    self.message_handler.registration_state.pop(addr, None)
+
+            # Second pass: prune persisted channel members with no live connection
+            # This handles ghosts from tests, crashed clients, and any other source
+            pruned = False
+            active_nicks = {info.get("name", "").lower() for info in self.clients.values()}
+
+            for ch in self.channel_manager.list_channels():
+                # list_channels() returns Channel objects, not names
+                if not ch:
+                    continue
+
+                for nick in list(ch.members.keys()):
+                    # Skip if nick has a live connection
+                    if nick.lower() in active_nicks:
+                        continue
+
+                    # Check last_seen from users.json (client_registry property reads disk)
+                    user_record = self.client_registry.get(nick, {})
+                    last_seen = user_record.get("last_seen", 0)
+
+                    if now - last_seen > self.timeout:
+                        self.log(f"[CLEANUP] Pruning stale channel member {nick} from {ch.name}")
+                        ch.remove_member(nick)
+                        pruned = True
+
+            if pruned:
+                self.storage.save_channels_from_manager(self.channel_manager)
+
+        except Exception as e:
+            import traceback
+            self.log(f"[CLEANUP] Error in cleanup logic: {e}")
+            self.log(f"[CLEANUP] Traceback: {traceback.format_exc()}")
 
     def _thread_worker(self, data, addr):
         """
         Worker thread to process each incoming packet.
         """
         try:
+            # Sync from disk if any files changed (Source of Truth)
+            self.sync_from_disk()
+
             # Decrypt if encrypted
             if is_encrypted(data):
                 key = self.encryption_keys.get(addr)
@@ -128,7 +372,7 @@ class Server(Service):
                 self.log(f"[CRYPTO] Encryption failed for {addr}: {e}")
                 # Fallback? No, security risk. Drop.
                 return
-        
+
         # Plaintext fallback
         super().sock_send(data, addr)
 
@@ -144,6 +388,7 @@ class Server(Service):
           `thread.start()`, `time.sleep()`.
         """
         self.log("[NETWORK] Network loop started.")
+
         while self._running:
             try:
                 message_data = self.get_message()
@@ -154,6 +399,7 @@ class Server(Service):
                     ).start()
                 else:
                     time.sleep(0.01)
+
             except Exception as e:
                 self.log(f"[NETWORK] Loop error: {e}")
         self.log("[NETWORK] Loop stopped.")
@@ -164,16 +410,8 @@ class Server(Service):
     def broadcast(self, message, exclude=None):
         """
         Sends a message to all active clients.
-
-        - What it does: Iterates through the list of active clients, checks for
-          timeouts, and sends the message to all non-excluded clients.
-        - Arguments:
-            - `message` (str or bytes): The message to send.
-            - `exclude` (tuple, optional): An address to skip.
-        - What calls it: `ServerMessageHandler.process()`, `ServerConsole.run_loop()`.
-        - What it calls: `time.time()`, `list()`, `dict.items()`, `isinstance()`,
-          `self.log()`, `dict.get()`, `dict.pop()`, `self.sock_send()`.
         """
+        self.sync_from_disk()
         now = time.time()
         for addr, info in list( self.clients.items() ):
             # auto-repair legacy float entries
@@ -190,16 +428,8 @@ class Server(Service):
                 # Inside: def broadcast(self, message, exclude=None):
 
             if now - info.get( "last_seen", 0 ) > self.timeout:
-                self.log( f"[Timeout] Dropping inactive client {addr}" )
-
-                # --- FIX ---
-                # This command can crash if another thread deletes the key first.
-                # del self.clients[addr]
-
-                # This command does the same thing, but will not crash if the key is already gone.
-                self.clients.pop( addr, None )
-                # -----------
-
+                # Skip stale clients during broadcast; the cleanup loop
+                # handles full disconnection (QUIT broadcast, channel/nick removal).
                 continue
 
             if addr != exclude:
@@ -208,45 +438,46 @@ class Server(Service):
     def broadcast_to_channel(self, channel_name, message, exclude=None):
         """
         Send a message to all members of a channel.
-
-        Args:
-            channel_name: The channel name (e.g. '#general')
-            message: The message string to send
-            exclude: An address tuple to skip (usually the sender)
         """
+        self.sync_from_disk()
         channel = self.channel_manager.get_channel(channel_name)
         if not channel:
-            self.log(f"[BROADCAST_CHAN] ERROR: Channel '{channel_name}' not found!")
             return
         msg_bytes = message.encode("utf-8") if isinstance(message, str) else message
-        sent_count = 0
         for nick, info in list(channel.members.items()):
             addr = info.get("addr")
             if addr and addr != exclude:
                 try:
                     self.sock_send(msg_bytes, addr)
-                    sent_count += 1
                 except Exception as e:
                     self.log(f"[BROADCAST_CHAN] Error sending to {nick}@{addr}: {e}")
-        self.log(f"[BROADCAST_CHAN] Broadcast to '{channel_name}': sent to {sent_count} members (total members: {len(channel.members)})")
 
     def send_to_nick(self, nick, message):
         """
         Send a message to a specific nick by looking up their address.
-
-        Args:
-            nick: The target nick
-            message: The message string to send
+        Falls back to S2S routing if the nick is on a remote server.
         """
+        self.sync_from_disk()
         msg_bytes = message.encode("utf-8") if isinstance(message, str) else message
         # Search active clients for the nick
         for addr, info in list(self.clients.items()):
-            if info.get("name") == nick:
+            if info.get("name", "").lower() == nick.lower():
                 try:
                     self.sock_send(msg_bytes, addr)
                 except Exception as e:
                     self.log(f"[SEND_NICK] Error sending to {nick}@{addr}: {e}")
                 return True
+
+        # Check if nick is on a remote server via S2S
+        if hasattr(self, 's2s_network'):
+            remote_info = self.s2s_network.get_user_from_network(nick)
+            if remote_info:
+                # Route via S2S
+                line = message if isinstance(message, str) else message.decode("utf-8", errors="ignore")
+                self.log(f"[S2S] Routing line to remote user {nick} on {remote_info['server_id']}")
+                self.s2s_network.sync_line(nick, line)
+                return True
+
         return False
 
     def send_wallops(self, message):
@@ -254,7 +485,7 @@ class Server(Service):
         wallops_msg = f":{SERVER_NAME} WALLOPS :{message}\r\n"
         for addr, info in list(self.clients.items()):
             nick = info.get("name")
-            if nick and nick in self.opers:
+            if nick and nick.lower() in self.opers:
                 try:
                     self.sock_send(wallops_msg.encode(), addr)
                 except Exception as e:
@@ -298,15 +529,7 @@ class Server(Service):
     # ======================================================================
 
     def sync_persistent_clients(self):
-        """
-        Writes the in-memory client registry back to persistent storage.
-
-        - What it does: Saves the `client_registry` from the `MessageHandler`
-          to the persistent data store.
-        - Arguments: None.
-        - What calls it: `self.run()`.
-        - What it calls: `self.put_data()`, `self.log()`.
-        """
+        """Writes the in-memory client registry back to persistent storage."""
         try:
             self.put_data("clients", self.message_handler.client_registry)
             self.log(
@@ -315,42 +538,74 @@ class Server(Service):
         except Exception as e:
             self.log(f"[SYNC ERROR] Could not save clients: {e}")
 
+    def _persist_session_data(self):
+        """Persist current session data to separate JSON files atomically.
+
+        Called immediately after every state change (nick, join, part, topic,
+        mode, oper, away, kick, kill) to ensure zero data loss on crashes.
+        Delegates to PersistentStorageManager.persist_all().
+        """
+        try:
+            with self.clients_lock:
+                ok = self.storage.persist_all(self)
+            if ok:
+                user_count = len([a for a in self.clients.values() if a.get("name")])
+                chan_count = len(self.channel_manager.list_channels())
+                self.log(f"[STORAGE] Persisted: {user_count} users, {chan_count} channels")
+        except Exception as e:
+            self.log(f"[STORAGE ERROR] Failed to persist session data: {e}")
+
     # ======================================================================
     # Run / Shutdown
     # ======================================================================
 
     def run(self):
         """
-        Starts the server's main network loop and console interface.
+        Starts the server's main network loop and the terminal interface.
 
-        - What it does: The main entry point for the server. It starts the network
-          loop in a background thread and runs the interactive console in the
-          main thread (unless --daemon flag is set). Handles graceful shutdown.
-        - Arguments: None.
-        - What calls it: The `if __name__ == "__main__":` block.
-        - What it calls: `self.log()`, `threading.Thread()`, `thread.start()`,
-          `self.console.run_loop()`, `thread.join()`,
-          `self.sync_persistent_clients()`, `self.close()`, `print()`.
+        If a TTY is attached, spawns a standard CSC Client instance for the
+        terminal. Otherwise, runs in headless/daemon mode.
         """
         self.log(f"[STARTUP] Server listening on {self.server_addr}")
         network_thread = threading.Thread(target=self._network_loop, daemon=True)
         network_thread.start()
 
-        # Launch interactive admin console in the main thread (unless running as daemon)
-        if "--daemon" not in sys.argv:
-            self.console.run_loop()
-        else:
-            self.log("[DAEMON] Running in daemon mode, skipping interactive console.")
-            # Keep the network thread alive by waiting indefinitely
+        # Terminal Interface Selection
+        # Force headless mode if CSC_HEADLESS environment variable is set
+        is_headless = os.environ.get("CSC_HEADLESS", "false").lower() == "true"
+        
+        if sys.stdin.isatty() and not is_headless:
+            self.log("[STARTUP] TTY detected, spawning standard client interface.")
             try:
-                while self._running:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                self.log("[SHUTDOWN] Keyboard interrupt received.")
+                from csc_service.client import Client
+                # Initialize client pointing to this server instance
+                client = Client()
+                # Ensure it points to the local server we just started
+                client.server_host = self.server_addr[0]
+                client.server_port = self.server_addr[1]
+                # Run the client in the main thread
+                client.run()
+            except ImportError:
+                self.log("[ERROR] csc-client not found, falling back to ServerConsole.")
+                self.console.run_loop()
+            except Exception as e:
+                self.log(f"[ERROR] Failed to start client interface: {e}")
+                self.console.run_loop()
+        else:
+            self.log("[STARTUP] No TTY detected, running in daemon mode.")
+            # ServerConsole handles non-tty by blocking forever
+            self.console.run_loop()
 
         # Graceful shutdown
         self._running = False
+
+        # Shut down S2S federation network
+        if hasattr(self, 's2s_network'):
+            self.s2s_network.shutdown()
+
         network_thread.join(timeout=2)
+        self._persist_session_data()
+        self.storage.save_history_from_server(self)
         self.sync_persistent_clients()
         self.close()
         self.log("[SHUTDOWN] Server closed sockets and persisted data.")

@@ -4,9 +4,9 @@ import time
 import threading
 from pathlib import Path
 import socket
-from csc_service.shared.network import Network
-from csc_service.shared.aliases import Aliases
-from csc_service.shared.macros import Macros
+from network import Network
+from aliases import Aliases
+from macros import Macros
 from csc_service.shared.data import Data
 from csc_service.shared.irc import parse_irc_message, format_irc_message, SERVER_NAME
 
@@ -534,6 +534,31 @@ class Client(Network):
             elif command == "/who":
                 chan = args.strip() if args else self.current_channel
                 super().send(f"WHO {chan}\r\n")
+            elif command == "/whois":
+                if args:
+                    parts_split = args.split()
+                    if len(parts_split) == 1:
+                        # WHOIS <nick>
+                        super().send(f"WHOIS {parts_split[0]}\r\n")
+                    elif len(parts_split) >= 2:
+                        # WHOIS [server] <nick>
+                        super().send(f"WHOIS {parts_split[0]} {parts_split[1]}\r\n")
+                else:
+                    print("Usage: /whois [server] <nick>")
+            elif command == "/whowas":
+                if args:
+                    parts_split = args.split()
+                    nick = parts_split[0]
+                    count = parts_split[1] if len(parts_split) > 1 else ""
+                    server = parts_split[2] if len(parts_split) > 2 else ""
+                    if count and server:
+                        super().send(f"WHOWAS {nick} {count} {server}\r\n")
+                    elif count:
+                        super().send(f"WHOWAS {nick} {count}\r\n")
+                    else:
+                        super().send(f"WHOWAS {nick}\r\n")
+                else:
+                    print("Usage: /whowas <nick> [count] [server]")
             elif command == "/oper":
                 parts_split = args.split(" ", 1)
                 if len(parts_split) >= 2:
@@ -612,6 +637,8 @@ class Client(Network):
             "/list                        : List all channels.\n"
             "/names [#ch]                 : List channel members.\n"
             "/who [#ch]                   : WHO query.\n"
+            "/whois <nick>                : Get information about a user.\n"
+            "/whowas <nick>               : Get information about disconnected user.\n"
             "/oper <name> <pass>          : Authenticate as IRC operator.\n"
             "/kick #ch <nick> [reason]    : Kick user from channel.\n"
             "/motd                        : Show message of the day.\n"

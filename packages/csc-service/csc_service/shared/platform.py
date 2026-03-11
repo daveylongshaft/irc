@@ -24,7 +24,29 @@ Classes:
 
 import json
 import os
-import platform as _platform
+import os as _os
+import sys as _sys
+
+class _platform:
+    """Thin shim replacing stdlib platform module to avoid name collision."""
+    @staticmethod
+    def machine():
+        return _os.uname().machine
+    @staticmethod
+    def processor():
+        return _os.uname().machine
+    @staticmethod
+    def system():
+        return _os.uname().sysname
+    @staticmethod
+    def release():
+        return _os.uname().release
+    @staticmethod
+    def version():
+        return _os.uname().version
+    @staticmethod
+    def python_version():
+        return '%d.%d.%d' % _sys.version_info[:3]
 import shutil
 import socket
 import struct
@@ -32,7 +54,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from .version import Version
+from csc_service.shared.version import Version
 
 
 # Parse human-readable sizes like "2GB" -> bytes
