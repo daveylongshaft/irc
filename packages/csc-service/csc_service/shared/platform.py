@@ -27,23 +27,25 @@ import os
 import os as _os
 import sys as _sys
 
+import platform as _plt
+
 class _platform:
     """Thin shim replacing stdlib platform module to avoid name collision."""
     @staticmethod
     def machine():
-        return _os.uname().machine
+        return _plt.machine()
     @staticmethod
     def processor():
-        return _os.uname().machine
+        return _plt.processor()
     @staticmethod
     def system():
-        return _os.uname().sysname
+        return _plt.system()
     @staticmethod
     def release():
-        return _os.uname().release
+        return _plt.release()
     @staticmethod
     def version():
-        return _os.uname().version
+        return _plt.version()
     @staticmethod
     def python_version():
         return '%d.%d.%d' % _sys.version_info[:3]
@@ -87,18 +89,23 @@ class Platform(Version):
     # Default platform.json location (next to the running process)
     PLATFORM_JSON_FILENAME = "platform.json"
     # Walk up to find project root — prefer csc-service.json (true root) over CLAUDE.md (submodule)
-    _p = Path(__file__).resolve().parent
-    _claude_md_stop = None
-    for _i in range(10):
-        if (_p / "csc-service.json").exists():
-            break
-        if (_p / "CLAUDE.md").exists() and _claude_md_stop is None:
-            _claude_md_stop = _p  # remember but keep walking for csc-service.json
-        if _p == _p.parent:
-            _p = _claude_md_stop or _p
-            break
-        _p = _p.parent
+    _env_root = os.environ.get("CSC_ROOT")
+    if _env_root and Path(_env_root).is_dir():
+        _p = Path(_env_root)
+    else:
+        _p = Path(__file__).resolve().parent
+        _claude_md_stop = None
+        for _i in range(10):
+            if (_p / "csc-service.json").exists():
+                break
+            if (_p / "CLAUDE.md").exists() and _claude_md_stop is None:
+                _claude_md_stop = _p
+            if _p == _p.parent:
+                _p = _claude_md_stop or _p
+                break
+            _p = _p.parent
     PROJECT_ROOT = _p
+    # print(f"DEBUG: Platform.PROJECT_ROOT detected as: {PROJECT_ROOT}")
 
     def __init__(self):
         super().__init__()
@@ -408,35 +415,20 @@ class Platform(Version):
 
     def _detect_network(self):
         """Detect hostname and IP addresses."""
+        # print("DEBUG: _detect_network started")
         info = {
             "hostname": socket.gethostname(),
             "ips": []
         }
         
         try:
-            # Get all IP addresses associated with this host
-            # socket.gethostbyname_ex returns (hostname, aliases, ip_list)
-            try:
-                _, _, ip_list = socket.gethostbyname_ex(info["hostname"])
-                for ip in ip_list:
-                    if ip not in info["ips"]:
-                        info["ips"].append(ip)
-            except Exception:
-                pass
+            # SKIP gethostbyname_ex and getaddrinfo on Windows as they can be unstable
+            # and are redundant if we use the dummy connect method below.
             
-            # Use getaddrinfo for more comprehensive detection (including IPv6 if needed)
-            try:
-                addr_info = socket.getaddrinfo(info["hostname"], None)
-                for addr in addr_info:
-                    ip = addr[4][0]
-                    if ip not in info["ips"]:
-                        info["ips"].append(ip)
-            except Exception:
-                pass
-                
             # If still empty or only localhost, try connecting to a dummy address to see outgoing interface
             if not info["ips"] or info["ips"] == ["127.0.0.1"]:
                 try:
+                    # print("DEBUG: _detect_network calling dummy connect")
                     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                     # Doesn't actually connect, just finds the interface
                     s.connect(("8.8.8.8", 80))
@@ -449,6 +441,7 @@ class Platform(Version):
         except Exception:
             pass
             
+        # print("DEBUG: _detect_network finished")
         return info
 
     def _run_version_cmd(self, binary, args=None):

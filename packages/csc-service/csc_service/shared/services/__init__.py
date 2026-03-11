@@ -1,4 +1,5 @@
 """CSC shared services."""
+import os
 import json
 from pathlib import Path
 
@@ -7,11 +8,17 @@ def find_project_root():
     """Find the CSC project root directory.
 
     Strategy:
-    1. Check platform.json in ancestor dirs for working_dir (fast, authoritative)
-    2. Walk up looking for marker files (CLAUDE.md, csc-service.json, README.1shot)
-    3. Fallback: 6 levels up from this file
+    1. Check CSC_ROOT environment variable (most reliable override)
+    2. Check platform.json in ancestor dirs for working_dir
+    3. Walk up looking for marker files (CLAUDE.md, csc-service.json, README.1shot)
+    4. Fallback: 6 levels up from this file
     """
-    # Walk up from this file looking for markers
+    # 1. Environment variable override
+    env_root = os.environ.get("CSC_ROOT")
+    if env_root and Path(env_root).is_dir():
+        return Path(env_root)
+
+    # 2. Walk up from this file looking for markers
     p = Path(__file__).resolve().parent
     markers = ("CLAUDE.md", "csc-service.json", "README.1shot")
     for _ in range(10):
