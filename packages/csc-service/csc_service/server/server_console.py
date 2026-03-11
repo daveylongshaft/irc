@@ -1,3 +1,4 @@
+import sys
 import time
 import getpass
 from csc_service.shared.irc import format_irc_message, SERVER_NAME
@@ -74,6 +75,9 @@ class ServerConsole:
         print("\nServer is running. Type /help for a list of commands.")
         while self.server._running:
             try:
+                if not sys.stdin.isatty():
+                    time.sleep(1)
+                    continue
                 cmd = input()
                 if not cmd:
                     continue

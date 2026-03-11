@@ -3,10 +3,10 @@ import time
 import random
 import threading
 import queue
-from csc_service.shared.version import Version
+from csc_service.shared.platform import Platform
 
 
-class Network( Version ):
+class Network( Platform ):
     def __init__(self, host="127.0.0.1", port=9525, name="network"):
         """
         Initializes the Network class.
@@ -50,7 +50,12 @@ class Network( Version ):
         while self._running:
             try:
                 data, addr = self.sock.recvfrom( self.buffsize )
-                self.clients[addr] = {"last_seen": time.time()}
+                # Update last_seen WITHOUT overwriting existing fields (RACE CONDITION FIX)
+                # Update last_seen, preserving existing fields like 'name'
+                if addr not in self.clients:
+                    self.clients[addr] = {"last_seen": time.time()}
+                else:
+                    self.clients[addr]["last_seen"] = time.time()
 
 #                self.clients[addr] = time.time()
 

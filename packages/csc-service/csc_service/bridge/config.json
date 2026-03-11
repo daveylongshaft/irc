@@ -5,6 +5,8 @@
   "tcp_listen_port": 9667,
   "udp_listen_host": "0.0.0.0",
   "udp_listen_port": 9526,
-  "encryption_enabled": true,
+  "encryption_enabled": false,
+  "bridge_encryption_enabled": false,
+  "gateway_mode": "rfc_to_csc",
   "session_timeout": 300
 }

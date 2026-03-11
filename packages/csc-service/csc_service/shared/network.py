@@ -1,12 +1,131 @@
+"""
+Network communication module for the CSC shared package.
+
+Provides the Network class which extends Version with UDP socket
+communication, message queuing, keepalive mechanisms, and a threaded
+listener for incoming data. Supports both client and server networking.
+
+Module Overview:
+    This module defines the Network class, the fifth level in the CSC framework
+    inheritance hierarchy (Root -> Log -> Data -> Version -> Platform -> Network -> Service).
+    It provides UDP-based networking with automatic keepalive, message queuing,
+    and a background listener thread for asynchronous I/O.
+
+Classes:
+    Network: Extends Version, adds UDP socket communication
+
+Network Model:
+    - UDP-only (connectionless) for simplicity and performance
+    - Non-blocking with 1.0 second socket timeout
+    - Background listener thread receives all incoming data
+    - Message queue decouples receiving from processing
+    - Automatic keepalive packets prevent NAT timeout
+    - Chunked sending for messages larger than buffer size
+
+Protocol Features:
+    - Raw bytes transmitted (no automatic encoding/decoding)
+    - Keepalive filtering: "<KEEPALIVE>", "NOOP", "PONG*" messages dropped
+    - Client tracking: Last-seen timestamps for all sending addresses
+    - 65500 byte buffer size (below 65507 UDP maximum)
+    - 10ms delay between chunks to prevent UDP loss
+
+Dependencies:
+    - socket: For UDP socket operations
+    - time: For timestamps and delays
+    - random: For keepalive interval randomization
+    - threading: For background listener thread
+    - queue: For thread-safe message queue
+    - .platform.Platform: Parent class providing platform detection and versioning
+
+Thread Safety:
+    - Listener thread runs in background (daemon=True)
+    - message_queue is thread-safe (queue.Queue)
+    - self.clients dict updated from listener thread (potential race condition)
+    - No locking around self.clients - callers must handle races
+    - Socket operations are thread-safe at OS level
+    - _running flag used for thread coordination (no lock - eventual consistency)
+
+Side Effects:
+    - Binds UDP socket on initialization (may fail if port in use)
+    - Listener thread created when start_listener() called
+    - Sends keepalive packets automatically from client
+    - Updates self.clients dict from listener thread
+    - Logs operations via inherited log() method
+    - Prints initialization info to console
+
+Connection Management:
+    - No connection in UDP sense - just address tracking
+    - self.clients dict maps (host, port) tuples to metadata:
+        {"last_seen": timestamp, "name": optional_name, ...}
+    - Client cleanup not automatic - callers must implement timeouts
+    - ConnectionResetError ignored (Windows ICMP response handling)
+
+Buffer and Queue:
+    - message_queue holds (bytes, addr) tuples
+    - No queue size limit (unbounded growth possible)
+    - get_message() returns None if empty (non-blocking)
+    - Listener filters keepalives before queueing
+
+Keepalive Mechanism:
+    - Random interval: 60-120 seconds (randomized to prevent thundering herd)
+    - Client sends "PING :keepalive\\r\\n"
+    - Server/listener filters and discards
+    - Resets interval after each send
+    - No automatic sending from server side
+
+Usage:
+    As server:
+        network = Network(host="0.0.0.0", port=9525)
+        network.sock.bind(network.server_addr)
+        network.start_listener()
+        while True:
+            msg = network.get_message()
+            if msg:
+                data, addr = msg
+                # Process message
+
+    As client:
+        network = Network(host="server_ip", port=9525)
+        network.start_listener()
+        network.send("Hello\\r\\n")
+        network.maybe_send_keepalive()
+
+Attributes (Instance):
+    name (str): Instance identifier, default "network"
+    server_addr (tuple): (host, port) tuple for socket operations
+    sock (socket.socket): UDP socket object
+    message_queue (queue.Queue): Thread-safe queue of (bytes, addr) tuples
+    _listener_thread (threading.Thread or None): Background listener thread
+    _running (bool): Flag to stop listener thread
+    buffsize (int): Maximum chunk size, 65500 bytes
+    last_keepalive (float): Timestamp of last keepalive send
+    clients (dict): Maps (host, port) -> {"last_seen": float, ...}
+    keepalive_interval (int): Seconds between keepalives, randomized 60-120
+
+Parents:
+    - Subclassed by Service class
+    - Used by Server and Client for all networking
+
+Children:
+    - Service class in the hierarchy
+
+Known Issues:
+    - Race condition: self.clients updated without lock
+    - Unbounded queue growth if messages not consumed
+    - No automatic client timeout/cleanup
+    - Large messages chunked but no reassembly on receiver
+    - Keepalive interval per-instance, not per-client
+"""
+
 import socket
 import time
 import random
 import threading
 import queue
-from csc_service.shared.version import Version
+from csc_service.shared.platform import Platform
 
 
-class Network( Version ):
+class Network( Platform ):
     def __init__(self, host="127.0.0.1", port=9525, name="network"):
         """
         Initializes the Network class.
@@ -50,7 +169,12 @@ class Network( Version ):
         while self._running:
             try:
                 data, addr = self.sock.recvfrom( self.buffsize )
-                self.clients[addr] = {"last_seen": time.time()}
+                # Update last_seen WITHOUT overwriting existing fields (RACE CONDITION FIX)
+                # Update last_seen, preserving existing fields like 'name'
+                if addr not in self.clients:
+                    self.clients[addr] = {"last_seen": time.time()}
+                else:
+                    self.clients[addr]["last_seen"] = time.time()
 
 #                self.clients[addr] = time.time()
 
@@ -64,6 +188,10 @@ class Network( Version ):
                 self.message_queue.put( (data, addr) )
 
             except socket.timeout:
+                continue
+            except ConnectionResetError:
+                # This happens on Windows if a previous sendto hit a closed port.
+                # It's harmless for UDP, just continue.
                 continue
             except Exception as e:
                 if self._running:
@@ -181,6 +309,13 @@ class Network( Version ):
     def connected_for(self):
         """
         A placeholder method for subclasses to override.
+
+        - What it does: Intended to be overridden by subclasses to return the
+          duration of the current connection in seconds.
+        - Arguments: None.
+        - What calls it: May be called by status reporting or monitoring systems.
+        - What it calls: None.
+        - Returns: A float representing seconds connected (0.0 in base implementation).
         """
         return 0.0
 

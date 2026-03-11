@@ -101,15 +101,20 @@ class DHExchange:
         >>> assert key_a == key_b  # Both derive the same 32-byte AES key
     """
 
-    def __init__(self):
+    def __init__(self, p: int = None, g: int = None):
         """Generate a new ephemeral DH key pair.
 
         The private key is 256 bits of cryptographically secure randomness.
-        The public key is computed as g^private mod p where g=2 and p is the
-        RFC 3526 Group 14 prime.
+        The public key is computed as g^private mod p.
+
+        Args:
+            p: Optional custom prime. If None, uses RFC 3526 Group 14 prime.
+            g: Optional custom generator. If None, uses 2.
         """
+        self.p = p if p is not None else DH_PRIME
+        self.g = g if g is not None else DH_GENERATOR
         self.private = int.from_bytes(os.urandom(32), "big")
-        self.public = pow(DH_GENERATOR, self.private, DH_PRIME)
+        self.public = pow(self.g, self.private, self.p)
 
     def compute_shared_key(self, other_public: int) -> bytes:
         """Derive a 32-byte AES-256 key from the other side's public key.
@@ -125,7 +130,7 @@ class DHExchange:
         Returns:
             32-byte key (bytes) for use with AES-256-GCM encrypt/decrypt.
         """
-        shared_secret = pow(other_public, self.private, DH_PRIME)
+        shared_secret = pow(other_public, self.private, self.p)
         secret_bytes = shared_secret.to_bytes(256, "big")
         return hashlib.sha256(secret_bytes).digest()
 
@@ -139,8 +144,8 @@ class DHExchange:
         Returns:
             String in the format: "CRYPTOINIT DH <p_hex> <g_hex> <pubkey_hex>\\r\\n"
         """
-        p_hex = format(DH_PRIME, "x")
-        g_hex = format(DH_GENERATOR, "x")
+        p_hex = format(self.p, "x")
+        g_hex = format(self.g, "x")
         pub_hex = format(self.public, "x")
         return f"CRYPTOINIT DH {p_hex} {g_hex} {pub_hex}\r\n"
 

@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 from pathlib import Path
-from csc_service.shared.data import Data
+from data import Data
 
 
 class Version( Data ):
@@ -227,6 +227,15 @@ class Version( Data ):
 
             # Use the class's helper method to write the updated metadata back.
             self._write_version_info( file_backup_dir, version_info )
+
+            # Notify Prompts service if active
+            try:
+                if hasattr(self, "server") and hasattr(self.server, "loaded_modules"):
+                    prompts = self.server.loaded_modules.get("prompts")
+                    if prompts:
+                        prompts.version_file(filepath)
+            except Exception as e:
+                self.log(f"Warning: Failed to notify prompts service: {e}")
 
             self.log( f"SUCCESS: Created version {new_version_number} for {filepath}" )
             return new_version_number
