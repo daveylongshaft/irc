@@ -52,6 +52,8 @@ def main():
     enable_pr_review = config.get("enable_pr_review", False)
     enable_jules = config.get("jules", {}).get("enabled", False)
     enable_pki = config.get("enable_pki", False)
+    enable_server = config.get("enable_server", True)
+    enable_bridge = config.get("enable_bridge", False)
 
     from csc_service.infra import git_sync
     git_sync.setup(work_dir)
@@ -63,12 +65,21 @@ def main():
         
         # Start core threaded components (IRC server, Bridge, Clients)
         server_thread = None
-        if config.get("enable_server", True):
-            from csc_server.server import Server
+        if enable_server:
+            from csc_service.server.server import Server
             srv = Server()
             server_thread = threading.Thread(target=srv.run, daemon=True)
             server_thread.start()
             print(f"[{ts()}] [csc-service] Started IRC server")
+
+        # Start Bridge if enabled
+        bridge_thread = None
+        if enable_bridge:
+            from csc_service.bridge.bridge import Bridge
+            bridge = Bridge()
+            bridge_thread = threading.Thread(target=bridge.run, daemon=True)
+            bridge_thread.start()
+            print(f"[{ts()}] [csc-service] Started IRC bridge")
 
         # Start PKI enrollment server if enabled (CA server only)
         if enable_pki:

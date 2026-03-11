@@ -8,15 +8,15 @@ import time
 import traceback
 import subprocess
 from pathlib import Path
-from service import Service
-from server_message_handler import MessageHandler
-from server_file_handler import FileHandler
+from .service import Service
+from .server_message_handler import MessageHandler
+from .server_file_handler import FileHandler
 from csc_service.shared.channel import ChannelManager
 from csc_service.shared.chat_buffer import ChatBuffer
 from csc_service.shared.irc import SERVER_NAME
 from csc_service.shared.crypto import is_encrypted, decrypt, encrypt
-from storage import PersistentStorageManager
-from server_s2s import ServerNetwork
+from .storage import PersistentStorageManager
+from .server_s2s import ServerNetwork
 
 
 class Server(Service):
