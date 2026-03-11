@@ -19,8 +19,8 @@ UNIT_MAP = {
     "pm":           ("csc-service.service",  "user"),
     "pr-reviewer":  ("csc-service.service",  "user"),
     "pki":          ("csc-service.service",  "user"),   # in-proc thread, restart parent
-    "server":       ("csc-server.service",   "system"),
-    "bridge":       ("csc-bridge.service",   "system"),
+    "server":       ("csc-server.service",   "user"),
+    "bridge":       ("csc-bridge.service",   "user"),
 }
 
 

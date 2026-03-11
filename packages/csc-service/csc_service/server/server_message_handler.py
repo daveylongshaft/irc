@@ -9,6 +9,7 @@ and legacy IDENT/RENAME compatibility.
 All service commands and file uploads are transparent on the chatline.
 """
 
+import os
 import re
 import time
 import threading
@@ -237,7 +238,11 @@ class MessageHandler:
             "STATS":       self._handle_stats,
             "REHASH":      self._handle_rehash,
             "SHUTDOWN":    self._handle_shutdown,
+            "LINK":        self._handle_link,
+            "RELINK":      self._handle_relink,
+            "DELINK":      self._handle_delink,
             "LOCALCONFIG": self._handle_localconfig,
+            "HELP":        self._handle_help,
         }
 
         if command in post_reg_commands:
@@ -899,11 +904,19 @@ class MessageHandler:
         parts = cmd_text.split()
         if not parts:
             return
-            
+
         token = parts[0]
-        
-        # Execute via server
-        result = self.server.handle_command(cmd_text)
+
+        if len(parts) < 3:
+            self._send_notice(addr, f"{token} AI : Usage: AI <token> <service> <method> [args...]")
+            return
+
+        class_name = parts[1]
+        method_name = parts[2]
+        method_args = parts[3:]
+
+        # Execute via server.handle_command (Service.handle_command signature)
+        result = self.server.handle_command(class_name, method_name, method_args, nick, addr)
         
         if token == "0":
             return # Fire and forget
@@ -1235,10 +1248,10 @@ class MessageHandler:
     # ======================================================================
 
     def _handle_oper(self, msg, addr):
-        """OPER <name> <password>
+        """OPER <account> <password>
 
         Authenticates the client as an IRC operator using the named O-line.
-        On success grants +o user mode, stores oper info (name, flags, class) in
+        On success grants oper user modes per flags, stores oper info in
         active_opers, and broadcasts a WALLOPS notice.
         """
         nick = self._get_nick(addr)
@@ -1246,32 +1259,36 @@ class MessageHandler:
             self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "OPER :Not enough parameters")
             return
 
-        oper_name = msg.params[0]
-        oper_pass = msg.params[1]
+        account = msg.params[0]
+        password = msg.params[1]
 
-        # Look up O-line from disk (disk is source of truth)
-        olines = self.server.get_olines()
-        oline = olines.get(oper_name)
-        if oline and oline.get("password") == oper_pass:
-            flags = list(oline.get("flags", []))
-            oper_class = oline.get("class", "local")
-            # Record in active_opers with flags and class
-            self.server.storage.add_active_oper(
-                nick.lower(),
-                oper_name=oper_name,
-                flags=flags,
-                oper_class=oper_class,
-            )
-            # Add +o to user_modes
+        # Build client mask for host check
+        reg = self.registration_state.get(addr, {})
+        client_user = reg.get("user", nick)
+        client_host = addr[0] if addr else "unknown"
+        client_mask = f"{nick}!{client_user}@{client_host}"
+
+        server_name = SERVER_NAME
+
+        flags = self.server.storage.check_oper_auth(account, password, server_name, client_mask)
+        if flags is not None:
             if addr not in self.server.clients:
                 self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
-            self.server.clients[addr].setdefault("user_modes", set()).add("o")
-            self._send_numeric(addr, RPL_YOUREOPER, nick,
-                               f"You are now an IRC operator (class: {oper_class})")
-            self.server.log(f"[OPER] {nick} authenticated as '{oper_name}' "
-                            f"(class={oper_class}, flags={flags})")
-            self.server.send_wallops(f"{nick} is now an IRC operator "
-                                     f"(auth: {oper_name}, class: {oper_class})")
+            modes = self.server.clients[addr].setdefault("user_modes", set())
+            for flag in flags:
+                if flag in "oOaA":
+                    modes.add(flag)
+            self.server.storage.add_active_oper(nick.lower(), account, flags)
+            if not hasattr(self.server, "_active_opers_full"):
+                self.server._active_opers_full = []
+            self.server._active_opers_full = [
+                e for e in self.server._active_opers_full
+                if e.get("nick", "").lower() != nick.lower()
+            ]
+            self.server._active_opers_full.append({"nick": nick.lower(), "account": account, "flags": flags})
+            self._send_numeric(addr, RPL_YOUREOPER, nick, "You are now an IRC operator")
+            self.server.log(f"[OPER] {nick} authenticated as oper '{account}' flags={flags}")
+            self.server.send_wallops(f"{nick} is now an IRC operator (account: {account}, flags: {flags})")
             self.server._persist_session_data()
         else:
             self._send_numeric(addr, ERR_PASSWDMISMATCH, nick, "Password incorrect")
@@ -1760,6 +1777,13 @@ class MessageHandler:
 
         target_nick = msg.params[0]
         reason = msg.params[1] if len(msg.params) > 1 else "Killed by operator"
+
+        # protect_local_opers: local opers cannot kill other opers unless they have O flag
+        if target_nick.lower() in self.server.opers:
+            if not self.server.is_global_oper(nick):
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "Permission Denied- Cannot KILL an IRC operator (need global oper flag O)")
+                return
 
         kill_reason = f"Killed by {nick}: {reason}"
         if not self._server_kill(target_nick, kill_reason):
@@ -3424,3 +3448,532 @@ class MessageHandler:
     def handle_service_command(self, line, addr, client_name):
         """Legacy entry point for service commands."""
         self._handle_service_via_chatline(line, addr, client_name)
+
+    # ==================================================================
+    # Oper Admin Commands
+    # ==================================================================
+
+    def _oper_notice(self, addr, text):
+        """Send a NOTICE to the requesting oper."""
+        nick = self._get_nick(addr)
+        msg = f":{SERVER_NAME} NOTICE {nick} :{text}\r\n"
+        self.server.sock_send(msg.encode(), addr)
+
+    def _require_oper(self, addr):
+        """Return nick if oper, else send ERR_NOPRIVILEGES and return None."""
+        nick = self._get_nick(addr)
+        if nick.lower() not in self.server.opers:
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "Permission Denied- You're not an IRC operator")
+            return None
+        return nick
+
+    def _require_admin(self, addr):
+        """Return nick if server admin (a/A flag), else deny."""
+        nick = self._require_oper(addr)
+        if nick and not self.server.is_server_admin(nick):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "Permission Denied- Server admin flag required")
+            return None
+        return nick
+
+    def _handle_setmotd(self, msg, addr):
+        """SETMOTD :<text>  — set Message of the Day (requires server admin)."""
+        nick = self._require_admin(addr)
+        if not nick:
+            return
+        text = " ".join(msg.params).lstrip(":")
+        if not text:
+            self._oper_notice(addr, "Usage: SETMOTD :<message>")
+            return
+        self.server.put_data("motd", text)
+        self._oper_notice(addr, f"MOTD updated.")
+        prefix = f"{SERVER_NAME}!admin@{SERVER_NAME}"
+        for channel in self.server.channel_manager.list_channels():
+            notice = format_irc_message(prefix, "NOTICE", [channel.name],
+                                        f"MOTD updated by {nick}") + "\r\n"
+            self.server.broadcast_to_channel(channel.name, notice)
+        self.server.send_wallops(f"MOTD updated by {nick}")
+
+    def _handle_trust(self, msg, addr):
+        """TRUST <subcommand> [args] — manage o-lines (oper credentials)."""
+        nick = self._get_nick(addr)
+        if not msg.params:
+            self._trust_help(addr)
+            return
+
+        sub = msg.params[0].lower()
+        args = msg.params[1:]
+
+        if sub == "list":
+            # Any oper can list
+            if nick.lower() not in self.server.opers:
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "Permission Denied- You're not an IRC operator")
+                return
+            self._trust_list(addr)
+        elif sub in ("add", "del", "edit", "addhost", "delhost"):
+            if not self._require_admin(addr):
+                return
+            if sub == "add":
+                self._trust_add(addr, args)
+            elif sub == "del":
+                self._trust_del(addr, args)
+            elif sub == "edit":
+                self._trust_edit(addr, args)
+            elif sub == "addhost":
+                self._trust_addhost(addr, args)
+            elif sub == "delhost":
+                self._trust_delhost(addr, args)
+        else:
+            self._trust_help(addr)
+
+    def _trust_help(self, addr):
+        for line in [
+            "TRUST subcommands:",
+            "  TRUST list                          - List all o-lines (no passwords)",
+            "  TRUST add <acct> <pass> <svrs> <masks> [flags]  - Add o-line",
+            "  TRUST del <acct>                    - Remove all o-lines for account",
+            "  TRUST edit <acct> <field> <value>   - Edit field: password/flags/servers",
+            "  TRUST addhost <acct> <mask>          - Add host mask",
+            "  TRUST delhost <acct> <mask>          - Remove host mask",
+            "  Flags: o=local oper  O=global oper  a=server admin  A=net admin",
+        ]:
+            self._oper_notice(addr, line)
+
+    def _trust_list(self, addr):
+        data = self.server.storage.load_opers()
+        olines = data.get("olines", {})
+        remote = data.get("remote_olines", {})
+        active_nicks = {e.get("nick", "").lower() for e in data.get("active_opers", [])
+                        if isinstance(e, dict)}
+        self._oper_notice(addr, "--- O-Lines ---")
+        for section, entries_dict, label in [
+            (olines, olines, "local"),
+            (remote, remote, "remote"),
+        ]:
+            for acct, entries in entries_dict.items():
+                for entry in entries:
+                    masks = ",".join(entry.get("host_masks", ["*!*@*"]))
+                    servers = ",".join(entry.get("servers", ["*"]))
+                    flags = entry.get("flags", "o")
+                    comment = entry.get("comment", "")
+                    active = " [ACTIVE]" if acct.lower() in active_nicks else ""
+                    self._oper_notice(addr,
+                        f"  [{label}] {acct}:{flags}:{servers}:{masks}{active}"
+                        + (f" # {comment}" if comment else ""))
+        self._oper_notice(addr, "--- End O-Lines ---")
+
+    def _trust_add(self, addr, args):
+        if len(args) < 4:
+            self._oper_notice(addr, "Usage: TRUST add <account> <password> <servers> <masks> [flags]")
+            return
+        acct, password, servers_str, masks_str = args[0], args[1], args[2], args[3]
+        flags = args[4] if len(args) > 4 else "ol"
+        servers = [s.strip() for s in servers_str.split(",") if s.strip()]
+        masks = [m.strip() for m in masks_str.split(",") if m.strip()]
+        data = self.server.storage.load_opers()
+        olines = data.setdefault("olines", {})
+        olines.setdefault(acct, []).append({
+            "user": acct,
+            "password": password,
+            "servers": servers or ["*"],
+            "host_masks": masks or ["*!*@*"],
+            "flags": flags,
+            "comment": "",
+        })
+        self.server.storage.save_opers(data)
+        self._write_olines_conf(data)
+        self._oper_notice(addr, f"O-line added for account '{acct}' (flags: {flags})")
+        nick = self._get_nick(addr)
+        self.server.send_wallops(f"{nick} added o-line for '{acct}'")
+
+    def _trust_del(self, addr, args):
+        if not args:
+            self._oper_notice(addr, "Usage: TRUST del <account>")
+            return
+        acct = args[0]
+        data = self.server.storage.load_opers()
+        olines = data.get("olines", {})
+        if acct not in olines:
+            self._oper_notice(addr, f"No o-line found for '{acct}'")
+            return
+        del olines[acct]
+        # Deoper anyone authenticated with this account
+        updated_active = []
+        for entry in data.get("active_opers", []):
+            if isinstance(entry, dict) and entry.get("account") == acct:
+                # Strip oper modes from connected client
+                for a, info in self.server.clients.items():
+                    if info.get("name", "").lower() == entry.get("nick", "").lower():
+                        info.get("user_modes", set()).discard("o")
+                        info.get("user_modes", set()).discard("O")
+                        info.get("user_modes", set()).discard("a")
+                        info.get("user_modes", set()).discard("A")
+                        mode_msg = f":{SERVER_NAME} MODE {info['name']} -oOaA\r\n"
+                        self.server.sock_send(mode_msg.encode(), a)
+            else:
+                updated_active.append(entry)
+        data["active_opers"] = updated_active
+        self.server.storage.save_opers(data)
+        self._write_olines_conf(data)
+        self._oper_notice(addr, f"O-line removed for account '{acct}'")
+        nick = self._get_nick(addr)
+        self.server.send_wallops(f"{nick} removed o-line for '{acct}'")
+
+    def _trust_edit(self, addr, args):
+        if len(args) < 3:
+            self._oper_notice(addr, "Usage: TRUST edit <account> <field> <value>")
+            self._oper_notice(addr, "  Fields: password, flags, servers")
+            return
+        acct, field, value = args[0], args[1].lower(), " ".join(args[2:])
+        data = self.server.storage.load_opers()
+        entries = data.get("olines", {}).get(acct)
+        if not entries:
+            self._oper_notice(addr, f"No o-line found for '{acct}'")
+            return
+        for entry in entries:
+            if field == "password":
+                entry["password"] = value
+            elif field == "flags":
+                entry["flags"] = value
+            elif field == "servers":
+                entry["servers"] = [s.strip() for s in value.split(",")]
+            else:
+                self._oper_notice(addr, f"Unknown field '{field}'. Use: password, flags, servers")
+                return
+        self.server.storage.save_opers(data)
+        self._write_olines_conf(data)
+        self._oper_notice(addr, f"Updated '{field}' for account '{acct}'")
+
+    def _trust_addhost(self, addr, args):
+        if len(args) < 2:
+            self._oper_notice(addr, "Usage: TRUST addhost <account> <nick!user@host>")
+            return
+        acct, mask = args[0], args[1]
+        data = self.server.storage.load_opers()
+        entries = data.get("olines", {}).get(acct)
+        if not entries:
+            self._oper_notice(addr, f"No o-line found for '{acct}'")
+            return
+        entries[0].setdefault("host_masks", []).append(mask)
+        self.server.storage.save_opers(data)
+        self._write_olines_conf(data)
+        self._oper_notice(addr, f"Added host mask '{mask}' to '{acct}'")
+
+    def _trust_delhost(self, addr, args):
+        if len(args) < 2:
+            self._oper_notice(addr, "Usage: TRUST delhost <account> <nick!user@host>")
+            return
+        acct, mask = args[0], args[1]
+        data = self.server.storage.load_opers()
+        entries = data.get("olines", {}).get(acct)
+        if not entries:
+            self._oper_notice(addr, f"No o-line found for '{acct}'")
+            return
+        for entry in entries:
+            masks = entry.get("host_masks", [])
+            if mask in masks:
+                masks.remove(mask)
+        self.server.storage.save_opers(data)
+        self._write_olines_conf(data)
+        self._oper_notice(addr, f"Removed host mask '{mask}' from '{acct}'")
+
+    def _write_olines_conf(self, data):
+        """Rewrite olines.conf from current opers.json data."""
+        conf_path = os.path.join(self.server.storage.base_path, "olines.conf")
+        self.server.storage.write_olines_conf(
+            conf_path, data.get("olines", {}), SERVER_NAME)
+
+    def _handle_stats(self, msg, addr):
+        """STATS <letter> — server statistics (oper only)."""
+        nick = self._require_oper(addr)
+        if not nick:
+            return
+        letter = msg.params[0].lower() if msg.params else "u"
+        RPL_STATSEND = "219"
+
+        if letter == "u":
+            import time as _time
+            uptime_sec = int(_time.time() - getattr(self.server, "_start_time", _time.time()))
+            h, rem = divmod(uptime_sec, 3600)
+            m, s = divmod(rem, 60)
+            clients = len([i for i in self.server.clients.values() if i.get("name")])
+            self._oper_notice(addr, f"Uptime: {h}h {m}m {s}s  |  Connected clients: {clients}")
+        elif letter == "o":
+            self._trust_list(addr)
+            return
+        elif letter == "c":
+            self._oper_notice(addr, "--- Active Clients ---")
+            for a, info in self.server.clients.items():
+                n = info.get("name")
+                if not n:
+                    continue
+                channels = self.server.channel_manager.find_channels_for_nick(n)
+                chans = ",".join(ch.name for ch in channels) or "(none)"
+                flags = self.server.storage.get_oper_flags(n)
+                oper_tag = f" [OPER:{flags}]" if flags else ""
+                self._oper_notice(addr, f"  {n}{oper_tag} @ {a[0]}:{a[1]}  chans: {chans}")
+            self._oper_notice(addr, "--- End Clients ---")
+        elif letter == "l":
+            if hasattr(self.server, "s2s_network"):
+                links = getattr(self.server.s2s_network, "connections", {})
+                if links:
+                    for sname, conn in links.items():
+                        self._oper_notice(addr, f"  Link: {sname} @ {getattr(conn, 'host', '?')}")
+                else:
+                    self._oper_notice(addr, "No active S2S links.")
+            else:
+                self._oper_notice(addr, "S2S not active.")
+        else:
+            self._oper_notice(addr, f"Unknown STATS letter '{letter}'. Use: u c o l")
+
+        end = f":{SERVER_NAME} {RPL_STATSEND} {nick} {letter} :End of /STATS report\r\n"
+        self.server.sock_send(end.encode(), addr)
+
+    def _handle_rehash(self, msg, addr):
+        """REHASH — reload olines.conf into memory (requires server admin)."""
+        nick = self._require_admin(addr)
+        if not nick:
+            return
+        conf_path = os.path.join(self.server.storage.base_path, "olines.conf")
+        new_olines = self.server.storage.parse_olines_conf(conf_path)
+        if new_olines:
+            data = self.server.storage.load_opers()
+            data["olines"] = new_olines
+            self.server.storage.save_opers(data)
+            self._oper_notice(addr, f"Rehash complete: loaded {sum(len(v) for v in new_olines.values())} o-line entries.")
+        else:
+            self._oper_notice(addr, "Rehash: olines.conf not found or empty. Config unchanged.")
+        RPL_REHASHING = "382"
+        reply = f":{SERVER_NAME} {RPL_REHASHING} {nick} olines.conf :Rehashing\r\n"
+        self.server.sock_send(reply.encode(), addr)
+        self.server.send_wallops(f"Server rehashed by {nick}")
+
+    def _handle_shutdown(self, msg, addr):
+        """SHUTDOWN [reason] — graceful server shutdown (requires server admin)."""
+        nick = self._require_admin(addr)
+        if not nick:
+            return
+        reason = " ".join(msg.params) if msg.params else "Server shutting down"
+        self.server.send_wallops(f"Server shutting down: {reason} (by {nick})")
+        error_msg = f"ERROR :Closing Link: Server shutting down ({reason})\r\n"
+        for a in list(self.server.clients.keys()):
+            try:
+                self.server.sock_send(error_msg.encode(), a)
+            except Exception:
+                pass
+        self.server._running = False
+        self.server.log(f"[SHUTDOWN] Initiated by {nick}: {reason}")
+
+    def _handle_link(self, msg, addr):
+        """LINK <server> [port] — initiate S2S link."""
+        nick = self._require_oper(addr)
+        if not nick:
+            return
+        if not msg.params:
+            self._oper_notice(addr, "Usage: LINK <server> [port]")
+            return
+        server_name = msg.params[0]
+        port = int(msg.params[1]) if len(msg.params) > 1 else 9525
+        # Delegate to CONNECT handler (already implemented)
+        from csc_service.shared.irc import parse_irc_message as _pim
+        fake_msg = type("M", (), {"params": [server_name, str(port)]})()
+        self._handle_connect(fake_msg, addr)
+
+    def _handle_relink(self, msg, addr):
+        """RELINK <server> — reconnect a dropped S2S link."""
+        nick = self._require_oper(addr)
+        if not nick:
+            return
+        if not msg.params:
+            self._oper_notice(addr, "Usage: RELINK <server>")
+            return
+        server_name = msg.params[0]
+        if hasattr(self.server, "s2s_network"):
+            self._oper_notice(addr, f"Attempting to relink {server_name}...")
+            try:
+                self.server.s2s_network.reconnect(server_name)
+                self._oper_notice(addr, f"Relink initiated for {server_name}")
+            except Exception as e:
+                self._oper_notice(addr, f"Relink failed: {e}")
+        else:
+            self._oper_notice(addr, "S2S not active.")
+
+    def _handle_delink(self, msg, addr):
+        """DELINK <server> [reason] — drop S2S link (alias for SQUIT)."""
+        nick = self._require_oper(addr)
+        if not nick:
+            return
+        self._handle_squit_cmd(msg, addr)
+
+    # ==================================================================
+    # LOCALCONFIG — server config via IRC (uses Data() get/put_data)
+    # ==================================================================
+
+    _CFG_DEFAULTS = {
+        "cfg.host":                     "0.0.0.0",
+        "cfg.port":                     9525,
+        "cfg.timeout":                  120,
+        "cfg.max_history":              100,
+        "cfg.protect_local_opers":      True,
+        "cfg.motd":                     "Welcome to csc-server!",
+        "cfg.s2s_cert":                 "/etc/csc/csc-fahu.chain.pem",
+        "cfg.s2s_key":                  "/etc/csc/csc-fahu.key",
+        "cfg.s2s_ca":                   "/etc/openvpn/easy-rsa/pki/ca.crt",
+        "cfg.s2s_crl":                  "/etc/openvpn/easy-rsa/pki/crl.pem",
+        "cfg.nickserv_enforce_timeout": 60,
+        "cfg.nickserv_enforce_mode":    "disconnect",
+    }
+    _CFG_RESTART  = {"cfg.host", "cfg.port"}
+    _CFG_RELINK   = {"cfg.s2s_cert", "cfg.s2s_key", "cfg.s2s_ca", "cfg.s2s_crl"}
+
+    def _handle_help(self, msg, addr):
+        """HELP — show available commands based on caller's oper flags."""
+        nick = self._get_nick(addr)
+        flags = self.server.storage.get_oper_flags(nick) if nick else ""
+        is_oper  = bool(flags)
+        is_admin = "a" in flags or "A" in flags
+        is_netadmin = "A" in flags
+
+        def ht(text):
+            self._send_numeric(addr, "705", nick, text)
+
+        self._send_numeric(addr, "704", nick, "CSC Server Help")
+
+        ht("=== User Commands ===")
+        ht("NICK <nick>                     Change your nickname")
+        ht("USER <user> 0 * :<realname>     Set username/realname (on connect)")
+        ht("JOIN <#channel>                 Join a channel")
+        ht("PART <#channel> [reason]        Leave a channel")
+        ht("PRIVMSG <target> :<msg>         Send a message to nick or channel")
+        ht("NOTICE <target> :<msg>          Send a notice")
+        ht("QUIT [reason]                   Disconnect from server")
+        ht("WHOIS <nick>                    Show info about a user")
+        ht("WHO <#channel|nick>             List users in channel or matching nick")
+        ht("LIST                            List all channels")
+        ht("TOPIC <#channel> [:<topic>]     Get or set channel topic")
+        ht("MODE <target> [modes]           Get or set user/channel modes")
+        ht("AWAY [:<message>]               Set or clear away message")
+        ht("PING <server>                   Ping the server")
+        ht("MOTD                            Show message of the day")
+        ht("NAMES <#channel>                List nicks in channel")
+        ht("WHOWAS <nick>                   Show last known info for a nick")
+        ht("KILL <nick> :<reason>           (Oper) Disconnect a user")
+        ht("")
+        ht("=== NickServ ===")
+        ht("/msg NickServ REGISTER <pass>   Register your nick")
+        ht("/msg NickServ IDENTIFY <pass>   Identify with your registered nick")
+        ht("/msg NickServ GHOST <nick> <p>  Kill a ghost using your nick")
+        ht("/msg NickServ INFO <nick>       Show nick registration info")
+        ht("/msg NickServ DROP <pass>       Unregister your nick")
+
+        if is_oper:
+            ht("")
+            ht("=== Oper Commands (flags: {}) ===".format(flags))
+            ht("KILL <nick> :<reason>           Disconnect a user from the server")
+            ht("WALLOPS :<message>              Send message to all opers")
+            ht("STATS u                         Uptime and connection count")
+            ht("STATS o                         Show all o-lines (no passwords)")
+            ht("STATS c                         Active clients and IPs")
+            ht("STATS l                         Server-to-server links")
+            ht("TRUST list                      List all oper accounts")
+
+        if is_admin:
+            ht("")
+            ht("=== Admin Commands (flags: {}) ===".format(flags))
+            ht("SETMOTD :<message>              Set the message of the day")
+            ht("REHASH                          Reload olines.conf from disk")
+            ht("SHUTDOWN [reason]               Gracefully shut down the server")
+            ht("TRUST add <acct> <pass> <svrs> <masks> [flags]")
+            ht("                                Add a new oper account")
+            ht("TRUST del <account>             Remove an oper account")
+            ht("TRUST edit <acct> <field> <val> Edit account field (password/flags/servers)")
+            ht("TRUST addhost <acct> <mask>     Add a hostmask to an account")
+            ht("TRUST delhost <acct> <mask>     Remove a hostmask from an account")
+            ht("LOCALCONFIG show                Show all server config settings")
+            ht("LOCALCONFIG get <key>           Get one config value")
+            ht("LOCALCONFIG set <key> <val>     Set a config value")
+            ht("LOCALCONFIG del <key>           Delete a config value (revert to default)")
+
+        if is_netadmin:
+            ht("")
+            ht("=== Network Admin Commands (flags: {}) ===".format(flags))
+            ht("LINK <server> [port]            Initiate a server-to-server link")
+            ht("RELINK <server>                 Reconnect a dropped server link")
+            ht("DELINK <server> [reason]        Drop a server link (alias: SQUIT)")
+
+        self._send_numeric(addr, "706", nick, "End of HELP")
+
+    def _handle_localconfig(self, msg, addr):
+        """LOCALCONFIG <show|list|get|set|del> [key] [value]"""
+        nick = self._get_nick(addr)
+        sub = msg.params[0].lower() if msg.params else "show"
+        args = msg.params[1:]
+
+        if sub in ("show", "list"):
+            if nick.lower() not in self.server.opers:
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "Permission Denied- You're not an IRC operator")
+                return
+            self._oper_notice(addr, "--- Server Config (cfg.*) ---")
+            for key, default in sorted(self._CFG_DEFAULTS.items()):
+                val = self.server.get_data(key)
+                display = val if val is not None else f"{default} (default)"
+                tag = " [RESTART]" if key in self._CFG_RESTART else (
+                      " [RELINK]"  if key in self._CFG_RELINK  else "")
+                self._oper_notice(addr, f"  {key} = {display}{tag}")
+            self._oper_notice(addr, "--- End Config ---")
+
+        elif sub == "get":
+            if nick.lower() not in self.server.opers:
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "Permission Denied- You're not an IRC operator")
+                return
+            if not args:
+                self._oper_notice(addr, "Usage: LOCALCONFIG get <key>")
+                return
+            key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
+            val = self.server.get_data(key)
+            default = self._CFG_DEFAULTS.get(key, "(no default)")
+            display = val if val is not None else f"{default} (default)"
+            self._oper_notice(addr, f"{key} = {display}")
+
+        elif sub == "set":
+            if not self._require_admin(addr):
+                return
+            if len(args) < 2:
+                self._oper_notice(addr, "Usage: LOCALCONFIG set <key> <value>")
+                return
+            key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
+            value = " ".join(args[1:])
+            # Type coerce based on default type
+            default = self._CFG_DEFAULTS.get(key)
+            if isinstance(default, bool):
+                value = value.lower() in ("true", "1", "yes", "on")
+            elif isinstance(default, int):
+                try:
+                    value = int(value)
+                except ValueError:
+                    self._oper_notice(addr, f"Invalid integer value for {key}")
+                    return
+            self.server.put_data(key, value)
+            tag = " — NOTE: requires restart" if key in self._CFG_RESTART else (
+                  " — NOTE: requires relink" if key in self._CFG_RELINK else "")
+            self._oper_notice(addr, f"Set {key} = {value}{tag}")
+            self.server.send_wallops(f"{nick} set config {key} = {value}")
+
+        elif sub == "del":
+            if not self._require_admin(addr):
+                return
+            if not args:
+                self._oper_notice(addr, "Usage: LOCALCONFIG del <key>")
+                return
+            key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
+            self.server.put_data(key, None)
+            default = self._CFG_DEFAULTS.get(key, "(none)")
+            self._oper_notice(addr, f"Deleted {key} — will use default: {default}")
+            self.server.send_wallops(f"{nick} deleted config {key}")
+
+        else:
+            self._oper_notice(addr, "Usage: LOCALCONFIG <show|list|get|set|del> [key] [value]")
