@@ -10,17 +10,6 @@ from csc_service.shared.network import Network
 
 class Service( Network ):
     def __init__(self, server_instance=None):
-        """
-        Initializes the Service class.
-
-        - What it does: Sets up the service layer, which is responsible for
-          dynamically loading and managing service modules.
-        - Arguments:
-            - `server_instance`: A reference to the main server object, used
-              to pass the server's context to the service modules.
-        - What calls it: Called by `Server.__init__()`.
-        - What it calls: `super().__init__()`, `print()`.
-        """
         super().__init__()
         self.name = "service"
         self.loaded_modules = {}

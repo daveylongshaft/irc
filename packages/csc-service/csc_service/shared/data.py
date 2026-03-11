@@ -117,9 +117,12 @@ class Data(Log):
         """Read a JSON file from disk.  Returns {} on missing or error."""
         try:
             p = Path(path)
+            # print(f"DEBUG: _read_json_file checking if {p} exists")
             if p.exists():
+                # print(f"DEBUG: _read_json_file opening {p}")
                 with open(p, "r", encoding="utf-8") as f:
                     content = f.read()
+                    # print(f"DEBUG: _read_json_file read {len(content)} bytes")
                     return json.loads(content) if content.strip() else {}
         except Exception as e:
             self.log(f"Error reading {path}: {e}")
@@ -159,12 +162,9 @@ class Data(Log):
             return _get_etc_dir_static()
 
     def _get_run_dir(self) -> Path:
-        """Return the runtime temp directory via Platform if available."""
-        try:
-            from csc_service.shared.platform import Platform
-            return Path(Platform().get_abs_tmp_path(["run"]))
-        except Exception:
-            return _get_run_dir()
+        """Return the runtime temp directory. Avoids instantiating Platform to prevent recursion."""
+        # Use module-level helper directly
+        return globals()["_get_run_dir"]()
 
     # -----------------------------------------------------------------------
     # Default key-value store  (backward-compat public API)
@@ -179,10 +179,10 @@ class Data(Log):
         if os.path.isabs(filename):
             path = Path(filename)
         else:
-            path = _get_run_dir() / filename
+            path = self._get_run_dir() / filename
 
         if not os.environ.get("CSC_QUIET"):
-            print(f"Connecting to data source: {path}")
+            print(f"[{self.name}] Connecting to data source: {path}")
         self._connected_source = str(path)
         self._storage = self._read_json_file(path)
         if not os.environ.get("CSC_QUIET"):

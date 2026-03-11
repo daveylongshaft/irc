@@ -109,15 +109,6 @@ class Version( Data ):
     """
 
     def __init__(self):
-        """
-        Initializes the Version class.
-
-        - What it does: Sets the instance name, determines the project root,
-          and creates the main backup directory for file versions.
-        - Arguments: None.
-        - What calls it: Called by the `__init__` method of its direct subclass, `Network`.
-        - What it calls: `super().__init__()`, `Path.parent.resolve()`, `Path.mkdir()`, `print()`.
-        """
         # Initialize the parent class (Data)
         super().__init__()
         self.name = "version"
@@ -130,8 +121,6 @@ class Version( Data ):
         except:
             if not os.environ.get("CSC_QUIET"):
                 print("exists")
-
-        #print(f"{self.name}->",end=None)
 
     def get_version_dir_for_file(self, filepath: str) -> Path:
         """

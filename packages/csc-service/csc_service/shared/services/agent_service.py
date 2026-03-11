@@ -524,10 +524,15 @@ class agent( Service ):
             # Create metadata for the workorder
             metadata = self._create_queue_metadata(selected, wip_filename, prompt_path)
 
-            # Write the workorder content and metadata to the agent's queue/in/
-            self._write_queued_files(wip_full_path, metadata, selected, wip_filename)
+            # Write ONLY the metadata to the agent's queue/in/ (for tracking)
+            # The actual workorder content is already in WIP_DIR and referenced by orders.md
+            metadata_filename = f"{Path(wip_filename).stem}.json"
+            queue_in_path = agent_dir / "queue" / "in"
+            queue_in_path.mkdir(parents=True, exist_ok=True)
+            (queue_in_path / metadata_filename).write_text(json.dumps(metadata, indent=4), encoding='utf-8')
 
             # Generate orders.md from template via script
+            # This script creates queue/in/orders.md which points to the WIP file
             self._run_generate_orders_md_script(selected, wip_filename)
 
             self.log(f"Queued '{wip_filename}' for {selected}")
