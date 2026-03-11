@@ -48,6 +48,7 @@ def main():
     enable_pm = config.get("enable_pm", True)
     enable_pr_review = config.get("enable_pr_review", False)
     enable_jules = config.get("jules", {}).get("enabled", False)
+    enable_pki = config.get("enable_pki", False)
 
     from csc_service.infra import git_sync
     git_sync.setup(work_dir)
@@ -65,6 +66,12 @@ def main():
             server_thread = threading.Thread(target=srv.run, daemon=True)
             server_thread.start()
             print(f"[{ts()}] [csc-service] Started IRC server")
+
+        # Start PKI enrollment server if enabled (CA server only)
+        if enable_pki:
+            from csc_service.pki import main as pki_main
+            pki_main.start()
+            print(f"[{ts()}] [csc-service] Started PKI enrollment server")
 
         # Daemon main loop for infra services
         try:

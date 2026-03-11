@@ -118,6 +118,12 @@ class Server(Service):
         # Run one cleanup pass immediately to prune any ghosts from previous runs
         self._run_cleanup_once()
 
+        # Check S2S certificate before starting federation
+        from csc_service.shared.platform import Platform
+        s2s_ok, s2s_reason = Platform.check_s2s_cert()
+        if not s2s_ok:
+            self.log(f"[S2S] Certificate check failed: {s2s_reason} — S2S listener will start without TLS")
+
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)
         self.s2s_network.start_listener()
