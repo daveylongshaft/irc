@@ -131,13 +131,46 @@ class Server(Service):
 
     @property
     def oper_credentials(self):
-        """Dynamic property that reads oper credentials from disk."""
-        return self.storage.load_opers().get("credentials", {})
+        """Dynamic property: returns olines dict (v2) for backward compat callers."""
+        return self.storage.load_opers().get("olines", {})
 
     @property
     def opers(self):
-        """Dynamic property that reads active opers from disk."""
-        return {nick.lower() for nick in self.storage.load_opers().get("active_opers", [])}
+        """Set of lowercase nicks currently holding any oper status."""
+        active = self.storage.load_opers().get("active_opers", [])
+        result = set()
+        for entry in active:
+            if isinstance(entry, dict):
+                result.add(entry.get("nick", "").lower())
+            else:
+                result.add(str(entry).lower())
+        return result
+
+    @property
+    def protect_local_opers(self):
+        """Whether remote opers without O flag can KILL local opers."""
+        return self.storage.load_opers().get("protect_local_opers", True)
+
+    def _oper_has_flag(self, nick, flag):
+        """Return True if nick is an active oper with the given flag."""
+        return flag in self.storage.get_oper_flags(nick.lower())
+
+    def is_local_oper(self, nick):
+        """Local oper: any oper flag (o, O, a, A)."""
+        flags = self.storage.get_oper_flags(nick.lower())
+        return bool(flags)
+
+    def is_global_oper(self, nick):
+        """Global oper: O flag."""
+        return self._oper_has_flag(nick, "O")
+
+    def is_server_admin(self, nick):
+        """Server admin: a or A flag."""
+        return self._oper_has_flag(nick, "a") or self._oper_has_flag(nick, "A")
+
+    def is_net_admin(self, nick):
+        """Network admin: A flag."""
+        return self._oper_has_flag(nick, "A")
 
     @property
     def wakewords(self):
