@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import signal
 import socket
 import threading
 import time
@@ -570,31 +571,27 @@ class Server(Service):
         network_thread = threading.Thread(target=self._network_loop, daemon=True)
         network_thread.start()
 
-        # Terminal Interface Selection
-        # Force headless mode if CSC_HEADLESS environment variable is set
+        # --daemon flag sets CSC_HEADLESS=true in main.py; also treat no-TTY as headless
         is_headless = os.environ.get("CSC_HEADLESS", "false").lower() == "true"
-        
-        if sys.stdin.isatty() and not is_headless:
-            self.log("[STARTUP] TTY detected, spawning standard client interface.")
+        is_interactive = sys.stdin.isatty() and not is_headless
+
+        if is_interactive:
+            self.log("[STARTUP] TTY detected, spawning csc-client interface.")
             try:
                 from csc_service.client import Client
-                # Initialize client pointing to this server instance
                 client = Client()
-                # Ensure it points to the local server we just started
                 client.server_host = self.server_addr[0]
                 client.server_port = self.server_addr[1]
-                # Run the client in the main thread
                 client.run()
             except ImportError:
-                self.log("[ERROR] csc-client not found, falling back to ServerConsole.")
-                self.console.run_loop()
+                self.log("[ERROR] csc-client not available. Server running headlessly.")
+                self._wait_for_shutdown()
             except Exception as e:
-                self.log(f"[ERROR] Failed to start client interface: {e}")
-                self.console.run_loop()
+                self.log(f"[ERROR] csc-client failed: {e}. Server running headlessly.")
+                self._wait_for_shutdown()
         else:
-            self.log("[STARTUP] No TTY detected, running in daemon mode.")
-            # ServerConsole handles non-tty by blocking forever
-            self.console.run_loop()
+            self.log("[STARTUP] Daemon mode: server running headlessly.")
+            self._wait_for_shutdown()
 
         # Graceful shutdown
         self._running = False
@@ -610,6 +607,19 @@ class Server(Service):
         self.close()
         self.log("[SHUTDOWN] Server closed sockets and persisted data.")
         print("Server has shut down.")
+
+    def _wait_for_shutdown(self):
+        """Block the main thread until SIGTERM/SIGINT is received."""
+        stop_event = threading.Event()
+
+        def _handle_signal(sig, frame):
+            self.log(f"[SHUTDOWN] Signal {sig} received.")
+            self._running = False
+            stop_event.set()
+
+        signal.signal(signal.SIGTERM, _handle_signal)
+        signal.signal(signal.SIGINT, _handle_signal)
+        stop_event.wait()
 
     # ======================================================================
     # Helpers for Data layer
