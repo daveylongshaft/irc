@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""csc-platform — query CSC Platform paths from shell scripts.
+
+Usage:
+  csc-platform                Print full platform_data JSON
+  csc-platform env            Print shell export statements (eval-safe)
+  csc-platform get_etc_dir    Print the etc/ directory path
+  csc-platform get_logs_dir   Print the logs/ directory path
+  csc-platform get_root       Print the project root path
+  csc-platform get_tmp        Print the tmp/run path
+
+Examples:
+  eval $(csc-platform env)          # Load all CSC_ vars into shell
+  ETC=$(csc-platform get_etc_dir)   # Get etc/ path into a variable
+"""
+from csc_service.shared.platform import _platform_cli
+_platform_cli()

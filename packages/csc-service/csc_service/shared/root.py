@@ -1,3 +1,4 @@
+import os
 from os import listdir
 from os.path import dirname
 from sys import path
@@ -33,7 +34,8 @@ class Root:
 
         self.name = "root"
 
-        print(f"system command keyword is: {self.command_keyword}")
+        if not os.environ.get("CSC_QUIET"):
+            print(f"system command keyword is: {self.command_keyword}")
 
         #self.log(f"{self.name}->")
 

@@ -128,7 +128,8 @@ class Version( Data ):
         try:
             self.version_backup_dir.mkdir( exist_ok=True )
         except:
-            print("exists")
+            if not os.environ.get("CSC_QUIET"):
+                print("exists")
 
         #print(f"{self.name}->",end=None)
 

@@ -34,11 +34,18 @@ import os
 import time
 import logging
 
+from csc_service.shared.data import Data
+
 logger = logging.getLogger(__name__)
 
 
-class PersistentStorageManager:
-    """Atomic file-based storage for IRC server state."""
+class PersistentStorageManager(Data):
+    """Atomic file-based storage for IRC server state.
+
+    Inherits from Data so all I/O goes through Data._read_json_file /
+    _write_json_file (the encryption hook point), and all oper/o-line
+    methods are available via inheritance.
+    """
 
     FILES = {
         "channels": "channels.json",
@@ -92,13 +99,13 @@ class PersistentStorageManager:
         """Initialize storage manager.
 
         Args:
-            base_path: Directory where JSON files are stored.
-            log_func: Optional logging function (e.g. server.log).
-                      Falls back to logger.info if not provided.
+            base_path: Directory where JSON files are stored (from Platform).
+            log_func:  Ignored — logging comes from inherited self.log().
+                       Kept for backward-compat call sites.
         """
+        super().__init__()          # sets up Data / Log / Root infrastructure
         self.base_path = base_path
-        self._log = log_func or logger.info
-        self._mtimes = {}  # key -> last seen mtime
+        self._mtimes = {}           # key -> last seen mtime
         self._ensure_all_files()
 
     def _file_path(self, key):
@@ -122,48 +129,35 @@ class PersistentStorageManager:
     # ==================================================================
 
     def _atomic_write(self, filepath, data):
-        """Write data to file atomically using temp+fsync+rename.
-
-        Returns True on success, False on error.
-        """
-        tmp_path = filepath + ".tmp"
-        try:
-            with open(tmp_path, "w") as f:
-                json.dump(data, f, indent=2, default=str)
-                f.write("\n")
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, filepath)
+        """Write data to file atomically — routes through Data._write_json_file."""
+        ok = self._write_json_file(filepath, data)
+        if ok:
             # Update mtime so we don't immediately reload our own write
-            key = next((k for k, v in self.FILES.items() if filepath.endswith(v)), None)
+            key = next((k for k, v in self.FILES.items()
+                        if str(filepath).endswith(v)), None)
             if key:
-                self._mtimes[key] = os.path.getmtime(filepath)
-            return True
-        except Exception as e:
-            self._log(f"[STORAGE ERROR] Atomic write failed for {filepath}: {e}")
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            return False
+                try:
+                    self._mtimes[key] = os.path.getmtime(filepath)
+                except OSError:
+                    pass
+        return ok
 
     def _atomic_read(self, filepath):
-        """Read and parse a JSON file safely.
+        """Read a JSON file safely — routes through Data._read_json_file.
 
-        Returns parsed data on success, None on error.
+        Returns parsed data on success, None on missing/error.
         """
-        try:
-            with open(filepath, "r") as f:
-                return json.load(f)
-        except json.JSONDecodeError as e:
-            self._log(f"[STORAGE ERROR] Corrupt JSON in {filepath}: {e}")
+        from pathlib import Path as _Path
+        p = _Path(filepath)
+        if not p.exists():
+            return None
+        data = self._read_json_file(p)
+        # _read_json_file returns {} on corrupt; treat empty-dict-from-corrupt as None
+        # and quarantine the file if the original exists but parse failed
+        if not data and p.exists() and p.stat().st_size > 10:
             self._quarantine(filepath)
             return None
-        except FileNotFoundError:
-            return None
-        except Exception as e:
-            self._log(f"[STORAGE ERROR] Read failed for {filepath}: {e}")
-            return None
+        return data if data else None
 
     def _quarantine(self, filepath):
         """Rename corrupt file to .corrupt.<timestamp> for investigation."""
@@ -171,16 +165,16 @@ class PersistentStorageManager:
             ts = int(time.time())
             corrupt_name = f"{filepath}.corrupt.{ts}"
             os.rename(filepath, corrupt_name)
-            self._log(f"[STORAGE] Quarantined corrupt file: {corrupt_name}")
+            self.log(f"[STORAGE] Quarantined corrupt file: {corrupt_name}")
         except Exception as e:
-            self._log(f"[STORAGE ERROR] Could not quarantine {filepath}: {e}")
+            self.log(f"[STORAGE ERROR] Could not quarantine {filepath}: {e}")
 
     def _ensure_all_files(self):
         """Create any missing storage files with defaults."""
         for key in self.FILES:
             filepath = self._file_path(key)
             if not os.path.exists(filepath):
-                self._log(f"[STORAGE] Creating {self.FILES[key]} with defaults")
+                self.log(f"[STORAGE] Creating {self.FILES[key]} with defaults")
                 self._atomic_write(filepath, self.DEFAULTS[key])
 
     # ==================================================================
@@ -295,289 +289,6 @@ class PersistentStorageManager:
             }
         data = {"version": 1, "users": users}
         return self.save_users(data)
-
-    # ==================================================================
-    # Oper Operations (v2: o-line based with flags, host masks, remote lists)
-    # ==================================================================
-
-    @staticmethod
-    def _migrate_opers_v1_to_v2(data):
-        """Migrate v1 {credentials: {name: pass}} to v2 olines format."""
-        creds = data.get("credentials", {})
-        olines = {}
-        for name, password in creds.items():
-            olines[name] = [{
-                "user": name,
-                "password": password,
-                "servers": ["*"],
-                "host_masks": ["*!*@*"],
-                "flags": "aol",
-                "comment": "migrated from v1",
-            }]
-        # active_opers v1 was list of nick strings → list of dicts
-        old_active = data.get("active_opers", [])
-        new_active = []
-        for entry in old_active:
-            if isinstance(entry, str):
-                new_active.append({"nick": entry, "account": entry, "flags": "aol"})
-            else:
-                new_active.append(entry)
-        return {
-            "version": 2,
-            "protect_local_opers": True,
-            "active_opers": new_active,
-            "olines": olines,
-        }
-
-    @staticmethod
-    def _match_hostmask(mask, client_mask):
-        """Return True if client_mask matches the o-line mask pattern.
-
-        mask format:   nick!user@host  (wildcards * and ? supported in each field)
-        client_mask:   nick!user@host  (actual connecting client)
-        """
-        try:
-            m_nick, rest = mask.split("!", 1)
-            m_user, m_host = rest.split("@", 1)
-            c_nick, c_rest = client_mask.split("!", 1)
-            c_user, c_host = c_rest.split("@", 1)
-            return (fnmatch.fnmatch(c_nick.lower(), m_nick.lower()) and
-                    fnmatch.fnmatch(c_user.lower(), m_user.lower()) and
-                    fnmatch.fnmatch(c_host.lower(), m_host.lower()))
-        except ValueError:
-            return fnmatch.fnmatch(client_mask.lower(), mask.lower())
-
-    def reload_olines(self, conf_path=None):
-        """Re-parse olines.conf and update the olines block in opers.json.
-
-        Returns:
-            dict of newly loaded olines (may be empty on error).
-        """
-        if conf_path is None:
-            conf_path = os.path.join(self.base_path, "olines.conf")
-        olines = self.parse_olines_conf(conf_path)
-        if not olines:
-            return olines
-        data = self._load_opers_from_disk()
-        data["olines"] = olines
-        self.save_opers(data)
-        return olines
-
-    # ==================================================================
-    # Oper Operations (v2)
-    # ==================================================================
-
-    def _load_opers_from_disk(self):
-        """Load oper data from disk, migrating v1→v2 if needed."""
-        data = self._atomic_read(self._file_path("opers"))
-        if data is None:
-            return dict(self.DEFAULTS["opers"])
-        if data.get("version", 1) < 2:
-            data = self._migrate_opers_v1_to_v2(data)
-            self._atomic_write(self._file_path("opers"), data)
-        return data
-
-    def load_opers(self):
-        """Load oper data (v2 format)."""
-        return self._load_opers_from_disk()
-
-    def get_olines(self):
-        """Return the olines dict: {oper_name: {password, host, class, flags}}."""
-        data = self._load_opers_from_disk()
-        return data.get("olines", {})
-
-    def get_active_opers(self):
-        """Return list of active oper dicts: [{nick, oper_name, flags, class}]."""
-        data = self._load_opers_from_disk()
-        return list(data.get("active_opers", []))
-
-    def get_active_opers_info(self):
-        """Return dict of {nick_lower: {nick, oper_name, flags, class}} for quick lookup."""
-        result = {}
-        for item in self.get_active_opers():
-            if isinstance(item, dict) and item.get("nick"):
-                result[item["nick"].lower()] = item
-        return result
-
-    def get_oper_flags(self, nick):
-        """Return the flags list for an active oper nick, or [] if not an oper."""
-        info = self.get_active_opers_info().get(nick.lower())
-        if not info:
-            return []
-        return list(info.get("flags", []))
-
-    def get_latest_opers_data(self):
-        """Returns (olines_dict, active_opers_set_of_nicks) for backward compat."""
-        data = self._load_opers_from_disk()
-        olines = data.get("olines", {})
-        active_nicks = {e["nick"].lower() for e in data.get("active_opers", [])
-                        if isinstance(e, dict)}
-        return olines, active_nicks
-
-    def save_opers(self, data):
-        """Save complete oper data atomically."""
-        return self._atomic_write(self._file_path("opers"), data)
-
-    def save_opers_from_server(self, server):
-        """Persist active_opers list; preserve olines and other v2 fields."""
-        data = self.load_opers()
-        # Rebuild active_opers from server's in-memory opers_full list if available
-        if hasattr(server, '_active_opers_full'):
-            data["active_opers"] = list(server._active_opers_full)
-        else:
-            # Fallback: keep existing active entries only for still-connected nicks
-            connected = {info.get("name", "").lower()
-                         for info in server.clients.values() if info.get("name")}
-            data["active_opers"] = [
-                e for e in data.get("active_opers", [])
-                if isinstance(e, dict) and e.get("nick", "").lower() in connected
-            ]
-        return self.save_opers(data)
-
-    def add_active_oper(self, nick, account="", flags="o"):
-        """Add/update an active oper entry on disk."""
-        data = self.load_opers()
-        active = data.setdefault("active_opers", [])
-        nick_lower = nick.lower()
-        # Remove any existing entry for this nick
-        active[:] = [e for e in active
-                     if not (isinstance(e, dict) and e.get("nick", "").lower() == nick_lower)]
-        active.append({"nick": nick_lower, "account": account or nick_lower, "flags": flags})
-        return self.save_opers(data)
-
-    def remove_active_oper(self, nick):
-        """Remove an active oper entry by nick."""
-        data = self.load_opers()
-        nick_lower = nick.lower()
-        data["active_opers"] = [
-            e for e in data.get("active_opers", [])
-            if not (isinstance(e, dict) and e.get("nick", "").lower() == nick_lower)
-        ]
-        return self.save_opers(data)
-
-    def get_oper_flags(self, nick):
-        """Return flags string for an active oper nick, or '' if not active."""
-        data = self.load_opers()
-        nick_lower = nick.lower()
-        for entry in data.get("active_opers", []):
-            if isinstance(entry, dict) and entry.get("nick", "").lower() == nick_lower:
-                return entry.get("flags", "o")
-        return ""
-
-    def check_oper_auth(self, account, password, server_name, client_mask):
-        """Check o-line authentication.
-
-        Iterates all o-line entries for the account. Returns flags string if
-        any entry matches (server + host mask), None if no match.
-
-        Args:
-            account:     The OPER account name from /OPER command.
-            password:    The password provided.
-            server_name: This server's short name (for server-scoped o-lines).
-            client_mask: Connecting client's mask as "nick!user@host".
-        """
-        data = self.load_opers()
-        entries = data.get("olines", {}).get(account, [])
-        # Also check remote olines
-        remote_entries = data.get("remote_olines", {}).get(account, [])
-
-        for entry in entries + remote_entries:
-            if entry.get("password") != password:
-                continue
-            # Server scope check
-            servers = entry.get("servers", ["*"])
-            server_ok = any(
-                s == "*" or fnmatch.fnmatch(server_name.lower(), s.lower())
-                for s in servers
-            )
-            if not server_ok:
-                continue
-            # Host mask check — any mask must match
-            masks = entry.get("host_masks", ["*!*@*"])
-            if any(self._match_hostmask(m, client_mask) for m in masks):
-                return entry.get("flags", "o")
-        return None
-
-    # ==================================================================
-    # O-line conf file format (olines.conf)
-    # Format per line: name:flags:user:pass:servers:hostmasks:# comment
-    # ==================================================================
-
-    def parse_olines_conf(self, path):
-        """Parse olines.conf → olines dict (same structure as opers.json 'olines').
-
-        Returns dict keyed by account name, value is list of entry dicts.
-        """
-        olines = {}
-        try:
-            with open(path, "r") as f:
-                for raw_line in f:
-                    line = raw_line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    # Strip inline comment (everything after the 6th colon-field)
-                    comment = ""
-                    parts = line.split(":")
-                    if len(parts) >= 7:
-                        comment = ":".join(parts[6:]).lstrip("# ").strip()
-                        parts = parts[:6]
-                    if len(parts) < 6:
-                        continue
-                    name, flags, user, password, servers_str, masks_str = parts
-                    name = name.strip()
-                    flags = flags.strip()
-                    user = user.strip()
-                    password = password.strip()
-                    servers = [s.strip() for s in servers_str.split(",") if s.strip()]
-                    masks = [m.strip() for m in masks_str.split(",") if m.strip()]
-                    if not name or not user or not password:
-                        continue
-                    entry = {
-                        "user": user,
-                        "password": password,
-                        "servers": servers or ["*"],
-                        "host_masks": masks or ["*!*@*"],
-                        "flags": flags or "o",
-                        "comment": comment,
-                    }
-                    olines.setdefault(name, []).append(entry)
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            self._log(f"[STORAGE] Error parsing olines.conf: {e}")
-        return olines
-
-    def write_olines_conf(self, path, olines, server_name="csc-server"):
-        """Write olines dict back to olines.conf text format atomically."""
-        lines = [
-            "# olines.conf — CSC IRC Server operator configuration",
-            "# Format: name:flags:user:pass:servers:hostmasks:# comment",
-            "# Flags: o=local oper  O=global oper  a=server admin  A=net admin",
-            f"# Server: {server_name}",
-            "",
-        ]
-        for name, entries in sorted(olines.items()):
-            for entry in entries:
-                servers = ",".join(entry.get("servers", ["*"]))
-                masks = ",".join(entry.get("host_masks", ["*!*@*"]))
-                flags = entry.get("flags", "o")
-                user = entry.get("user", name)
-                password = entry.get("password", "")
-                comment = entry.get("comment", "")
-                comment_str = f":# {comment}" if comment else ""
-                lines.append(f"{name}:{flags}:{user}:{password}:{servers}:{masks}{comment_str}")
-        lines.append("")
-        tmp_path = path + ".tmp"
-        try:
-            with open(tmp_path, "w") as f:
-                f.write("\n".join(lines))
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, path)
-            return True
-        except Exception as e:
-            self._log(f"[STORAGE] Error writing olines.conf: {e}")
-            return False
 
     # ==================================================================
     # Ban Operations
@@ -905,7 +616,7 @@ class PersistentStorageManager:
         on_disk_keys = {name.lower() for name in channels.keys()}
         for name in list(channel_manager.channels.keys()):
             if name not in on_disk_keys and name != channel_manager.DEFAULT_CHANNEL.lower():
-                self._log(f"[STORAGE] Removing channel not on disk: {name}")
+                self.log(f"[STORAGE] Removing channel not on disk: {name}")
                 del channel_manager.channels[name]
 
         count = 0
@@ -973,7 +684,7 @@ class PersistentStorageManager:
             info = server.clients.get(addr, {})
             # Only drop if it's a registered client (has name) that's not on disk
             if info.get("name") and info.get("name") != "unknown" and addr not in on_disk_addresses:
-                self._log(f"[STORAGE] Dropping active client not on disk: {info.get('name')} @ {addr}")
+                self.log(f"[STORAGE] Dropping active client not on disk: {info.get('name')} @ {addr}")
                 server.clients.pop(addr, None)
                 server.message_handler.registration_state.pop(addr, None)
 
@@ -984,7 +695,7 @@ class PersistentStorageManager:
             if isinstance(last_seen, dict):
                 last_seen = max(last_seen.values()) if last_seen else 0
             if now - last_seen > server.timeout:
-                self._log(f"[STORAGE] Skipping expired session: {nick} "
+                self.log(f"[STORAGE] Skipping expired session: {nick} "
                           f"(last seen {now - last_seen:.0f}s ago)")
                 # Clean stale nick from channels and persistent user store
                 server.channel_manager.remove_nick_from_all(nick)
@@ -1021,7 +732,7 @@ class PersistentStorageManager:
                 channel.add_member(nick, addr, member_modes)
 
             count += 1
-            self._log(f"[STORAGE] Restored user: {nick} @ {addr}")
+            self.log(f"[STORAGE] Restored user: {nick} @ {addr}")
         return count
 
     def restore_opers(self, server):
@@ -1124,7 +835,7 @@ class PersistentStorageManager:
         ban_count = self.restore_bans(server)
         hist_count = self.restore_history(server)
 
-        self._log(f"[STORAGE] Restore complete: {ch_count} channels, "
+        self.log(f"[STORAGE] Restore complete: {ch_count} channels, "
                   f"{user_count} users, {oper_count} opers, "
                   f"{ban_count} channels with bans, {hist_count} history records")
 
@@ -1155,7 +866,7 @@ class PersistentStorageManager:
         if not snapshot:
             return False
 
-        self._log("[STORAGE] Migrating from old snapshot format...")
+        self.log("[STORAGE] Migrating from old snapshot format...")
 
         # Migrate channels
         channels_snapshot = snapshot.get("channels", {})
@@ -1205,7 +916,7 @@ class PersistentStorageManager:
         self.save_bans(self.DEFAULTS["bans"])
         self.save_history(self.DEFAULTS["history"])
 
-        self._log(f"[STORAGE] Migration complete: "
+        self.log(f"[STORAGE] Migration complete: "
                   f"{len(channels_snapshot)} channels, "
                   f"{len(sessions)} users, "
                   f"{len(active_opers)} opers")
