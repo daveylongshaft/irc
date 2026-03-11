@@ -53,7 +53,7 @@ AGENTS = [
     {"name": "gemini-2.5-flash", "role": "docs-and-tests",
      "good_for": ["docs", "test-fix", "validation"]},
     {"name": "gemini-2.5-pro", "role": "code",
-     "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "audit"]},
+     "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "pr-reviewer", "audit"]},
     {"name": "sonnet", "role": "code",
      "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
     {"name": "opus", "role": "debug",
@@ -168,7 +168,7 @@ def _save_state(state: dict):
 # ======================================================================
 
 VALID_CATEGORIES = {"push-fail", "test-fix", "simple-fix", "docs", "audit",
-                    "debug", "refactor", "feature"}
+                    "debug", "refactor", "feature", "pr-reviewer"}
 
 
 def classify(filename: str) -> str:
