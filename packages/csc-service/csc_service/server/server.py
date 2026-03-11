@@ -11,7 +11,6 @@ from pathlib import Path
 from service import Service
 from server_message_handler import MessageHandler
 from server_file_handler import FileHandler
-from server_console import ServerConsole
 from csc_service.shared.channel import ChannelManager
 from csc_service.shared.chat_buffer import ChatBuffer
 from csc_service.shared.irc import SERVER_NAME
@@ -36,7 +35,7 @@ class Server(Service):
         Initializes the Server.
 
         - What it does: Sets up the server's name, address, timeout, and all
-          its component modules (FileHandler, MessageHandler, ServerConsole).
+          its component modules (FileHandler, MessageHandler).
           It binds the socket, starts the network listener, and loads
           persistent data.
         - Arguments:
@@ -45,7 +44,7 @@ class Server(Service):
             - `timeout` (int): Inactivity timeout (seconds) for clients.
         - What calls it: The `if __name__ == "__main__":` block.
         - What it calls: `super().__init__()`, `self.init_data()`, `FileHandler()`,
-          `MessageHandler()`, `ServerConsole()`, `self.sock.bind()`,
+          `MessageHandler()`, `self.sock.bind()`,
           `self.start_listener()`, `self.log()`, `self.connect()`, `self.get_data()`.
         """
         super().__init__(self)
@@ -63,7 +62,6 @@ class Server(Service):
         # File and message handling components
         self.file_handler = FileHandler(self)
         self.message_handler = MessageHandler(self, self.file_handler)
-        self.console = ServerConsole(self)
 
         # Bind and start listening
         self.log_file = str(Path(__file__).resolve().parent / f"{self.name}.log")
@@ -131,13 +129,39 @@ class Server(Service):
 
     @property
     def oper_credentials(self):
-        """Dynamic property that reads oper credentials from disk."""
-        return self.storage.load_opers().get("credentials", {})
+        """Backward-compatible property: returns {oper_name: password} from olines."""
+        return {name: info["password"] for name, info in self.storage.get_olines().items()}
 
     @property
     def opers(self):
-        """Dynamic property that reads active opers from disk."""
-        return {nick.lower() for nick in self.storage.load_opers().get("active_opers", [])}
+        """Dynamic property: returns set of active oper nicks (lowercase)."""
+        info = self.storage.get_active_opers_info()
+        return set(info.keys())
+
+    @property
+    def active_opers_info(self):
+        """Dynamic property: returns {nick_lower: {nick, oper_name, flags, class}}."""
+        return self.storage.get_active_opers_info()
+
+    def oper_has_flag(self, nick, flag):
+        """Check if an active oper nick has a specific privilege flag.
+
+        Args:
+            nick: The IRC nick to check (case-insensitive).
+            flag: One of: kill, ban, rehash, shutdown, setmotd, stats,
+                  localconfig, trust, global, connect, squit.
+        Returns:
+            True if nick is an active oper with the given flag.
+        """
+        return flag in self.storage.get_oper_flags(nick)
+
+    def get_olines(self):
+        """Return the olines configuration dict.
+
+        Returns:
+            {oper_name: {password, host, class, flags}} loaded from disk/conf.
+        """
+        return self.storage.get_olines()
 
     @property
     def wakewords(self):
@@ -633,7 +657,7 @@ class Server(Service):
           from the `Data` class with a try-except block for error logging.
         - Arguments:
             - `key` (str): The key of the data to retrieve.
-        - What calls it: `self.__init__()`, `ServerConsole.list_clients()`.
+        - What calls it: `self.__init__()`.
         - What it calls: `super().get_data()`, `self.log()`.
         - Returns:
             - The requested data or `None` on error.
@@ -653,7 +677,7 @@ class Server(Service):
         - Arguments:
             - `key` (str): The key for the data to be stored.
             - `value`: The value to be stored.
-        - What calls it: `self.sync_persistent_clients()`, `ServerConsole.set_motd()`.
+        - What calls it: `self.sync_persistent_clients()`, `_handle_setmotd()`.
         - What it calls: `super().put_data()`, `self.log()`.
         """
         try:

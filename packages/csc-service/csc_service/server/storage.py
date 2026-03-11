@@ -7,11 +7,27 @@ zero data loss on power failure or crash.
 Files managed:
   - channels.json: channel state, members, modes, bans
   - users.json: user sessions, credentials, modes
-  - opers.json: operator status and credentials
+  - opers.json: operator status and credentials (v2: olines + active list)
   - bans.json: per-channel ban masks
   - history.json: disconnection records for WHOWAS
+
+opers.json v2 schema:
+  {
+    "version": 2,
+    "active_opers": [
+      {"nick": "alice", "oper_name": "admin", "flags": [...], "class": "admin"}
+    ],
+    "olines": {
+      "admin": {"password": "...", "host": "*", "class": "admin", "flags": [...]}
+    }
+  }
+
+olines.conf:
+  INI-style file defining operator blocks.  Loaded at startup and on REHASH.
+  See olines.conf for format documentation.
 """
 
+import configparser
 import json
 import os
 import time
@@ -38,7 +54,25 @@ class PersistentStorageManager:
     DEFAULTS = {
         "channels": {"version": 1, "channels": {}},
         "users": {"version": 1, "users": {}},
-        "opers": {"version": 1, "active_opers": [], "credentials": {"admin": "changeme"}},
+        "opers": {
+            "version": 2,
+            "active_opers": [],
+            "olines": {
+                "admin": {
+                    "password": "changeme",
+                    "host": "*",
+                    "class": "admin",
+                    "flags": ["kill", "ban", "rehash", "setmotd", "stats",
+                              "localconfig", "trust", "global", "connect", "squit"],
+                },
+                "localop": {
+                    "password": "localpass",
+                    "host": "127.0.0.1",
+                    "class": "local",
+                    "flags": ["kill", "stats"],
+                },
+            },
+        },
         "bans": {"version": 1, "channel_bans": {}},
         "history": {"version": 1, "disconnections": []},
         "nickserv": {"version": 1, "nicks": {}},
@@ -267,25 +301,210 @@ class PersistentStorageManager:
     # Oper Operations
     # ==================================================================
 
+    # ==================================================================
+    # olines.conf Parser
+    # ==================================================================
+
+    _ALL_FLAGS = frozenset([
+        "kill", "ban", "rehash", "shutdown", "setmotd", "stats",
+        "localconfig", "trust", "global", "connect", "squit",
+    ])
+
+    _CLASS_DEFAULT_FLAGS = {
+        "local":    frozenset(["kill", "stats"]),
+        "global":   frozenset(["kill", "stats", "global"]),
+        "admin":    frozenset(["kill", "ban", "rehash", "setmotd", "stats",
+                               "localconfig", "trust", "global", "connect", "squit"]),
+        "netadmin": frozenset(["kill", "ban", "rehash", "shutdown", "setmotd", "stats",
+                               "localconfig", "trust", "global", "connect", "squit"]),
+    }
+
+    def parse_olines_conf(self, conf_path=None):
+        """Parse an olines.conf file and return an olines dict.
+
+        Args:
+            conf_path: Path to olines.conf.  Defaults to olines.conf in base_path.
+        Returns:
+            dict of {oper_name: {password, host, class, flags}} on success.
+            Returns {} if file does not exist or cannot be parsed.
+        """
+        if conf_path is None:
+            conf_path = os.path.join(self.base_path, "olines.conf")
+
+        # Fall back to the directory of this source file if not in base_path
+        if not os.path.exists(conf_path):
+            src_dir = os.path.dirname(os.path.abspath(__file__))
+            conf_path = os.path.join(src_dir, "olines.conf")
+
+        if not os.path.exists(conf_path):
+            self._log("[OLINES] olines.conf not found, using defaults from opers.json")
+            return {}
+
+        parser = configparser.RawConfigParser()
+        try:
+            parser.read(conf_path)
+        except Exception as e:
+            self._log(f"[OLINES] Failed to parse olines.conf: {e}")
+            return {}
+
+        olines = {}
+        for section in parser.sections():
+            if not section.lower().startswith("oper:"):
+                continue
+            oper_name = section[5:].strip()  # strip "oper:" prefix
+            if not oper_name:
+                continue
+
+            password = parser.get(section, "password", fallback="").strip()
+            host = parser.get(section, "host", fallback="*").strip()
+            oper_class = parser.get(section, "class", fallback="local").strip().lower()
+
+            # Parse flags list
+            raw_flags = parser.get(section, "flags", fallback="").strip()
+            if raw_flags:
+                flags = [f.strip().lower() for f in raw_flags.split(",") if f.strip()]
+                # Keep only known flags
+                flags = [f for f in flags if f in self._ALL_FLAGS]
+            else:
+                # Default flags from class
+                flags = list(self._CLASS_DEFAULT_FLAGS.get(oper_class, self._CLASS_DEFAULT_FLAGS["local"]))
+
+            olines[oper_name] = {
+                "password": password,
+                "host": host,
+                "class": oper_class,
+                "flags": flags,
+            }
+
+        self._log(f"[OLINES] Loaded {len(olines)} oper block(s) from {conf_path}")
+        return olines
+
+    def reload_olines(self, conf_path=None):
+        """Re-parse olines.conf and update the olines block in opers.json.
+
+        Returns:
+            dict of newly loaded olines (may be empty on error).
+        """
+        olines = self.parse_olines_conf(conf_path)
+        if not olines:
+            return olines
+
+        data = self._load_opers_from_disk()
+        self._migrate_opers_v1_to_v2(data)
+        data["olines"] = olines
+        self.save_opers(data)
+        return olines
+
+    # ==================================================================
+    # Opers v2: schema migration helper
+    # ==================================================================
+
+    def _migrate_opers_v1_to_v2(self, data):
+        """Migrate opers data dict from v1 to v2 schema in-place.
+
+        v1 had: {"version":1, "credentials": {name:pass}, "active_opers": [nick,...]}
+        v2 has: {"version":2, "olines": {...},             "active_opers": [{nick,...},...]}
+
+        Mutates data in place. No-op if already v2.
+        """
+        if data.get("version", 1) >= 2:
+            return
+
+        # Build olines from v1 credentials
+        old_creds = data.pop("credentials", {})
+        olines = {}
+        for name, password in old_creds.items():
+            olines[name] = {
+                "password": password,
+                "host": "*",
+                "class": "local",
+                "flags": list(self._CLASS_DEFAULT_FLAGS["local"]),
+            }
+
+        # Convert active_opers: list[str] -> list[dict]
+        old_active = data.get("active_opers", [])
+        new_active = []
+        for item in old_active:
+            if isinstance(item, str):
+                # Best-effort: pick first matching oline, else use nick as oper_name
+                oline = olines.get(item, olines.get(list(olines.keys())[0]) if olines else {})
+                new_active.append({
+                    "nick": item,
+                    "oper_name": item,
+                    "flags": list(oline.get("flags", [])),
+                    "class": oline.get("class", "local"),
+                })
+            else:
+                new_active.append(item)  # already v2 dict
+
+        data["version"] = 2
+        data["olines"] = olines
+        data["active_opers"] = new_active
+
+    # ==================================================================
+    # Oper Operations (v2)
+    # ==================================================================
+
     def _load_opers_from_disk(self):
         """Load oper data from disk. Returns dict or defaults on error."""
         data = self._atomic_read(self._file_path("opers"))
         if data is None:
             return dict(self.DEFAULTS["opers"])
+        # Migrate v1 in-memory if needed (won't auto-save; caller decides)
+        if data.get("version", 1) < 2:
+            self._migrate_opers_v1_to_v2(data)
         return data
 
     def load_opers(self):
         """Public alias for _load_opers_from_disk."""
         return self._load_opers_from_disk()
 
+    def get_olines(self):
+        """Return the olines dict: {oper_name: {password, host, class, flags}}."""
+        data = self._load_opers_from_disk()
+        return data.get("olines", {})
+
+    def get_active_opers(self):
+        """Return list of active oper dicts: [{nick, oper_name, flags, class}]."""
+        data = self._load_opers_from_disk()
+        return list(data.get("active_opers", []))
+
+    def get_active_opers_info(self):
+        """Return dict of {nick_lower: {nick, oper_name, flags, class}} for quick lookup."""
+        result = {}
+        for item in self.get_active_opers():
+            if isinstance(item, dict) and item.get("nick"):
+                result[item["nick"].lower()] = item
+        return result
+
+    def get_oper_flags(self, nick):
+        """Return the flags list for an active oper nick, or [] if not an oper."""
+        info = self.get_active_opers_info().get(nick.lower())
+        if not info:
+            return []
+        return list(info.get("flags", []))
+
     def get_latest_opers_data(self):
-        """
-        Retrieve the latest operator credentials and active opers from disk.
+        """Retrieve the latest operator credentials and active opers from disk.
+
         Returns a tuple: (credentials_dict, active_opers_set).
+        credentials_dict is {oper_name: password} built from olines for v2.
+        active_opers_set is a set of lowercase nick strings.
         """
         data = self._load_opers_from_disk()
-        credentials = data.get("credentials", {})
-        active_opers = set(data.get("active_opers", []))
+        olines = data.get("olines", {})
+        # Build credentials-compatible dict from olines for backward compat
+        credentials = {name: info["password"] for name, info in olines.items()}
+        # Also include v1 credentials if present
+        credentials.update(data.get("credentials", {}))
+        active_opers = set()
+        for item in data.get("active_opers", []):
+            if isinstance(item, dict):
+                nick = item.get("nick")
+                if nick:
+                    active_opers.add(nick.lower())
+            elif isinstance(item, str):
+                active_opers.add(item.lower())
         return credentials, active_opers
 
     def save_opers(self, data):
@@ -300,27 +519,56 @@ class PersistentStorageManager:
         Returns:
             True on success, False on error.
         """
-        data = {
-            "version": 1,
-            "active_opers": list(server.opers),
-            "credentials": dict(server.oper_credentials),
-        }
+        data = self._load_opers_from_disk()
+        self._migrate_opers_v1_to_v2(data)
+        # Preserve olines from disk; update active_opers from server
+        data["active_opers"] = list(server.active_opers_info.values())
         return self.save_opers(data)
 
-    def add_active_oper(self, nick):
-        """Add a nick to the active opers list on disk."""
-        data = self.load_opers()
-        active = set(data.get("active_opers", []))
-        active.add(nick)
-        data["active_opers"] = list(active)
+    def add_active_oper(self, nick, oper_name=None, flags=None, oper_class=None):
+        """Add or update a nick in the active opers list on disk.
+
+        Args:
+            nick: Lowercase nick.
+            oper_name: The O-line name used to authenticate.
+            flags: List of oper flags.
+            oper_class: Oper class string.
+        """
+        data = self._load_opers_from_disk()
+        self._migrate_opers_v1_to_v2(data)
+        active = data.get("active_opers", [])
+
+        # Determine flags/class from olines if not provided
+        if oper_name and (flags is None or oper_class is None):
+            oline = data.get("olines", {}).get(oper_name, {})
+            if flags is None:
+                flags = list(oline.get("flags", []))
+            if oper_class is None:
+                oper_class = oline.get("class", "local")
+
+        # Remove existing entry for this nick
+        active = [a for a in active if not (isinstance(a, dict) and a.get("nick", "").lower() == nick.lower())]
+
+        active.append({
+            "nick": nick.lower(),
+            "oper_name": oper_name or nick.lower(),
+            "flags": list(flags or []),
+            "class": oper_class or "local",
+        })
+        data["active_opers"] = active
         return self.save_opers(data)
 
     def remove_active_oper(self, nick):
         """Remove a nick from the active opers list on disk."""
-        data = self.load_opers()
-        active = set(data.get("active_opers", []))
-        active.discard(nick)
-        data["active_opers"] = list(active)
+        data = self._load_opers_from_disk()
+        self._migrate_opers_v1_to_v2(data)
+        active = data.get("active_opers", [])
+        active = [
+            a for a in active
+            if not (isinstance(a, dict) and a.get("nick", "").lower() == nick.lower())
+            and not (isinstance(a, str) and a.lower() == nick.lower())
+        ]
+        data["active_opers"] = active
         return self.save_opers(data)
 
     # ==================================================================
@@ -777,20 +1025,30 @@ class PersistentStorageManager:
             Number of opers restored.
         """
         data = self.load_opers()
-        active = data.get("active_opers", [])
-        credentials = data.get("credentials", {})
 
-        # Merge credentials (disk values take precedence for known keys)
-        if credentials:
-            server.oper_credentials.update(credentials)
+        # Load olines from olines.conf (authoritative) then merge with stored olines
+        conf_olines = self.parse_olines_conf()
+        stored_olines = data.get("olines", {})
+        if conf_olines:
+            # Conf file takes precedence; update stored olines
+            merged_olines = dict(stored_olines)
+            merged_olines.update(conf_olines)
+            data["olines"] = merged_olines
+            self.save_opers(data)
 
         # Restore active opers (only if they have an active session)
+        active = data.get("active_opers", [])
         count = 0
-        for nick in active:
+        for item in active:
+            if isinstance(item, dict):
+                nick = item.get("nick", "")
+            else:
+                nick = item
+            if not nick:
+                continue
             # Verify nick is actually connected
             for addr, info in server.clients.items():
-                if info.get("name") == nick:
-                    server.opers.add(nick.lower())
+                if info.get("name", "").lower() == nick.lower():
                     count += 1
                     break
         return count
