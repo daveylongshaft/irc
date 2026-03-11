@@ -220,18 +220,24 @@ class MessageHandler:
             "WHO":     self._handle_who,
             "WHOIS":   self._handle_whois,
             "WHOWAS":  self._handle_whowas,
-            "OPER":    self._handle_oper,
-            "KICK":    self._handle_kick,
-            "MODE":    self._handle_mode,
-            "AWAY":    self._handle_away,
-            "MOTD":    self._handle_motd,
-            "KILL":    self._handle_kill,
-            "ISOP":    self._handle_isop,
-            "WALLOPS": self._handle_wallops,
-            "BUFFER":  self._handle_buffer,
-            "WAKEWORD": self._handle_wakeword,
-            "CONNECT": self._handle_connect,
-            "SQUIT": self._handle_squit_cmd,
+            "OPER":        self._handle_oper,
+            "KICK":        self._handle_kick,
+            "MODE":        self._handle_mode,
+            "AWAY":        self._handle_away,
+            "MOTD":        self._handle_motd,
+            "KILL":        self._handle_kill,
+            "ISOP":        self._handle_isop,
+            "WALLOPS":     self._handle_wallops,
+            "BUFFER":      self._handle_buffer,
+            "WAKEWORD":    self._handle_wakeword,
+            "CONNECT":     self._handle_connect,
+            "SQUIT":       self._handle_squit_cmd,
+            "TRUST":       self._handle_trust,
+            "SETMOTD":     self._handle_setmotd,
+            "STATS":       self._handle_stats,
+            "REHASH":      self._handle_rehash,
+            "SHUTDOWN":    self._handle_shutdown,
+            "LOCALCONFIG": self._handle_localconfig,
         }
 
         if command in post_reg_commands:
@@ -1229,7 +1235,12 @@ class MessageHandler:
     # ======================================================================
 
     def _handle_oper(self, msg, addr):
-        """OPER <name> <password>"""
+        """OPER <name> <password>
+
+        Authenticates the client as an IRC operator using the named O-line.
+        On success grants +o user mode, stores oper info (name, flags, class) in
+        active_opers, and broadcasts a WALLOPS notice.
+        """
         nick = self._get_nick(addr)
         if len(msg.params) < 2:
             self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "OPER :Not enough parameters")
@@ -1238,18 +1249,29 @@ class MessageHandler:
         oper_name = msg.params[0]
         oper_pass = msg.params[1]
 
-        # Read oper credentials directly from disk (disk is source of truth)
-        creds = self.server.oper_credentials
-        if oper_name in creds and creds[oper_name] == oper_pass:
-            self.server.storage.add_active_oper(nick.lower())
-            # Add +o to user_modes for consistency
+        # Look up O-line from disk (disk is source of truth)
+        olines = self.server.get_olines()
+        oline = olines.get(oper_name)
+        if oline and oline.get("password") == oper_pass:
+            flags = list(oline.get("flags", []))
+            oper_class = oline.get("class", "local")
+            # Record in active_opers with flags and class
+            self.server.storage.add_active_oper(
+                nick.lower(),
+                oper_name=oper_name,
+                flags=flags,
+                oper_class=oper_class,
+            )
+            # Add +o to user_modes
             if addr not in self.server.clients:
                 self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
             self.server.clients[addr].setdefault("user_modes", set()).add("o")
-            self._send_numeric(addr, RPL_YOUREOPER, nick, "You are now an IRC operator")
-            self.server.log(f"[OPER] {nick} authenticated as oper '{oper_name}'")
-            self.server.send_wallops(f"{nick} is now an IRC operator (auth: {oper_name})")
-            # Real-time persistence: Save session state immediately
+            self._send_numeric(addr, RPL_YOUREOPER, nick,
+                               f"You are now an IRC operator (class: {oper_class})")
+            self.server.log(f"[OPER] {nick} authenticated as '{oper_name}' "
+                            f"(class={oper_class}, flags={flags})")
+            self.server.send_wallops(f"{nick} is now an IRC operator "
+                                     f"(auth: {oper_name}, class: {oper_class})")
             self.server._persist_session_data()
         else:
             self._send_numeric(addr, ERR_PASSWDMISMATCH, nick, "Password incorrect")
@@ -1725,11 +1747,11 @@ class MessageHandler:
         self.server._persist_session_data()
 
     def _handle_kill(self, msg, addr):
-        """KILL <nick> [:<reason>] — oper only, disconnect user from all channels."""
+        """KILL <nick> [:<reason>] — requires oper 'kill' flag."""
         nick = self._get_nick(addr)
-        if nick.lower() not in self.server.opers:
-            self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
-                               "KILL :Permission Denied- You're not an IRC operator")
+        if not self.server.oper_has_flag(nick, "kill"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "KILL :Permission Denied- You do not have the kill flag")
             return
 
         if len(msg.params) < 1:
@@ -1749,10 +1771,11 @@ class MessageHandler:
         self.server.send_wallops(f"{nick} killed {target_nick}: {reason}")
 
     def _handle_connect(self, msg, addr):
-        """CONNECT <host> <port> [password] — Initiate S2S link to another server."""
+        """CONNECT <host> <port> [password] — Initiate S2S link. Requires 'connect' flag."""
         nick = self._get_nick(addr)
-        if nick.lower() not in self.server.opers:
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick, "Permission Denied- You're not an IRC operator")
+        if not self.server.oper_has_flag(nick, "connect"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "Permission Denied- You do not have the connect flag")
             return
 
         if len(msg.params) < 2:
@@ -1786,10 +1809,11 @@ class MessageHandler:
         threading.Thread(target=do_link, daemon=True).start()
 
     def _handle_squit_cmd(self, msg, addr):
-        """SQUIT <server_id> [:<reason>] — Drop an S2S link."""
+        """SQUIT <server_id> [:<reason>] — Drop an S2S link. Requires 'squit' flag."""
         nick = self._get_nick(addr)
-        if nick.lower() not in self.server.opers:
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick, "Permission Denied- You're not an IRC operator")
+        if not self.server.oper_has_flag(nick, "squit"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "Permission Denied- You do not have the squit flag")
             return
 
         if len(msg.params) < 1:
@@ -1812,6 +1836,243 @@ class MessageHandler:
         link.send_message("SQUIT", self.server.s2s_network.server_id, reason)
         link.close()
         self._send_notice(addr, f"Link to {server_id} closed.")
+
+    # ======================================================================
+    # Oper Hierarchy Commands: TRUST, SETMOTD, STATS, REHASH, SHUTDOWN, LOCALCONFIG
+    # ======================================================================
+
+    def _handle_trust(self, msg, addr):
+        """TRUST <ADD|REMOVE|LIST> [nick_or_host] — Manage trusted hosts/nicks.
+
+        Requires 'trust' oper flag.
+
+        ADD <nick>    - Mark a connected nick as trusted (bypasses some restrictions).
+        REMOVE <nick> - Remove trust from a nick.
+        LIST          - Show all currently trusted nicks.
+        """
+        nick = self._get_nick(addr)
+        if not self.server.oper_has_flag(nick, "trust"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "TRUST :Permission Denied- You do not have the trust flag")
+            return
+
+        if not msg.params:
+            self._send_notice(addr, "Usage: TRUST <ADD|REMOVE|LIST> [nick]")
+            return
+
+        subcmd = msg.params[0].upper()
+
+        if subcmd == "LIST":
+            trust_list = self.server.storage.load_settings().get("trusted_nicks", [])
+            if not trust_list:
+                self._send_notice(addr, "No trusted nicks configured.")
+            else:
+                for trusted_nick in trust_list:
+                    self._send_notice(addr, f"  TRUST: {trusted_nick}")
+            self._send_notice(addr, "End of TRUST list.")
+            return
+
+        if len(msg.params) < 2:
+            self._send_notice(addr, "Usage: TRUST ADD <nick> | TRUST REMOVE <nick>")
+            return
+
+        target = msg.params[1]
+
+        if subcmd == "ADD":
+            settings = self.server.storage.load_settings()
+            trusted = set(settings.get("trusted_nicks", []))
+            trusted.add(target.lower())
+            settings["trusted_nicks"] = sorted(trusted)
+            self.server.storage.save_settings(settings)
+            self._send_notice(addr, f"Added {target} to trusted list.")
+            self.server.log(f"[TRUST] {nick} added {target} to trusted nicks")
+            self.server.send_wallops(f"{nick} added {target} to trusted nicks")
+
+        elif subcmd == "REMOVE":
+            settings = self.server.storage.load_settings()
+            trusted = set(settings.get("trusted_nicks", []))
+            trusted.discard(target.lower())
+            settings["trusted_nicks"] = sorted(trusted)
+            self.server.storage.save_settings(settings)
+            self._send_notice(addr, f"Removed {target} from trusted list.")
+            self.server.log(f"[TRUST] {nick} removed {target} from trusted nicks")
+        else:
+            self._send_notice(addr, "Usage: TRUST <ADD|REMOVE|LIST> [nick]")
+
+    def _handle_setmotd(self, msg, addr):
+        """SETMOTD :<new message of the day> — Requires 'setmotd' oper flag."""
+        nick = self._get_nick(addr)
+        if not self.server.oper_has_flag(nick, "setmotd"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "SETMOTD :Permission Denied- You do not have the setmotd flag")
+            return
+
+        if not msg.params:
+            self._send_notice(addr, "Usage: SETMOTD :<message>")
+            return
+
+        new_motd = msg.params[0]
+        # Persist MOTD
+        self.server.put_data("motd", new_motd)
+        self._send_notice(addr, f"MOTD updated: {new_motd}")
+        self.server.log(f"[SETMOTD] {nick} set new MOTD: {new_motd!r}")
+        self.server.send_wallops(f"{nick} set a new MOTD")
+
+        # Broadcast update notice to all channels
+        prefix = f"{nick}!{nick}@{SERVER_NAME}"
+        for channel in self.server.channel_manager.list_channels():
+            notice = format_irc_message(
+                prefix, "NOTICE", [channel.name], f"MOTD updated by {nick}: {new_motd}"
+            ) + "\r\n"
+            self.server.broadcast_to_channel(channel.name, notice)
+
+    def _handle_stats(self, msg, addr):
+        """STATS [letter] — Server statistics query. Requires 'stats' oper flag.
+
+        Letters:
+          o - List all configured O-lines (oper blocks).
+          u - Server uptime.
+          m - Active oper count.
+          c - Connected client count.
+        """
+        nick = self._get_nick(addr)
+        if not self.server.oper_has_flag(nick, "stats"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "STATS :Permission Denied- You do not have the stats flag")
+            return
+
+        letter = msg.params[0].lower() if msg.params else "u"
+
+        if letter == "o":
+            # O-lines
+            olines = self.server.get_olines()
+            if not olines:
+                self._send_notice(addr, "STATS o: No O-lines configured.")
+            else:
+                for oper_name, info in olines.items():
+                    flags_str = ",".join(info.get("flags", []))
+                    self._send_notice(
+                        addr,
+                        f"O-line: {oper_name} host={info.get('host','*')} "
+                        f"class={info.get('class','local')} flags=[{flags_str}]"
+                    )
+
+        elif letter == "u":
+            # Uptime
+            uptime = int(time.time() - getattr(self.server, "startup_time", time.time()))
+            days, rem = divmod(uptime, 86400)
+            hours, rem = divmod(rem, 3600)
+            mins, secs = divmod(rem, 60)
+            self._send_notice(addr,
+                f"STATS u: Server up {days}d {hours:02d}h {mins:02d}m {secs:02d}s")
+
+        elif letter == "m":
+            # Active opers
+            active = list(self.server.opers)
+            self._send_notice(addr, f"STATS m: {len(active)} active oper(s): "
+                              f"{', '.join(active) if active else '(none)'}")
+
+        elif letter == "c":
+            # Client count
+            total = len(self.server.clients)
+            registered = sum(1 for i in self.server.clients.values() if i.get("name"))
+            self._send_notice(addr,
+                f"STATS c: {total} connections, {registered} registered clients")
+
+        else:
+            self._send_notice(addr,
+                f"STATS: Unknown letter '{letter}'. Known: o (olines), u (uptime), "
+                f"m (opers), c (clients)")
+
+    def _handle_rehash(self, msg, addr):
+        """REHASH — Reload olines.conf and server config. Requires 'rehash' flag."""
+        nick = self._get_nick(addr)
+        if not self.server.oper_has_flag(nick, "rehash"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "REHASH :Permission Denied- You do not have the rehash flag")
+            return
+
+        self.server.log(f"[REHASH] {nick} initiated REHASH")
+        self._send_notice(addr, "Reloading configuration...")
+
+        # Reload olines.conf
+        new_olines = self.server.storage.reload_olines()
+        count = len(new_olines)
+        self._send_notice(addr, f"REHASH complete: loaded {count} O-line block(s).")
+        self.server.log(f"[REHASH] Loaded {count} oper block(s)")
+        self.server.send_wallops(f"{nick} performed REHASH ({count} O-line(s) loaded)")
+
+    def _handle_shutdown(self, msg, addr):
+        """SHUTDOWN [:<reason>] — Gracefully shut down the server. Requires 'shutdown' flag."""
+        nick = self._get_nick(addr)
+        if not self.server.oper_has_flag(nick, "shutdown"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "SHUTDOWN :Permission Denied- You do not have the shutdown flag")
+            return
+
+        reason = msg.params[0] if msg.params else "Operator shutdown"
+        self.server.log(f"[SHUTDOWN] {nick} initiated server shutdown: {reason}")
+        self.server.send_wallops(f"Server is shutting down: {reason} (initiated by {nick})")
+
+        # Broadcast ERROR to all clients
+        error_msg = f"ERROR :Server shutting down: {reason}\r\n"
+        for saddr in list(self.server.clients.keys()):
+            try:
+                self.server.sock_send(error_msg.encode(), saddr)
+            except Exception:
+                pass
+
+        self.server._running = False
+
+    def _handle_localconfig(self, msg, addr):
+        """LOCALCONFIG <key> [value] — Read or set a local server config value.
+
+        Requires 'localconfig' oper flag.
+
+        LOCALCONFIG <key>          - Get current value of key.
+        LOCALCONFIG <key> <value>  - Set key to value.
+        LOCALCONFIG LIST           - List all local config keys.
+        """
+        nick = self._get_nick(addr)
+        if not self.server.oper_has_flag(nick, "localconfig"):
+            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                               "LOCALCONFIG :Permission Denied- You do not have the localconfig flag")
+            return
+
+        if not msg.params:
+            self._send_notice(addr, "Usage: LOCALCONFIG <key> [value] | LOCALCONFIG LIST")
+            return
+
+        key = msg.params[0]
+
+        if key.upper() == "LIST":
+            settings = self.server.storage.load_settings()
+            local_cfg = settings.get("local_config", {})
+            if not local_cfg:
+                self._send_notice(addr, "LOCALCONFIG: No local config entries.")
+            else:
+                for k, v in sorted(local_cfg.items()):
+                    self._send_notice(addr, f"  {k} = {v}")
+            self._send_notice(addr, "End of LOCALCONFIG list.")
+            return
+
+        settings = self.server.storage.load_settings()
+        local_cfg = settings.setdefault("local_config", {})
+
+        if len(msg.params) == 1:
+            # Query
+            val = local_cfg.get(key)
+            if val is None:
+                self._send_notice(addr, f"LOCALCONFIG: {key} is not set.")
+            else:
+                self._send_notice(addr, f"LOCALCONFIG: {key} = {val}")
+        else:
+            # Set
+            value = msg.params[1]
+            local_cfg[key] = value
+            self.server.storage.save_settings(settings)
+            self._send_notice(addr, f"LOCALCONFIG: {key} set to {value!r}")
+            self.server.log(f"[LOCALCONFIG] {nick} set {key}={value!r}")
 
     # ======================================================================
     # Server Kill — core disconnect logic used by KILL, QUIT, GHOST, NickServ
