@@ -1,0 +1,253 @@
+"""PKI CLI commands: enroll, cert status.
+
+csc-ctl enroll <ca_url> <token>  — Enroll this server for a TLS certificate
+csc-ctl cert status              — Show local certificate status
+"""
+
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+
+def _get_server_shortname():
+    """Read the server shortname from /etc/csc/server_name or hostname."""
+    sn_file = Path("/etc/csc/server_name")
+    if sn_file.exists():
+        name = sn_file.read_text(encoding="utf-8").strip()
+        if name:
+            return name
+    # Fallback to hostname
+    import socket
+    return socket.gethostname().split(".")[0]
+
+
+def _generate_key_and_csr(shortname):
+    """Generate a private key and CSR using openssl subprocess.
+
+    Returns (key_pem, csr_pem) as strings.
+    """
+    key_path = f"/tmp/{shortname}.key"
+    csr_path = f"/tmp/{shortname}.csr"
+
+    try:
+        # Generate private key
+        result = subprocess.run(
+            ["openssl", "genrsa", "-out", key_path, "4096"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Key generation failed: {result.stderr.strip()}")
+
+        # Generate CSR
+        result = subprocess.run(
+            [
+                "openssl", "req", "-new",
+                "-key", key_path,
+                "-out", csr_path,
+                "-subj", f"/CN={shortname}",
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"CSR generation failed: {result.stderr.strip()}")
+
+        key_pem = Path(key_path).read_text(encoding="utf-8")
+        csr_pem = Path(csr_path).read_text(encoding="utf-8")
+
+        return key_pem, csr_pem
+
+    finally:
+        for p in (key_path, csr_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
+def enroll(args, config_manager):
+    """Enroll this server for a TLS certificate.
+
+    1. Gets server shortname from server_name file
+    2. Generates private key + CSR
+    3. POSTs to enrollment endpoint
+    4. Saves key and chain to /etc/csc/
+    """
+    ca_url = args.ca_url.rstrip("/")
+    token = args.token
+
+    shortname = _get_server_shortname()
+    print(f"Enrolling as: {shortname}")
+
+    # Generate key and CSR
+    print("Generating private key and CSR...")
+    try:
+        key_pem, csr_pem = _generate_key_and_csr(shortname)
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # POST to enrollment endpoint
+    print(f"Requesting certificate from {ca_url}/enroll ...")
+    try:
+        import urllib.request
+        import urllib.error
+
+        payload = json.dumps({
+            "shortname": shortname,
+            "csr_pem": csr_pem,
+            "token": token,
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            f"{ca_url}/enroll",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=30)
+        resp_data = json.loads(resp.read().decode("utf-8"))
+
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        try:
+            err = json.loads(body).get("error", body)
+        except json.JSONDecodeError:
+            err = body
+        print(f"Enrollment failed ({e.code}): {err}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Enrollment failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if resp_data.get("status") != "ok":
+        print(f"Enrollment failed: {resp_data}", file=sys.stderr)
+        sys.exit(1)
+
+    chain_pem = resp_data["chain_pem"]
+
+    # Save private key (mode 600)
+    cert_dir = Path("/etc/csc")
+    cert_dir.mkdir(parents=True, exist_ok=True)
+
+    key_file = cert_dir / f"{shortname}.key"
+    key_file.write_text(key_pem, encoding="utf-8")
+    os.chmod(key_file, 0o600)
+
+    # Save certificate chain
+    chain_file = cert_dir / f"{shortname}.chain.pem"
+    chain_file.write_text(chain_pem, encoding="utf-8")
+    os.chmod(chain_file, 0o644)
+
+    print(f"Certificate enrolled successfully!")
+    print(f"  Key:   {key_file}")
+    print(f"  Chain: {chain_file}")
+    print(f"  Valid: {resp_data.get('valid_from')} -> {resp_data.get('valid_to')}")
+
+
+def cert_status(args, config_manager):
+    """Show local certificate status.
+
+    Reads the local certificate chain and displays:
+    - CN, serial, not-before, not-after, days remaining
+    - Revocation status against local CRL
+    """
+    shortname = _get_server_shortname()
+    cert_dir = Path("/etc/csc")
+    chain_file = cert_dir / f"{shortname}.chain.pem"
+
+    if not chain_file.exists():
+        print(f"No certificate found for {shortname}")
+        print(f"  Expected: {chain_file}")
+        print("  Run 'csc-ctl enroll <ca_url> <token>' to obtain a certificate.")
+        sys.exit(1)
+
+    # Parse certificate details
+    try:
+        result = subprocess.run(
+            [
+                "openssl", "x509", "-in", str(chain_file),
+                "-noout", "-subject", "-serial", "-dates",
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            print(f"Error reading certificate: {result.stderr.strip()}")
+            sys.exit(1)
+
+        info = {}
+        for line in result.stdout.strip().split("\n"):
+            if "=" in line:
+                key, val = line.split("=", 1)
+                info[key.strip()] = val.strip()
+
+        cn = info.get("subject", "").replace("CN = ", "").replace("CN=", "")
+        serial = info.get("serial", "unknown")
+        not_before = info.get("notBefore", "unknown")
+        not_after = info.get("notAfter", "unknown")
+
+        # Calculate days remaining
+        days_remaining = "unknown"
+        try:
+            result2 = subprocess.run(
+                [
+                    "openssl", "x509", "-in", str(chain_file),
+                    "-noout", "-checkend", "0",
+                ],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result2.returncode != 0:
+                days_remaining = "EXPIRED"
+            else:
+                # Calculate from not_after
+                result3 = subprocess.run(
+                    [
+                        "openssl", "x509", "-in", str(chain_file),
+                        "-noout", "-enddate",
+                    ],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if result3.returncode == 0:
+                    end_str = result3.stdout.strip().split("=", 1)[-1]
+                    # Parse openssl date format
+                    from email.utils import parsedate_to_datetime
+                    try:
+                        end_dt = parsedate_to_datetime(end_str)
+                        import datetime
+                        remaining = end_dt - datetime.datetime.now(
+                            datetime.timezone.utc
+                        )
+                        days_remaining = f"{remaining.days} days"
+                    except Exception:
+                        days_remaining = "unknown"
+        except Exception:
+            pass
+
+        # Check revocation status
+        crl_file = cert_dir / "crl.pem"
+        revoked = False
+        if crl_file.exists() and serial != "unknown":
+            try:
+                result4 = subprocess.run(
+                    ["openssl", "crl", "-in", str(crl_file), "-noout", "-text"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if result4.returncode == 0:
+                    revoked = serial.upper() in result4.stdout.upper()
+            except Exception:
+                pass
+
+        print(f"Certificate Status for {shortname}")
+        print(f"  CN:          {cn}")
+        print(f"  Serial:      {serial}")
+        print(f"  Not Before:  {not_before}")
+        print(f"  Not After:   {not_after}")
+        print(f"  Remaining:   {days_remaining}")
+        print(f"  Status:      {'REVOKED' if revoked else 'Valid'}")
+        print(f"  Chain file:  {chain_file}")
+
+    except FileNotFoundError:
+        print("Error: openssl not found. Install openssl to check certificates.")
+        sys.exit(1)

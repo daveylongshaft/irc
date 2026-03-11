@@ -1,7 +1,7 @@
 """csc-ctl: Cross-platform CLI for managing CSC services."""
 import argparse
 import sys
-from .commands import status_cmd, config_cmd, service_cmd
+from .commands import status_cmd, config_cmd, service_cmd, pki_cmd
 from ..config import ConfigManager
 
 
@@ -83,10 +83,27 @@ def main():
     run_parser.add_argument("service", help="Service to run (queue-worker, test-runner, pm)")
     run_parser.set_defaults(func=service_cmd.cycle)
 
+    # PKI: enroll
+    enroll_parser = subparsers.add_parser("enroll", help="Enroll for a TLS certificate")
+    enroll_parser.add_argument("ca_url", help="CA enrollment URL (e.g. https://haven.ef6e/csc/pki/)")
+    enroll_parser.add_argument("token", help="One-time enrollment token")
+    enroll_parser.set_defaults(func=pki_cmd.enroll)
+
+    # PKI: cert (with sub-subcommand 'status')
+    cert_parser = subparsers.add_parser("cert", help="Certificate management")
+    cert_sub = cert_parser.add_subparsers(dest="cert_command")
+    cert_status_parser = cert_sub.add_parser("status", help="Show local certificate status")
+    cert_status_parser.set_defaults(func=pki_cmd.cert_status)
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
+        sys.exit(1)
+
+    # Handle 'cert' with no subcommand
+    if args.command == "cert" and not getattr(args, "cert_command", None):
+        cert_parser.print_help()
         sys.exit(1)
 
     config_manager = ConfigManager(args.config)
