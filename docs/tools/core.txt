@@ -18,6 +18,8 @@ CORE SUBMODULE MAP
     def _olines_conf_path(self) -> Path
     def _migrate_opers_v1_to_v2(data: dict) -> dict  # Upgrade v1 {credentials: {name: pass}} to v2 olines format.
     def _match_hostmask(mask: str, client_mask: str) -> bool  # Return True if client_mask matches the wildcard mask pattern.
+    def load_opers(self) -> dict  # Public alias — backward compat for existing callers.
+    def save_opers(self, data: dict) -> bool  # Public alias — backward compat for existing callers.
     def _load_opers(self) -> dict  # Load opers.json, migrating v1→v2 if needed.
     def _save_opers(self, data: dict) -> bool  # Atomically save opers.json.
     def get_olines(self) -> dict  # Return olines dict: {account: [entry, ...]}.
@@ -40,7 +42,7 @@ CORE SUBMODULE MAP
   class Log(Root):  # Extends the root class.
     def __init__(self, server=None)
     def set_platform_log_dir(cls, log_dir)  # Called by Platform after path detection — no-op here since log.py
-    def log(self, message: str)  # Logs a message to the central project log file and prints to console.
+    def log(self, message: str, level: str='INFO')  # Logs a message to the central project log file and prints to console.
     def help(self)  # Displays base help information for the class.
     def test(self)  # Runs a base self-test for the class.
   def _get_logs_dir() -> Path  # Resolve logs directory without requiring Platform() to be instantiated.
@@ -77,7 +79,7 @@ CORE SUBMODULE MAP
     def _detect_virtualization(self)  # Detect if running in a VM, container, WSL, or cloud.
     def _detect_geography(self)  # Detect timezone and locale-based geography.
     def _detect_time(self)  # Check system time accuracy.
-    def _detect_network(self)  # Detect hostname and IP addresses.
+    def _detect_network(self)  # Detect hostname and IP addresses safely using passive shell commands.
     def _run_version_cmd(self, binary, args=None)  # Run a command and return version string or None.
     def _detect_software(self)  # Detect installed software tools and their versions.
     def _detect_docker(self)  # Detect Docker availability, daemon status, and resources.
@@ -86,11 +88,14 @@ CORE SUBMODULE MAP
     def _detect_runtime(self)  # Detect runtime directories (temp root, agent work base) in both Windows and Linux notations.
     def agent_temp_root(self)  # Get system temp directory path.
     def agent_work_base(self)  # Get CSC agent work base directory path.
-    def run_dir(self)  # Get the runtime state and log directory path.
+    def run_dir(self) -> Path  # Return the absolute path to the run/ directory (PROJECT_ROOT/tmp/run), creating it if needed.
     def get_etc_dir(cls) -> Path  # Return the persistent config directory (PROJECT_ROOT/etc), creating it if needed.
     def get_logs_dir(cls) -> Path  # Return the logs directory (PROJECT_ROOT/logs), creating it if needed.
     def get_tools_dir(cls) -> Path  # Return the tools/ code maps directory (irc/docs/tools), creating it if needed.
     def get_docs_dir(cls) -> Path  # Return the documentation directory (irc/docs), creating it if needed.
+    def get_wo_dir(cls) -> Path  # Return the workorder pool directory (ops/wo).
+    def get_agents_dir(cls) -> Path  # Return the agents definition/queue directory (ops/agents).
+    def get_pki_dir(cls) -> Path  # Return the PKI/EasyRSA directory (etc/easy-rsa).
     def get_abs_etc_path(self, components) -> str  # Return absolute path under etc/ (platform-native separators).
     def _get_platform_json_path(self)  # Get the path for platform.json (in etc/).
     def _persist_platform(self)  # Write platform data to platform.json atomically.
@@ -106,6 +111,7 @@ CORE SUBMODULE MAP
     def has_min_ram(self, min_ram_str)  # Check if system meets minimum RAM requirement.
     def check_requirements(self, requires=None, platform_list=None, min_ram=None)  # Check if this system satisfies all requirements.
     def check_s2s_cert(cls, config=None)  # Check the S2S TLS certificate status.
+    def get_backup_dir(cls) -> Path  # Return the backup directory (PROJECT_ROOT/backup), creating it if needed.
     def refresh_platform(self)  # Re-run all detection and persist.
     def get_abs_root_path(self, components)  # Return absolute path from PROJECT_ROOT.
     def get_abs_tmp_path(self, components)  # Return absolute path from TMP directory (PROJECT_ROOT/tmp).

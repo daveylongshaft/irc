@@ -705,12 +705,6 @@ AGENTS SUBMODULE MAP
 ── ops/agents/haiku/orders.md-template ──
 # You are an AI coding agent running from /opt/.
 
-── ops/agents/haiku/queue/in/orders.md ──
-# You are an AI coding agent running from /opt/.
-
-── ops/agents/haiku/queue/in/windows-service-update.json ──
-# {
-
 ── ops/agents/ollama-codellama/bin/run_agent.bat ──
 # @echo off
 
@@ -812,12 +806,6 @@ AGENTS SUBMODULE MAP
 ── ops/agents/opus/orders.md-template ──
 # You are an AI coding agent running from /opt/.
 
-── ops/agents/opus/queue/in/windows-service-update.json ──
-# {
-
-── ops/agents/opus/queue/in/windows-service-update.md ──
-# PLATFORM: windows
-
 ── ops/agents/opus/queue/out/agent_1773106893_csc-ftpd-wo-watcher.log ──
 # Invoking: gemini -y -m gemini-2.5-pro -p " "
 
@@ -914,7 +902,7 @@ AGENTS SUBMODULE MAP
 ── ops/agents/opus/queue/out/orders-orphan-1773105521.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
-── ops/agents/opus/queue/work/orders.md ──
+── ops/agents/opus/queue/out/orders-orphan-1773345383.md ──
 # You are an AI coding agent running from /opt/.
 
 ── ops/agents/opus/workorders/wip/opus_plan_queue_worker_python_implementation.md ──

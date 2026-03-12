@@ -355,6 +355,7 @@ class Data(Log):
         data = self._load_opers()
         entries = (data.get("olines", {}).get(account, []) +
                    data.get("remote_olines", {}).get(account, []))
+        self.log(f"[OPER AUTH DEBUG] account={account!r}, found {len(entries)} entries")
         for entry in entries:
             if entry.get("password") != password:
                 continue
