@@ -1,0 +1,266 @@
+WORKORDERS SUBMODULE MAP
+==================================================
+
+── bin/next_step ──
+# #!/usr/bin/env python3.10
+
+── bin/next_step.bat ──
+# @echo off
+
+── bin/wo ──
+# #!/usr/bin/env python3
+
+── bin/wo.bat ──
+# @echo off
+
+── bin/workorders ──
+# #!/usr/bin/env python3
+
+── bin/workorders.bat ──
+# @echo off
+
+── bin/workorders_quick.py ──
+# Quick workorder CLI - lists/reads workorders from ops/wo/
+  PROJECT_ROOT = Path(__file__).resolve().parent.parent
+  def get_wo_dirs()  # Get all workorder directories.
+  def status()  # Show queue statistics.
+  def list_dir(dirname)  # List workorders in a directory.
+  def read_wo(ref)  # Read a workorder by number or filename.
+  def main()
+
+── irc/packages/csc-service/csc_service/shared/services/workorders_service.py ──
+# Prompts Service - Work Queue Management
+  class workorders(Service):  # Service for managing prompt files in a work queue system.
+    def __init__(self, server_instance)
+    def urgency(self, *args) -> str  # Get or set default urgency level for new workorders.
+    def _sanitize_filename(self, description)  # Convert description to safe filename component.
+    def _format_prompt_list(self, dir_name, files)  # Format a numbered list of workorders with urgency and tags.
+    def add(self, *args) -> str  # Create a new workorder with metadata and execution mode support.
+    def list(self, *args) -> str  # List workorders in specified directory or all directories.
+    def read(self, filename: str) -> str  # Read and display a prompt file.
+    def edit(self, *args) -> str  # Edit an existing prompt file.
+    def append(self, *args) -> str  # Append content to an existing prompt file.
+    def _resolve_prompt(self, ref, from_dir='ready')  # Resolve a prompt reference (number or filename) to a filepath.
+    def assign(self, *args) -> str  # Assign a workorder to an agent with execution mode support.
+    def move(self, *args) -> str  # Move a prompt between directories.
+    def delete(self, filename: str) -> str  # Delete a prompt file.
+    def status(self) -> str  # Show status of all prompt directories.
+    def archive(self, filename: str) -> str  # Archive a completed prompt from done/ to archive/.
+    def default(self, *args) -> str  # Show available commands.
+  class prompts(workorders):  # Compatibility alias for legacy prompts service.
+
+── ops/wo/done/1772297624-haiku-cleanup_irrelevant_tests_md.md ──
+# Audit tests/ directory - identify and prune irrelevant or broken tests (old test patterns, platform-incompatible tests, unmaintained test suites)
+
+── ops/wo/done/1773033520-test-echo-haiku.md ──
+# ---
+
+── ops/wo/done/BATCH_API_TOOL_LOOP_IMPLEMENTATION.md ──
+# # Batch API Tool Loop Implementation
+
+── ops/wo/done/CLAUDE_AUTO_RESUME_PROOF_TEST.md ──
+# # Auto-Resume: IRC Proof Test Integration
+
+── ops/wo/done/EVOLUTION_MD_write_origin_story.md ──
+# # Write EVOLUTION.md — The System's Origin Story
+
+── ops/wo/done/IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.md ──
+# ---
+
+── ops/wo/done/INTEGRATION_TEST_IRC_PROOF_SYSTEM.md ──
+# # Integration Test: IRC Proof System (35% Coverage)
+
+── ops/wo/done/JULES_INTEGRATION_WORKORDER_SPEC.md ──
+# # Jules Integration: Workorder Assignment Option
+
+── ops/wo/done/OPUS_BUILD_BATCH_API_TOOL_EXECUTOR.md ──
+# # Build Batch API Tool Executor with Proper Tool Loop
+
+── ops/wo/done/OPUS_EXECUTE_RESTRUCTURE_BATCHES.md ──
+# # Execute CSC Restructure - Batch API Tool Loop
+
+── ops/wo/done/OPUS_REVISE_TOOL_LOOP_WITH_RETRY_ESCALATION.md ──
+# # Revise Tool Loop Executor - Add Retry + Model Escalation
+
+── ops/wo/done/P0_opus_fix_pr_18_rejection.md ──
+# ---
+
+── ops/wo/done/P0_opus_fix_pr_review_agent_script.md ──
+# ---
+
+── ops/wo/done/PKI_CERTIFICATE_ENROLLMENT_SYSTEM.md ──
+# Already up to date.
+
+── ops/wo/done/PLAN_REVIEW_AGENT_SETUP.md ──
+# ---
+
+── ops/wo/done/PROMPT_abs_wip_path_multiagent_20260309_210749.md ──
+# PID: 3025431 starting at Mon 09 Mar 2026 09:07:49 PM CDT
+
+── ops/wo/done/PROMPT_docs_svc_agent.md ──
+# # Document & Test: agent service
+
+── ops/wo/done/PROMPT_docs_svc_backup.md ──
+# # Document & Test: backup service
+
+── ops/wo/done/PROMPT_docs_svc_builtin.md ──
+# # Document & Test: builtin service
+
+── ops/wo/done/PROMPT_docs_svc_curl.md ──
+# # Document & Test: curl service
+
+── ops/wo/done/PROMPT_docs_svc_help.md ──
+# # Document & Test: help service
+
+── ops/wo/done/PROMPT_docs_svc_module_manager.md ──
+# # Document & Test: module_manager service
+
+── ops/wo/done/PROMPT_docs_svc_nickserv.md ──
+# # Document & Test: nickserv service
+
+── ops/wo/done/PROMPT_docs_svc_ntfy.md ──
+# # Document & Test: ntfy service
+
+── ops/wo/done/PROMPT_docs_svc_patch.md ──
+# # Document & Test: patch service
+
+── ops/wo/done/PROMPT_docs_svc_version.md ──
+# # Document & Test: version service
+
+── ops/wo/done/PROMPT_fix_test_client_dcc_send.md ──
+# # Task: Fix Failing Test — client_dcc_send
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_1_20260309-175457.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_2_20260310-183830.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_2_20260310-184341.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_2_20260310-185059.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_2_20260310-185557.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_3_20260310-201343.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_3_20260310-201345.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_3_20260310-202514.md ──
+# ---
+
+── ops/wo/done/PROMPT_review_pr_daveylongshaft_irc_3_20260310-202906.md ──
+# ---
+
+── ops/wo/done/PROMPT_setup_github_webhook.md ──
+# ---
+
+── ops/wo/done/PROOF_TEST_INTEGRATION_WIP.md ──
+# # IRC Proof Test Integration - WIP
+
+── ops/wo/done/REBUILD_AGENT_AND_WORKORDERS_SERVICES.md ──
+# ---
+
+── ops/wo/done/adopt-an-orangutan.md ──
+# Skip to main content
+
+── ops/wo/done/agent-diff-audit-1773176488 ──
+# PID: 3335384 starting at Tue 10 Mar 2026 04:01:28 PM CDT
+
+── ops/wo/done/audit-csc-old-vs-new-port.md ──
+# <<<<<<< HEAD
+
+── ops/wo/done/batch-write-tests.md ──
+# You are building and submitting a Claude Haiku batch job to generate pytest test files. Work entirely in /opt/audit/. Journal every step to this file before doing it.
+
+── ops/wo/done/batch_audit_1773177586.md ──
+# # Batch Audit Layer Task
+
+── ops/wo/done/claude-evolution-story.md ──
+# PID: 3368527 starting at Tue 10 Mar 2026 05:57:19 PM CDT
+
+── ops/wo/done/create_file_comparison_script.md ──
+# ---
+
+── ops/wo/done/csc-ftpd-wo-watcher.md ──
+# ---
+
+── ops/wo/done/data_hierarchy_audit.md ──
+# PID: 2610804 starting at Sun 08 Mar 2026 11:41:10 PM CDT
+
+── ops/wo/done/fix-csc-service-segfault.md ──
+# # Fix: csc-service Segmentation Fault on Windows
+
+── ops/wo/done/haiku-audit_data_class_circumventions.md ──
+# ---
+
+── ops/wo/done/haiku-fix_agent_tail_segfault.md ──
+# ---
+
+── ops/wo/done/haiku-fix_service_loop_registry_and_log.md ──
+# # Fix csc-service Loop: Add pr-review to Registry + Fix Log Overrides
+
+── ops/wo/done/haiku-research_orangutan_create_pdf.md ──
+# ---
+
+── ops/wo/done/migration_completion_summary.md ──
+# ---
+
+── ops/wo/done/oper-hierarchy-20260311.md ──
+# PID: 3502799 starting at Wed 11 Mar 2026 12:17:19 AM CDT
+
+── ops/wo/done/orangutan_research_report_20260304_174241.html ──
+# <!DOCTYPE html>
+
+── ops/wo/done/orangutan_research_report_20260304_174241.md ──
+# # Orangutan Research Report
+
+── ops/wo/done/plain-task.md ──
+# # Just a plain workorder, no front-matter
+
+── ops/wo/done/platform_00-extend_platform_py_runtime_strategy.md ──
+# Perfect! The workorder has been successfully completed and verified. Here's a summary of what was done:
+
+── ops/wo/done/platform_13-create_daily_motive_state_workorders.md ──
+# # platform_13: Create Daily Motive-State Comparison Workorders
+
+── ops/wo/done/pm-execution-journal.md ──
+# # PM Execution Journal - Manual Queue Management Session
+
+── ops/wo/done/reorg_root_cleanup.md ──
+# PID: 2189021 starting at Sat 07 Mar 2026 07:55:03 PM CST
+
+── ops/wo/done/review_PR2_bridge_migration.md ──
+# ---
+
+── ops/wo/done/roles_setup.md ──
+# PID: 2275905 starting at Sun 08 Mar 2026 03:19:19 AM CDT
+
+── ops/wo/ready/AUDIT_REORGANIZE_ALL_WORKORDERS.md ──
+# ---
+
+── ops/wo/ready/FIX_PATH_AND_ALL_SHELL_TOOLS.md ──
+# ---
+
+── ops/wo/ready/IMPLEMENT_JULES_INTEGRATION_FULL.md ──
+# ---
+
+── ops/wo/wip/cleanup_wo_dirs_3572384 ──
+# PID: 3572384 starting at Wed 11 Mar 2026 04:19:36 AM CDT
+
+── ops/wo/wip/cleanup_wo_dirs_3572823 ──
+# removing stray dirs/lnks
+
+── ops/wo/wip/recover_pki_3558517 ──
+# PID: 3558517 starting at Wed 11 Mar 2026 03:34:50 AM CDT
+
+── ops/wo/wip/windows-service-update.md ──
+# PLATFORM: windows
