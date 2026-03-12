@@ -29,35 +29,25 @@ class agent( Service ):
       tail [N]                - Tail N lines of WIP journal (default 20).
     """
 
-    PROJECT_ROOT = _PROJECT_ROOT
-    WORKORDERS_BASE = _PROJECT_ROOT / "workorders"
-    LEGACY_PROMPTS_BASE = _PROJECT_ROOT / "prompts"
-    LOGS_DIR = _PROJECT_ROOT / "logs"
+    PROJECT_ROOT = Platform.PROJECT_ROOT
+    WORKORDERS_BASE = Platform.get_wo_dir()
+    LOGS_DIR = Platform.get_logs_dir()
 
     @property
     def PROMPTS_BASE(self):
-        # Check candidates in priority order
-        for candidate in [
-            self.WORKORDERS_BASE,                          # workorders/
-            _PROJECT_ROOT / "ops" / "wo",                 # ops/wo/ (ops submodule)
-            _PROJECT_ROOT.parent / "ops" / "wo",          # parent/ops/wo/ (irc submodule case)
-            self.LEGACY_PROMPTS_BASE,                     # prompts/
-        ]:
-            if candidate.exists():
-                return candidate
         return self.WORKORDERS_BASE
 
     @property
     def READY_DIR(self):
-        return self.PROMPTS_BASE / "ready"
+        return self.WORKORDERS_BASE / "ready"
 
     @property
     def WIP_DIR(self):
-        return self.PROMPTS_BASE / "wip"
+        return self.WORKORDERS_BASE / "wip"
 
     @property
     def DONE_DIR(self):
-        return self.PROMPTS_BASE / "done"
+        return self.WORKORDERS_BASE / "done"
 
     # System-level enforcement prompt injected via --append-system-prompt (claude)
     # This is separate from the user prompt and cannot be scrolled past.
@@ -140,9 +130,10 @@ class agent( Service ):
         except Exception:
             pass
 
+        agents_dir = Platform.get_agents_dir()
         if agent_name in self.LOCAL_AGENTS:
             # Local agents use cagent exec with cagent.yaml
-            yaml_path = self.PROJECT_ROOT / "ops" / "agents" / agent_name / "cagent.yaml"
+            yaml_path = agents_dir / agent_name / "cagent.yaml"
             if not yaml_path.exists():
                 self.log(f"ERROR: cagent.yaml not found for local agent {agent_name} at {yaml_path}")
                 return [], None
@@ -158,8 +149,8 @@ class agent( Service ):
             env.setdefault("OPENAI_API_KEY", "dummy")
         else:
             # Remote agents use run_agent.sh or run_agent.bat
-            run_script_sh = self.PROJECT_ROOT / "ops" / "agents" / agent_name / "bin" / "run_agent.sh"
-            run_script_bat = self.PROJECT_ROOT / "ops" / "agents" / agent_name / "bin" / "run_agent.bat"
+            run_script_sh = agents_dir / agent_name / "bin" / "run_agent.sh"
+            run_script_bat = agents_dir / agent_name / "bin" / "run_agent.bat"
             
             run_script = None
             if run_script_sh.exists():
@@ -168,16 +159,16 @@ class agent( Service ):
                 run_script = run_script_bat
 
             if not run_script:
-                self.log(f"ERROR: run_agent script not found for remote agent {agent_name} in {self.PROJECT_ROOT / 'agents' / agent_name / 'bin'}")
+                self.log(f"ERROR: run_agent script not found for remote agent {agent_name} in {agents_dir / agent_name / 'bin'}")
                 return [], None
             
             if run_script.suffix == ".sh":
-                cmd = ["bash", str(run_script), full_prompt, str(self.PROJECT_ROOT / "ops" / "wo" / "wip" / wip_filename)]
+                cmd = ["bash", str(run_script), full_prompt, str(self.WIP_DIR / wip_filename)]
             else: # .bat
-                cmd = [str(run_script), full_prompt, str(self.PROJECT_ROOT / "ops" / "wo" / "wip" / wip_filename)]
+                cmd = [str(run_script), full_prompt, str(self.WIP_DIR / wip_filename)]
             
             # For remote agents, working_dir should typically be the agent's root to find its resources
-            working_dir = str(self.PROJECT_ROOT / "ops" / "agents" / agent_name)
+            working_dir = str(agents_dir / agent_name)
 
         return cmd, env
 
@@ -266,7 +257,7 @@ class agent( Service ):
         # Copy default template if no agent-specific one exists
         template_dst = agent_dir / "orders.md-template"
         if not template_dst.exists():
-            default_tmpl = self.PROJECT_ROOT / "ops" / "agents" / "templates" / "default.md"
+            default_tmpl = Platform.get_agents_dir() / "templates" / "default.md"
             if default_tmpl.exists():
                 import shutil as _shutil
                 _shutil.copy2(str(default_tmpl), str(template_dst))
@@ -278,15 +269,16 @@ class agent( Service ):
         """
         has_cagent = shutil.which("cagent") is not None
         result = {}
+        agents_dir = Platform.get_agents_dir()
         for name in self.KNOWN_AGENTS:
             if name in self.LOCAL_AGENTS:
                 # Local agents still use cagent.yaml
-                yaml_path = self.PROJECT_ROOT / "ops" / "agents" / name / "cagent.yaml"
+                yaml_path = agents_dir / name / "cagent.yaml"
                 result[name] = has_cagent and yaml_path.exists()
             else:
                 # Remote agents use run_agent scripts
-                run_script_sh = self.PROJECT_ROOT / "ops" / "agents" / name / "bin" / "run_agent.sh"
-                run_script_bat = self.PROJECT_ROOT / "ops" / "agents" / name / "bin" / "run_agent.bat"
+                run_script_sh = agents_dir / name / "bin" / "run_agent.sh"
+                run_script_bat = agents_dir / name / "bin" / "run_agent.bat"
                 result[name] = run_script_sh.exists() or run_script_bat.exists()
         return result
 
@@ -587,8 +579,9 @@ class agent( Service ):
             workorder_filename: The workorder filename (e.g., "TASK_fix_foo.md")
         """
         try:
-            agent_dir = self.PROJECT_ROOT / "ops" / "agents" / agent_name
-            scripts_dir = self.PROJECT_ROOT / "ops" / "agents" / "templates"
+            agents_dir = Platform.get_agents_dir()
+            agent_dir = agents_dir / agent_name
+            scripts_dir = agents_dir / "templates"
 
             if os.name == 'nt':
                 script = scripts_dir / "generate_orders_md.bat"
@@ -676,7 +669,7 @@ class agent( Service ):
     def status(self) -> str:
         """Show queue and agent status by scanning queue directories and WIP files."""
         lines = []
-        agents_dir = self.PROJECT_ROOT / "ops" / "agents"
+        agents_dir = Platform.get_agents_dir()
 
         # Scan queue/work/ for running tasks
         running_tasks = []
@@ -899,14 +892,14 @@ class agent( Service ):
         import os
         import tempfile
 
-        # Get temp base without creating full Platform object (avoids cryptography segfault)
-        temp_root = os.environ.get("TEMP") or os.environ.get("TMP") or tempfile.gettempdir()
-        agent_work_base = Path(temp_root) / "csc"
+        # Use Platform for temp repo path resolution
+        plat = Platform()
+        agent_work_base = plat.agent_work_base
 
-        if not agent_work_base.exists():
+        if not agent_work_base or not agent_work_base.exists():
             return result
 
-        agents_dir = self.PROJECT_ROOT / "ops" / "agents"
+        agents_dir = Platform.get_agents_dir()
         for agent_dir in agents_dir.iterdir():
             if not agent_dir.is_dir():
                 continue
@@ -921,12 +914,13 @@ class agent( Service ):
             # Check temp repo for WIP files
             agent_name = agent_dir.name
             temp_repo = agent_work_base / agent_name / "repo"
-            temp_wip_dir = temp_repo / "workorders" / "wip"
-            if not temp_wip_dir.exists():
-                temp_wip_dir = temp_repo / "prompts" / "wip"
-            if temp_wip_dir.exists():
-                for f in temp_wip_dir.glob("*.md"):
-                    result[f.name] = f
+            # Check standard locations
+            for sub in ["workorders", "prompts"]:
+                temp_wip_dir = temp_repo / sub / "wip"
+                if temp_wip_dir.exists():
+                    for f in temp_wip_dir.glob("*.md"):
+                        result[f.name] = f
+                    break
         return result
 
     def _find_wip_file(self, filename):

@@ -161,8 +161,9 @@ class Platform(Version):
             "virtualization": self._detect_virtualization(),
             "geography": self._detect_geography(),
             "time": self._detect_time(),
-            "network": self._detect_network(),
+            "network": {}, # self._detect_network(),
             "software": self._detect_software(),
+
             "docker": self._detect_docker(),
             "ai_agents": self._detect_ai_agents(),
             "resource_assessment": self._assess_resources(),
@@ -414,34 +415,48 @@ class Platform(Version):
         return info
 
     def _detect_network(self):
-        """Detect hostname and IP addresses."""
-        # print("DEBUG: _detect_network started")
+        """Detect hostname and IP addresses safely using passive shell commands."""
         info = {
             "hostname": socket.gethostname(),
             "ips": []
         }
         
         try:
-            # SKIP gethostbyname_ex and getaddrinfo on Windows as they can be unstable
-            # and are redundant if we use the dummy connect method below.
+            if sys.platform == "win32":
+                # Safe passive string parsing of ipconfig on Windows
+                result = subprocess.run(["ipconfig"], capture_output=True, text=True, timeout=5)
+                for line in result.stdout.splitlines():
+                    if "IPv4" in line:
+                        parts = line.split(":")
+                        if len(parts) > 1:
+                            ip = parts[1].strip()
+                            # Basic validation and exclude localhost
+                            if ip and ip != "127.0.0.1" and " " not in ip:
+                                if ip not in info["ips"]:
+                                    info["ips"].append(ip)
+            else:
+                # Safe passive command on Linux
+                result = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout.strip():
+                    for ip in result.stdout.strip().split():
+                        if ip != "127.0.0.1" and ip not in info["ips"]:
+                            info["ips"].append(ip)
+                else:
+                    # Fallback to ip command
+                    result2 = subprocess.run(["ip", "-4", "addr", "show"], capture_output=True, text=True, timeout=5)
+                    for line in result2.stdout.splitlines():
+                        if "inet " in line:
+                            parts = line.split()
+                            if len(parts) > 1:
+                                ip = parts[1].split("/")[0]
+                                if ip != "127.0.0.1" and ip not in info["ips"]:
+                                    info["ips"].append(ip)
+        except Exception as e:
+            self.log(f"[Platform] Network detection error: {e}")
             
-            # If still empty or only localhost, try connecting to a dummy address to see outgoing interface
-            if not info["ips"] or info["ips"] == ["127.0.0.1"]:
-                try:
-                    # print("DEBUG: _detect_network calling dummy connect")
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    # Doesn't actually connect, just finds the interface
-                    s.connect(("8.8.8.8", 80))
-                    local_ip = s.getsockname()[0]
-                    if local_ip not in info["ips"]:
-                        info["ips"].append(local_ip)
-                    s.close()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        if not info["ips"]:
+            info["ips"] = ["127.0.0.1"]
             
-        # print("DEBUG: _detect_network finished")
         return info
 
     def _run_version_cmd(self, binary, args=None):
@@ -754,6 +769,40 @@ class Platform(Version):
         p = cls.PROJECT_ROOT / "logs"
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    @classmethod
+    def get_tools_dir(cls) -> Path:
+        """Return the tools/ code maps directory (irc/docs/tools), creating it if needed."""
+        p = cls.PROJECT_ROOT / "irc" / "docs" / "tools"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @classmethod
+    def get_docs_dir(cls) -> Path:
+        """Return the documentation directory (irc/docs), creating it if needed."""
+        p = cls.PROJECT_ROOT / "irc" / "docs"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @classmethod
+    def get_wo_dir(cls) -> Path:
+        """Return the workorder pool directory (ops/wo)."""
+        return cls.PROJECT_ROOT / "ops" / "wo"
+
+    @classmethod
+    def get_agents_dir(cls) -> Path:
+        """Return the agents definition/queue directory (ops/agents)."""
+        return cls.PROJECT_ROOT / "ops" / "agents"
+
+    @classmethod
+    def get_pki_dir(cls) -> Path:
+        """Return the PKI/EasyRSA directory (etc/easy-rsa)."""
+        return cls.get_etc_dir() / "easy-rsa"
+
+    @property
+    def run_dir(self) -> Path:
+        """Return the absolute path to the run/ directory."""
+        return self.get_abs_tmp_path(["run"])
 
     def get_abs_etc_path(self, components) -> str:
         """Return absolute path under etc/ (platform-native separators).
@@ -1109,6 +1158,13 @@ class Platform(Version):
     # Refresh
     # ------------------------------------------------------------------
 
+    @classmethod
+    def get_backup_dir(cls) -> Path:
+        """Return the backup directory (PROJECT_ROOT/backup), creating it if needed."""
+        p = cls.PROJECT_ROOT / "backup"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
     def refresh_platform(self):
         """Re-run all detection and persist."""
         self._detect_all()
@@ -1202,8 +1258,8 @@ class Platform(Version):
         os.environ['CSC_TMP'] = self.get_abs_tmp_path([])
         os.environ['CSC_OPS_WO'] = self.get_abs_root_path(['ops', 'wo'])
         os.environ['CSC_OPS_AGENTS'] = self.get_abs_root_path(['ops', 'agents'])
-        os.environ['CSC_DOCS'] = self.get_abs_root_path(['docs'])
-        os.environ['CSC_DOCS_TOOLS'] = self.get_abs_root_path(['docs', 'tools'])
+        os.environ['CSC_DOCS'] = str(self.get_docs_dir())
+        os.environ['CSC_DOCS_TOOLS'] = str(self.get_tools_dir())
         os.environ['CSC_LOGS'] = str(self.get_logs_dir())
         os.environ['CSC_BIN'] = self.get_abs_root_path(['irc', 'bin'])
 
@@ -1218,6 +1274,8 @@ def _platform_cli(args=None):
       get_logs_dir    Print the logs/ directory path
       get_root        Print the project root path
       get_tmp         Print the tmp/run path
+      get_docs_dir    Print the documentation directory path
+      get_tools_dir   Print the tools/ code maps directory path
     """
     import sys
     argv = (args or sys.argv)[1:]
@@ -1240,6 +1298,8 @@ def _platform_cli(args=None):
             "CSC_TMP":        p.get_abs_tmp_path([]),
             "CSC_OPS_WO":     p.get_abs_root_path(["ops", "wo"]),
             "CSC_OPS_AGENTS": p.get_abs_root_path(["ops", "agents"]),
+            "CSC_DOCS":       str(Platform.get_docs_dir()),
+            "CSC_DOCS_TOOLS": str(Platform.get_tools_dir()),
             "CSC_BIN":        p.get_abs_root_path(["irc", "bin"]),
         }
         for k, v in pairs.items():
@@ -1252,6 +1312,10 @@ def _platform_cli(args=None):
         print(Platform.PROJECT_ROOT)
     elif cmd == "get_tmp":
         print(p.get_abs_tmp_path(["run"]))
+    elif cmd == "get_docs_dir":
+        print(Platform.get_docs_dir())
+    elif cmd == "get_tools_dir":
+        print(Platform.get_tools_dir())
     else:
         print(json.dumps(p.platform_data, indent=2, default=str))
 

@@ -12,9 +12,29 @@ import time
 from pathlib import Path
 
 
+from csc_service.shared.platform import Platform
+
+def _get_openssl_cmd():
+    """Return path to openssl executable."""
+    import shutil
+    cmd = shutil.which("openssl")
+    if cmd:
+        return cmd
+    # Common Windows locations
+    if os.name == 'nt':
+        candidates = [
+            r"C:\Program Files\Git\usr\bin\openssl.exe",
+            r"C:\Program Files\OpenSSL-Win64\bin\openssl.exe",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+    return "openssl"  # Fallback to PATH
+
+
 def _get_server_shortname():
-    """Read the server shortname from /etc/csc/server_name or hostname."""
-    sn_file = Path("/etc/csc/server_name")
+    """Read the server shortname from server_name file or hostname."""
+    sn_file = Platform.PROJECT_ROOT / "server_name"
     if sn_file.exists():
         name = sn_file.read_text(encoding="utf-8").strip()
         if name:
@@ -29,13 +49,15 @@ def _generate_key_and_csr(shortname):
 
     Returns (key_pem, csr_pem) as strings.
     """
-    key_path = f"/tmp/{shortname}.key"
-    csr_path = f"/tmp/{shortname}.csr"
+    tmp_dir = Platform().get_abs_tmp_path([])
+    key_path = os.path.join(tmp_dir, f"{shortname}.key")
+    csr_path = os.path.join(tmp_dir, f"{shortname}.csr")
+    openssl = _get_openssl_cmd()
 
     try:
         # Generate private key
         result = subprocess.run(
-            ["openssl", "genrsa", "-out", key_path, "4096"],
+            [openssl, "genrsa", "-out", key_path, "4096"],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
@@ -44,7 +66,7 @@ def _generate_key_and_csr(shortname):
         # Generate CSR
         result = subprocess.run(
             [
-                "openssl", "req", "-new",
+                openssl, "req", "-new",
                 "-key", key_path,
                 "-out", csr_path,
                 "-subj", f"/CN={shortname}",
@@ -62,7 +84,8 @@ def _generate_key_and_csr(shortname):
     finally:
         for p in (key_path, csr_path):
             try:
-                os.unlink(p)
+                if os.path.exists(p):
+                    os.unlink(p)
             except OSError:
                 pass
 
@@ -73,7 +96,7 @@ def enroll(args, config_manager):
     1. Gets server shortname from server_name file
     2. Generates private key + CSR
     3. POSTs to enrollment endpoint
-    4. Saves key and chain to /etc/csc/
+    4. Saves key and chain to etc/
     """
     ca_url = args.ca_url.rstrip("/")
     token = args.token
@@ -128,18 +151,22 @@ def enroll(args, config_manager):
 
     chain_pem = resp_data["chain_pem"]
 
-    # Save private key (mode 600)
-    cert_dir = Path("/etc/csc")
-    cert_dir.mkdir(parents=True, exist_ok=True)
-
-    key_file = cert_dir / f"{shortname}.key"
+    # Save private key
+    etc_dir = Platform.get_etc_dir()
+    key_file = etc_dir / f"{shortname}.key"
     key_file.write_text(key_pem, encoding="utf-8")
-    os.chmod(key_file, 0o600)
+    try:
+        os.chmod(key_file, 0o600)
+    except Exception:
+        pass # Windows chmod is limited
 
     # Save certificate chain
-    chain_file = cert_dir / f"{shortname}.chain.pem"
+    chain_file = etc_dir / f"{shortname}.chain.pem"
     chain_file.write_text(chain_pem, encoding="utf-8")
-    os.chmod(chain_file, 0o644)
+    try:
+        os.chmod(chain_file, 0o644)
+    except Exception:
+        pass
 
     print(f"Certificate enrolled successfully!")
     print(f"  Key:   {key_file}")
@@ -155,8 +182,9 @@ def cert_status(args, config_manager):
     - Revocation status against local CRL
     """
     shortname = _get_server_shortname()
-    cert_dir = Path("/etc/csc")
-    chain_file = cert_dir / f"{shortname}.chain.pem"
+    etc_dir = Platform.get_etc_dir()
+    chain_file = etc_dir / f"{shortname}.chain.pem"
+    openssl = _get_openssl_cmd()
 
     if not chain_file.exists():
         print(f"No certificate found for {shortname}")
@@ -168,7 +196,7 @@ def cert_status(args, config_manager):
     try:
         result = subprocess.run(
             [
-                "openssl", "x509", "-in", str(chain_file),
+                openssl, "x509", "-in", str(chain_file),
                 "-noout", "-subject", "-serial", "-dates",
             ],
             capture_output=True, text=True, timeout=10,
@@ -193,7 +221,7 @@ def cert_status(args, config_manager):
         try:
             result2 = subprocess.run(
                 [
-                    "openssl", "x509", "-in", str(chain_file),
+                    openssl, "x509", "-in", str(chain_file),
                     "-noout", "-checkend", "0",
                 ],
                 capture_output=True, text=True, timeout=10,
@@ -204,7 +232,7 @@ def cert_status(args, config_manager):
                 # Calculate from not_after
                 result3 = subprocess.run(
                     [
-                        "openssl", "x509", "-in", str(chain_file),
+                        openssl, "x509", "-in", str(chain_file),
                         "-noout", "-enddate",
                     ],
                     capture_output=True, text=True, timeout=10,
@@ -226,12 +254,12 @@ def cert_status(args, config_manager):
             pass
 
         # Check revocation status
-        crl_file = cert_dir / "crl.pem"
+        crl_file = etc_dir / "crl.pem"
         revoked = False
         if crl_file.exists() and serial != "unknown":
             try:
                 result4 = subprocess.run(
-                    ["openssl", "crl", "-in", str(crl_file), "-noout", "-text"],
+                    [openssl, "crl", "-in", str(crl_file), "-noout", "-text"],
                     capture_output=True, text=True, timeout=10,
                 )
                 if result4.returncode == 0:
@@ -248,6 +276,6 @@ def cert_status(args, config_manager):
         print(f"  Status:      {'REVOKED' if revoked else 'Valid'}")
         print(f"  Chain file:  {chain_file}")
 
-    except FileNotFoundError:
-        print("Error: openssl not found. Install openssl to check certificates.")
+    except Exception as e:
+        print(f"Error checking certificate: {e}")
         sys.exit(1)

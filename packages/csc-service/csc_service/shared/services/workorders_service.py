@@ -24,15 +24,15 @@ import subprocess
 from pathlib import Path
 from csc_service.server.service import Service
 from csc_service.shared.utils import QueueDirectories
-from csc_service.shared.services import PROJECT_ROOT
+from csc_service.shared.platform import Platform
 from csc_service.shared.services.agent_service import agent as AgentService
 
 
 class workorders( Service ):
     """Service for managing prompt files in a work queue system."""
 
-    PROJECT_ROOT = PROJECT_ROOT
-    WORKORDERS_BASE = PROJECT_ROOT / "ops" / "wo"
+    PROJECT_ROOT = Platform.PROJECT_ROOT
+    WORKORDERS_BASE = Platform.get_wo_dir()
     LEGACY_PROMPTS_BASE = PROJECT_ROOT / "ops" / "prompts"
 
     def __init__(self, server_instance):

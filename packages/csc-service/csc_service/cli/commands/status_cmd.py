@@ -29,10 +29,52 @@ UNIT_SERVICES = {
 PARENT_UNIT = ("csc-service.service", "user")
 
 
+def _is_pid_alive(pid):
+    """Check if a process is running."""
+    if IS_WINDOWS:
+        try:
+            # tasklist /fi "pid eq N"
+            r = subprocess.run(["tasklist", "/fi", f"pid eq {pid}", "/nh"], capture_output=True, text=True, timeout=5)
+            return str(pid) in r.stdout
+        except Exception:
+            return False
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+
+def _get_csc_service_pid():
+    """Read PID from run/csc-service.pid if it exists and is alive."""
+    try:
+        from csc_service.shared.platform import Platform
+        pid_file = Platform().run_dir / "csc-service.pid"
+        if pid_file.exists():
+            pid = int(pid_file.read_text().strip())
+            if _is_pid_alive(pid):
+                return pid
+    except Exception:
+        pass
+    return None
+
+
 def _systemd_active(unit, scope="user"):
     """Return 'active', 'inactive', 'failed', or 'unknown'."""
     if IS_WINDOWS:
-        return _windows_service_state(unit.replace(".service", ""))
+        # Check system service first
+        state = _windows_service_state(unit.replace(".service", ""))
+        if state == "active":
+            return state
+        
+        # Fall back to PID file check for csc-service
+        if unit == "csc-service.service":
+            pid = _get_csc_service_pid()
+            return "active" if pid else "inactive"
+        
+        return state
+
     try:
         cmd = ["systemctl"]
         if scope == "user":
@@ -52,7 +94,13 @@ def _systemd_active(unit, scope="user"):
 
 
 def _systemd_pid(unit, scope="user"):
-    """Return MainPID for a systemd unit, or None."""
+    """Return MainPID for a systemd unit, or PID from file on Windows."""
+    if IS_WINDOWS:
+        if unit == "csc-service.service":
+            return _get_csc_service_pid()
+        # For server/bridge, they might also have PID files if we add them
+        return None
+
     try:
         cmd = ["systemctl"]
         if scope == "user":
@@ -323,7 +371,9 @@ def status(args, config_manager):
 
     # Parent unit
     parent_state = _systemd_active(*PARENT_UNIT)
-    print(f"\n  {'csc-service':22s} {parent_state}  (user unit — wraps in-proc services)")
+    parent_pid = _systemd_pid(*PARENT_UNIT)
+    pid_str = f"(PID {parent_pid})" if parent_pid else ""
+    print(f"\n  {'csc-service':22s} {parent_state:10s} {pid_str}")
 
     # In-process services
     print()
@@ -342,7 +392,9 @@ def status(args, config_manager):
         enabled = cfg.get(cfg_key, False)
         cfg_str = "enabled" if enabled else "disabled"
         state = _systemd_active(unit, scope)
-        print(f"  {name:22s} {cfg_str:10s}  [{state}]")
+        pid = _systemd_pid(unit, scope)
+        pid_str = f"(PID {pid})" if pid else ""
+        print(f"  {name:22s} {cfg_str:10s}  [{state}] {pid_str}")
         if state == "active":
             if name == "server":
                 for line in _net_info_server(state):
