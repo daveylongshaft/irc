@@ -76,7 +76,7 @@ def enroll(args, config_manager):
     4. Saves key and chain to /etc/csc/
     """
     ca_url = args.ca_url.rstrip("/")
-    token = args.token
+    token = getattr(args, "token", None) or ""
 
     shortname = _get_server_shortname()
     print(f"Enrolling as: {shortname}")
@@ -90,16 +90,16 @@ def enroll(args, config_manager):
         sys.exit(1)
 
     # POST to enrollment endpoint
-    print(f"Requesting certificate from {ca_url}/enroll ...")
+    mode = "token" if token else "pre-approved"
+    print(f"Requesting certificate from {ca_url}/enroll [{mode}] ...")
     try:
         import urllib.request
         import urllib.error
 
-        payload = json.dumps({
-            "shortname": shortname,
-            "csr_pem": csr_pem,
-            "token": token,
-        }).encode("utf-8")
+        payload_dict = {"shortname": shortname, "csr_pem": csr_pem}
+        if token:
+            payload_dict["token"] = token
+        payload = json.dumps(payload_dict).encode("utf-8")
 
         req = urllib.request.Request(
             f"{ca_url}/enroll",
@@ -113,10 +113,15 @@ def enroll(args, config_manager):
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         try:
-            err = json.loads(body).get("error", body)
+            resp_json = json.loads(body)
+            err = resp_json.get("error", body)
+            hint = resp_json.get("hint", "")
         except json.JSONDecodeError:
             err = body
+            hint = ""
         print(f"Enrollment failed ({e.code}): {err}", file=sys.stderr)
+        if hint:
+            print(f"  Hint: {hint}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
         print(f"Enrollment failed: {e}", file=sys.stderr)
@@ -161,7 +166,10 @@ def cert_status(args, config_manager):
     if not chain_file.exists():
         print(f"No certificate found for {shortname}")
         print(f"  Expected: {chain_file}")
-        print("  Run 'csc-ctl enroll <ca_url> <token>' to obtain a certificate.")
+        print("  To obtain a certificate:")
+        print("    csc-ctl enroll https://facingaddictionwithhope.com/csc/pki/")
+        print("  If this server is not yet pre-approved, ask an oper to run:")
+        print(f"    PKI APPROVE {shortname}")
         sys.exit(1)
 
     # Parse certificate details
