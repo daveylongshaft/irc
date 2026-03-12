@@ -152,21 +152,24 @@ class Platform(Version):
 
     def _detect_all(self):
         """Run all detection routines and populate self.platform_data."""
+        # Use simple OS-level detection on Windows to avoid access violations
+        is_win = sys.platform == "win32"
+        
         self.platform_data = {
             "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "working_dir": str(self.PROJECT_ROOT),
             "path_separator": os.sep,
-            "hardware": self._detect_hardware(),
+            "hardware": self._detect_hardware() if not is_win else {},
             "os": self._detect_os(),
-            "virtualization": self._detect_virtualization(),
+            "virtualization": self._detect_virtualization() if not is_win else {"type": "unknown"},
             "geography": self._detect_geography(),
             "time": self._detect_time(),
             "network": {}, # self._detect_network(),
-            "software": self._detect_software(),
+            "software": self._detect_software() if not is_win else {},
 
-            "docker": self._detect_docker(),
-            "ai_agents": self._detect_ai_agents(),
-            "resource_assessment": self._assess_resources(),
+            "docker": self._detect_docker() if not is_win else {"installed": False},
+            "ai_agents": self._detect_ai_agents() if not is_win else {},
+            "resource_assessment": self._assess_resources() if not is_win else {"resource_level": "low"},
             "runtime": self._detect_runtime(),
         }
 
@@ -801,11 +804,6 @@ class Platform(Version):
     def get_pki_dir(cls) -> Path:
         """Return the PKI/EasyRSA directory (etc/easy-rsa)."""
         return cls.get_etc_dir() / "easy-rsa"
-
-    @property
-    def run_dir(self) -> Path:
-        """Return the absolute path to the run/ directory."""
-        return self.get_abs_tmp_path(["run"])
 
     def get_abs_etc_path(self, components) -> str:
         """Return absolute path under etc/ (platform-native separators).

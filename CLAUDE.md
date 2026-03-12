@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## CRITICAL: Subprocess Spawning Rules (2026-03-12)
+
+**NEVER use these subprocess flags:**
+- `subprocess.CREATE_NEW_PROCESS_GROUP` - BANNED
+- `subprocess.DETACHED_PROCESS` - BANNED
+- `subprocess.CREATE_NEW_WINDOW` - BANNED
+- `subprocess.CREATE_NEW_CONSOLE` - BANNED
+
+These spawn uncontrollable visible terminal windows that fill the desktop and make the system unusable.
+
+**CORRECT Windows background process:**
+```python
+subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW, stdout=log_file, stderr=log_file)
+```
+
+See `SUBPROCESS_SPAWNING_RULES.md` and `WINDOW_SPAWNING_FIX_REQUIRED.txt` for details.
+
+---
+
 ## Project Overview
 
 **CSC (Client-Server-Commander)** is an IRC-based multi-AI orchestration system consisting of:

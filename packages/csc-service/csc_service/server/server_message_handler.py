@@ -1270,6 +1270,9 @@ class MessageHandler:
 
         server_name = SERVER_NAME
 
+        # DEBUG: Log the OPER parameters
+        self.server.log(f"[OPER DEBUG] account={account!r} password={password!r} server_name={server_name!r} client_mask={client_mask!r}")
+
         flags = self.server.storage.check_oper_auth(account, password, server_name, client_mask)
         if flags is not None:
             if addr not in self.server.clients:

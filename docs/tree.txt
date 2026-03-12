@@ -36,7 +36,6 @@ csc/
 ├── Server.log
 ├── Server_data.json
 ├── agent_data.json
-├── analyze_error.log
 ├── backup
 │   ├── csc-service.json.backup.20260311-015551
 │   └── csc-service.json.backup.20260311-015554
@@ -230,21 +229,50 @@ csc/
 │   ├── agent_data.json
 │   ├── backup
 │   │   ├── csc-service.json.backup.20260311-095605
-│   │   └── csc-service.json.backup.20260311-095718
+│   │   ├── csc-service.json.backup.20260311-095718
+│   │   ├── csc-service.json.backup.20260312-024000
+│   │   ├── csc-service.json.backup.20260312-105115
+│   │   └── csc-service.json.backup.20260312-133819
 │   ├── bans.json
 │   ├── botserv.json
 │   ├── channels.json
+│   ├── channels.json.corrupt.1773345477
 │   ├── chanserv.json
 │   ├── csc-service.json
+│   ├── easy-rsa
+│   │   ├── easyrsa
+│   │   ├── openssl-easyrsa.cnf
+│   │   ├── pki
+│   │   │   ├── .rnd
+│   │   │   ├── ca.crt
+│   │   │   ├── extensions.temp
+│   │   │   ├── index.txt
+│   │   │   ├── index.txt.attr
+│   │   │   ├── index.txt.attr.old
+│   │   │   ├── index.txt.old
+│   │   │   ├── issued
+│   │   │   │   └── haven.4346.crt
+│   │   │   ├── openssl-easyrsa.cnf
+│   │   │   ├── private
+│   │   │   │   └── ca.key
+│   │   │   ├── reqs
+│   │   │   │   └── haven.4346.req
+│   │   │   ├── safessl-easyrsa.cnf
+│   │   │   ├── serial
+│   │   │   └── serial.old
+│   │   ├── vars
+│   │   └── x509-types
+│   ├── haven.4346.chain.pem
+│   ├── haven.4346.key
 │   ├── history.json
 │   ├── nickserv.json
 │   ├── olines.conf
 │   ├── opers.json
 │   ├── platform.json
-│   ├── platform.json.tmp
 │   ├── pr-review-config.json
 │   ├── settings.json
-│   └── users.json
+│   ├── users.json
+│   └── users.json.corrupt.1773345477
 ├── instruction_history.log
 ├── irc
 │   ├── .gitignore
@@ -368,6 +396,7 @@ csc/
 │   ├── docs
 │   │   ├── EVOLUTION.md
 │   │   ├── MOTIVE_STATE.md
+│   │   ├── PKI_ENROLLMENT_GUIDE.md
 │   │   ├── p-files.list
 │   │   ├── platform.md
 │   │   ├── services.md
@@ -385,6 +414,8 @@ csc/
 │   │   │   ├── sm.txt
 │   │   │   └── workorders.txt
 │   │   └── tree.txt
+│   ├── etc
+│   │   └── approved_servers.json
 │   ├── haiku-research_orangutan_create_pdf.md
 │   ├── logs
 │   │   └── motive_state_progress.json
@@ -416,6 +447,7 @@ csc/
 │   │       │   │       ├── tcp_outbound.py
 │   │       │   │       ├── udp_inbound.py
 │   │       │   │       └── udp_outbound.py
+│   │       │   ├── buffers
 │   │       │   ├── cli
 │   │       │   │   ├── __init__.py
 │   │       │   │   ├── commands
@@ -472,6 +504,7 @@ csc/
 │   │       │   │   ├── enrollment_server.py
 │   │       │   │   └── main.py
 │   │       │   ├── server
+│   │       │   │   ├── Server.log
 │   │       │   │   ├── __init__.py
 │   │       │   │   ├── channel.py
 │   │       │   │   ├── client.py
@@ -534,6 +567,7 @@ csc/
 │   │       │       │   ├── version_service.py
 │   │       │       │   ├── wakeword_service.py
 │   │       │       │   └── workorders_service.py
+│   │       │       ├── staging_uploads
 │   │       │       ├── utils
 │   │       │       │   ├── __init__.py
 │   │       │       │   ├── queue_utils.py
@@ -578,6 +612,7 @@ csc/
 │   │   └── 1773177723910_failed_wo.FAIL
 │   ├── csc-service.log
 │   ├── log.log
+│   ├── pki.log
 │   ├── pr-review-agent.log
 │   └── queue-wip-sizes.json
 ├── my_tool_pouch.md
@@ -890,6 +925,7 @@ csc/
 │   │   │   │   └── run_agent.sh
 │   │   │   ├── orders.md-template
 │   │   │   └── queue
+│   │   │       ├── in
 │   │   │       └── out
 │   │   │           ├── agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
 │   │   │           ├── agent_1773106341_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
@@ -1008,8 +1044,6 @@ csc/
 │   │   │   ├── orders.md-template
 │   │   │   └── queue
 │   │   │       └── in
-│   │   │           ├── orders.md
-│   │   │           └── windows-service-update.json
 │   │   ├── ollama-codellama
 │   │   │   └── bin
 │   │   │       ├── run_agent.bat
@@ -1040,8 +1074,6 @@ csc/
 │   │   │   ├── orders.md-template
 │   │   │   ├── queue
 │   │   │   │   ├── in
-│   │   │   │   │   ├── windows-service-update.json
-│   │   │   │   │   └── windows-service-update.md
 │   │   │   │   ├── out
 │   │   │   │   │   ├── agent_1773106893_csc-ftpd-wo-watcher.log
 │   │   │   │   │   ├── agent_1773108135_csc-ftpd-wo-watcher.log
@@ -1074,9 +1106,9 @@ csc/
 │   │   │   │   │   ├── orders-1773186203.md
 │   │   │   │   │   ├── orders-1773187891.md
 │   │   │   │   │   ├── orders-1773217374.md
-│   │   │   │   │   └── orders-orphan-1773105521.md
+│   │   │   │   │   ├── orders-orphan-1773105521.md
+│   │   │   │   │   └── orders-orphan-1773345383.md
 │   │   │   │   └── work
-│   │   │   │       └── orders.md
 │   │   │   └── workorders
 │   │   │       └── wip
 │   │   │           └── opus_plan_queue_worker_python_implementation.md
@@ -1099,6 +1131,9 @@ csc/
 │   │   │   │   └── run_agent.sh
 │   │   │   ├── orders.md-template
 │   │   │   └── queue
+│   │   │       ├── in
+│   │   │       │   ├── PROMPT_refactor_paths_with_platform.json
+│   │   │       │   └── orders.md
 │   │   │       └── out
 │   │   │           ├── agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
 │   │   │           ├── agent_1773106893_csc-ftpd-wo-watcher.log
@@ -1824,7 +1859,9 @@ csc/
 │       ├── ready
 │       │   ├── AUDIT_REORGANIZE_ALL_WORKORDERS.md
 │       │   ├── FIX_PATH_AND_ALL_SHELL_TOOLS.md
-│       │   └── IMPLEMENT_JULES_INTEGRATION_FULL.md
+│       │   ├── IMPLEMENT_JULES_INTEGRATION_FULL.md
+│       │   ├── PROMPT_refactor_paths_with_platform.md
+│       │   └── windows-service-update.md
 │       ├── recurring
 │       │   └── daily-motive-state-check.md.template
 │       ├── results
@@ -1917,8 +1954,7 @@ csc/
 │       └── wip
 │           ├── cleanup_wo_dirs_3572384
 │           ├── cleanup_wo_dirs_3572823
-│           ├── recover_pki_3558517
-│           └── windows-service-update.md
+│           └── recover_pki_3558517
 ├── platform.json
 ├── pm_data.json
 ├── prompts
@@ -2346,7 +2382,10 @@ csc/
 ├── results
 │   └── ANALYSIS_2026-03-08.md
 ├── send
+├── server_name
 ├── tmp
+│   └── run
+│       └── csc-service.pid
 ├── tools.txt
 ├── users
 └── wo

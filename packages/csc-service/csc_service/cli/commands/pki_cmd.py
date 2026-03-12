@@ -49,18 +49,17 @@ def _generate_key_and_csr(shortname):
 
     Returns (key_pem, csr_pem) as strings.
     """
-    plat = Platform()
-    tmp_dir = Path(plat.get_abs_tmp_path([]))
+    # Bypass Platform() object to avoid access violation crash on exit
+    csc_root = Path(os.environ.get("CSC_ROOT", "C:/csc"))
+    tmp_dir = csc_root / "tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    
     key_path = tmp_dir / f"{shortname}.key"
     csr_path = tmp_dir / f"{shortname}.csr"
     openssl = _get_openssl_cmd()
     
-    print(f"DEBUG: openssl path: {openssl}")
-    print(f"DEBUG: tmp_dir: {tmp_dir}")
-
     try:
         # Generate private key
-        print("DEBUG: Executing openssl genrsa...")
         result = subprocess.run(
             [openssl, "genrsa", "-out", str(key_path), "4096"],
             capture_output=True, text=True, timeout=30,
@@ -69,7 +68,6 @@ def _generate_key_and_csr(shortname):
             raise RuntimeError(f"Key generation failed: {result.stderr.strip()}")
 
         # Generate CSR
-        print("DEBUG: Executing openssl req...")
         result = subprocess.run(
             [
                 openssl, "req", "-new",
@@ -104,80 +102,103 @@ def enroll(args, config_manager):
     3. POSTs to enrollment endpoint
     4. Saves key and chain to etc/
     """
-    ca_url = args.ca_url.rstrip("/")
-    token = getattr(args, "token", None) or ""
-
-    shortname = _get_server_shortname()
-    print(f"Enrolling as: {shortname}")
-
-    # Generate key and CSR
-    print("Generating private key and CSR...")
     try:
-        key_pem, csr_pem = _generate_key_and_csr(shortname)
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        ca_url = args.ca_url.rstrip("/")
+        token = getattr(args, "token", None) or ""
 
-    # POST to enrollment endpoint
-    mode = "token" if token else "pre-approved"
-    print(f"Requesting certificate from {ca_url}/enroll [{mode}] ...")
-    try:
-        import urllib.request
-        import urllib.error
+        shortname = _get_server_shortname()
+        print(f"Enrolling as: {shortname}")
 
-        payload_dict = {"shortname": shortname, "csr_pem": csr_pem}
-        if token:
-            payload_dict["token"] = token
-        payload = json.dumps(payload_dict).encode("utf-8")
-
-        req = urllib.request.Request(
-            f"{ca_url}/enroll",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        resp = urllib.request.urlopen(req, timeout=30)
-        resp_data = json.loads(resp.read().decode("utf-8"))
-
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
+        # Generate key and CSR
+        print("Generating private key and CSR...")
         try:
-            resp_json = json.loads(body)
-            err = resp_json.get("error", body)
-            hint = resp_json.get("hint", "")
-        except json.JSONDecodeError:
-            err = body
-            hint = ""
-        print(f"Enrollment failed ({e.code}): {err}", file=sys.stderr)
-        if hint:
-            print(f"  Hint: {hint}", file=sys.stderr)
-        sys.exit(1)
+            key_pem, csr_pem = _generate_key_and_csr(shortname)
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Unexpected key gen error: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+        # POST to enrollment endpoint
+        mode = "token" if token else "pre-approved"
+        print(f"Requesting certificate from {ca_url}/enroll [{mode}] ...")
+        try:
+            import urllib.request
+            import urllib.error
+
+            payload_dict = {"shortname": shortname, "csr_pem": csr_pem}
+            if token:
+                payload_dict["token"] = token
+            payload = json.dumps(payload_dict).encode("utf-8")
+
+            req = urllib.request.Request(
+                f"{ca_url}/enroll",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            print("DEBUG: Sending POST request...")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp_data = json.loads(resp.read().decode("utf-8"))
+            print("DEBUG: Response received.")
+
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            try:
+                resp_json = json.loads(body)
+                err = resp_json.get("error", body)
+                hint = resp_json.get("hint", "")
+            except json.JSONDecodeError:
+                err = body
+                hint = ""
+            print(f"Enrollment failed ({e.code}): {err}", file=sys.stderr)
+            if hint:
+                print(f"  Hint: {hint}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Enrollment failed during communication: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+        if resp_data.get("status") != "ok":
+            print(f"Enrollment failed: {resp_data}", file=sys.stderr)
+            sys.exit(1)
+
+        chain_pem = resp_data["chain_pem"]
+
+        # Save private key
+        etc_dir = Platform.get_etc_dir()
+        key_file = etc_dir / f"{shortname}.key"
+        print(f"Saving key to {key_file}...")
+        key_file.write_text(key_pem, encoding="utf-8")
+        try:
+            os.chmod(key_file, 0o600)
+        except Exception:
+            pass # Windows chmod is limited
+
+        # Save certificate chain
+        chain_file = etc_dir / f"{shortname}.chain.pem"
+        print(f"Saving chain to {chain_file}...")
+        chain_file.write_text(chain_pem, encoding="utf-8")
+        try:
+            os.chmod(chain_file, 0o644)
+        except Exception:
+            pass
+
+        print(f"Certificate enrolled successfully!")
+        print(f"  Key:   {key_file}")
+        print(f"  Chain: {chain_file}")
+        print(f"  Valid: {resp_data.get('valid_from')} -> {resp_data.get('valid_to')}")
+
     except Exception as e:
-        print(f"Enrollment failed: {e}", file=sys.stderr)
+        print(f"FATAL ERROR in enroll: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
-
-    if resp_data.get("status") != "ok":
-        print(f"Enrollment failed: {resp_data}", file=sys.stderr)
-        sys.exit(1)
-
-    chain_pem = resp_data["chain_pem"]
-
-    # Save private key
-    etc_dir = Platform.get_etc_dir()
-    key_file = etc_dir / f"{shortname}.key"
-    key_file.write_text(key_pem, encoding="utf-8")
-    try:
-        os.chmod(key_file, 0o600)
-    except Exception:
-        pass # Windows chmod is limited
-
-    # Save certificate chain
-    chain_file = etc_dir / f"{shortname}.chain.pem"
-    chain_file.write_text(chain_pem, encoding="utf-8")
-    try:
-        os.chmod(chain_file, 0o644)
-    except Exception:
-        pass
 
     print(f"Certificate enrolled successfully!")
     print(f"  Key:   {key_file}")

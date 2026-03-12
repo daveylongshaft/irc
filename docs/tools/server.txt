@@ -181,7 +181,7 @@ SERVER SUBMODULE MAP
     def sync_persistent_clients(self)  # Writes the in-memory client registry back to persistent storage.
     def _persist_session_data(self)  # Persist current session data to separate JSON files atomically.
     def run(self)  # Starts the server's main network loop and the terminal interface.
-    def _wait_for_shutdown(self)  # Block the main thread until SIGTERM/SIGINT is received.
+    def _wait_for_shutdown(self)  # Block the main thread until SIGTERM/SIGINT is received or SHUTDOWN file exists.
     def get_data(self, key)  # Wrapper for persistent data retrieval.
     def put_data(self, key, value)  # Wrapper for persistent data writes.
 
@@ -435,7 +435,6 @@ SERVER SUBMODULE MAP
     def restore_bans(self, server)  # Restore per-channel bans from disk.
     def restore_history(self, server)  # Restore disconnection history from disk.
     def restore_all(self, server)  # Restore complete server state from disk.
-    def migrate_from_snapshot(self, server)  # Migrate data from old Server_data.json session_snapshot format.
 
 ── irc/packages/csc-service/csc_service/server/version.py ──
   class Version(Data):  # Extends the Data class.

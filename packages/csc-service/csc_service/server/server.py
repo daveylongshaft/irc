@@ -108,8 +108,7 @@ class Server(Service):
         self.syslog_thread = threading.Thread(target=self._syslog_monitor_loop, daemon=True)
         self.syslog_thread.start()
 
-        # Migrate from old snapshot system if needed, then restore
-        self.storage.migrate_from_snapshot(self)
+        # Restore server state from disk
         self.storage.restore_all(self)
 
         # Record startup time for S2S federation

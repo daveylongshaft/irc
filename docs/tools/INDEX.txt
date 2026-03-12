@@ -1,12 +1,12 @@
 CSC CODE MAP - TABLE OF CONTENTS
 ==================================================
 
-  agents.txt - 270 files
+  agents.txt - 266 files
   automations.txt - 12 files
   bridge.txt - 20 files
   client.txt - 22 files
   core.txt - 7 files
-  other.txt - 1253 files
-  server.txt - 20 files
+  other.txt - 1262 files
+  server.txt - 21 files
   sm.txt - 26 files
-  workorders.txt - 81 files
+  workorders.txt - 83 files
