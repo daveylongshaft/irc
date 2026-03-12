@@ -673,20 +673,13 @@ class PersistentStorageManager(Data):
         data = self.load_users()
         users = data.get("users", {})
         now = time.time()
-        
-        # Clear existing active clients that are not on disk or expired
-        on_disk_addresses = set()
-        for nick, user_data in users.items():
-            addr = tuple(user_data.get("last_addr", ()))
-            if addr: on_disk_addresses.add(addr)
-            
-        for addr in list(server.clients.keys()):
-            info = server.clients.get(addr, {})
-            # Only drop if it's a registered client (has name) that's not on disk
-            if info.get("name") and info.get("name") != "unknown" and addr not in on_disk_addresses:
-                self.log(f"[STORAGE] Dropping active client not on disk: {info.get('name')} @ {addr}")
-                server.clients.pop(addr, None)
-                server.message_handler.registration_state.pop(addr, None)
+
+        # Build index of nicks that are already live in memory
+        live_nicks = {
+            info.get("name", "").lower(): (addr, info.get("last_seen", 0))
+            for addr, info in server.clients.items()
+            if info.get("name")
+        }
 
         count = 0
         for nick, user_data in users.items():
@@ -705,6 +698,17 @@ class PersistentStorageManager(Data):
             addr = tuple(user_data.get("last_addr", ()))
             if not addr or len(addr) != 2:
                 continue
+
+            # If this nick is already live in memory (recently seen), skip restore.
+            # This prevents disk-change syncs from overwriting or duplicating
+            # an active connection that hasn't been evicted yet.
+            existing = live_nicks.get(nick.lower())
+            if existing:
+                existing_addr, existing_last_seen = existing
+                if now - existing_last_seen <= server.timeout:
+                    # Already live — skip; don't disturb the active session
+                    count += 1
+                    continue
 
             # Restore to server.clients
             client_data = {
