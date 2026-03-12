@@ -85,8 +85,8 @@ def main():
 
     # PKI: enroll
     enroll_parser = subparsers.add_parser("enroll", help="Enroll for a TLS certificate")
-    enroll_parser.add_argument("ca_url", help="CA enrollment URL (e.g. https://haven.ef6e/csc/pki/)")
-    enroll_parser.add_argument("token", help="One-time enrollment token")
+    enroll_parser.add_argument("ca_url", help="CA enrollment URL (e.g. https://facingaddictionwithhope.com/csc/pki/)")
+    enroll_parser.add_argument("token", nargs="?", default="", help="One-time enrollment token (omit if pre-approved)")
     enroll_parser.set_defaults(func=pki_cmd.enroll)
 
     # PKI: cert (with sub-subcommand 'status')
