@@ -23,22 +23,27 @@ from pathlib import Path
 # Shortname must be alphanumeric with dots/hyphens, max 64 chars
 _SHORTNAME_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]{0,62}[a-z0-9]$")
 
-# EasyRSA paths
-EASYRSA_DIR = Path("/etc/openvpn/easy-rsa")
-EASYRSA_BIN = EASYRSA_DIR / "easyrsa"
+from csc_service.shared.platform import Platform
+
+# Initialize Platform
+plat = Platform()
+
+# EasyRSA paths - On Windows these might need to be configured, but for now use relative to root
+EASYRSA_DIR = Platform.PROJECT_ROOT / "etc" / "easy-rsa"
+EASYRSA_BIN = EASYRSA_DIR / ("easyrsa.bat" if os.name == 'nt' else "easyrsa")
 PKI_DIR = EASYRSA_DIR / "pki"
 CA_CRT = PKI_DIR / "ca.crt"
 CRL_PEM = PKI_DIR / "crl.pem"
 ISSUED_DIR = PKI_DIR / "issued"
 
 # Token storage
-TOKEN_FILE = Path("/opt/csc/tmp/csc/run/pki_tokens.json")
+TOKEN_FILE = plat.run_dir / "pki_tokens.json"
 
 # PKI log
-PKI_LOG = Path("/opt/csc/logs/pki.log")
+PKI_LOG = Platform.get_logs_dir() / "pki.log"
 
 # Cert output directory
-CERT_DIR = Path("/etc/csc")
+CERT_DIR = Platform.get_etc_dir()
 
 # Token lifetime: 24 hours
 TOKEN_TTL = 86400

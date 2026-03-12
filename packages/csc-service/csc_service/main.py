@@ -59,78 +59,92 @@ def main():
     from csc_service.infra import git_sync
     git_sync.setup(work_dir)
 
-    if "--daemon" in args:
-        os.environ["CSC_HEADLESS"] = "true"
-        ts = lambda: time.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{ts()}] [csc-service] Starting (poll every {poll_interval}s)")
-        
-        # Start core threaded components (IRC server, Bridge, Clients)
-        server_thread = None
-        if enable_server:
-            from csc_service.server.server import Server
-            srv = Server()
-            server_thread = threading.Thread(target=srv.run, daemon=True)
-            server_thread.start()
-            print(f"[{ts()}] [csc-service] Started IRC server")
+    try:
+        if "--daemon" in args:
+            # Write PID file
+            pid_file = plat.run_dir / "csc-service.pid"
+            pid_file.parent.mkdir(parents=True, exist_ok=True)
+            pid_file.write_text(str(os.getpid()), encoding="utf-8")
 
-        # Start Bridge if enabled
-        bridge_thread = None
-        if enable_bridge:
-            from csc_service.bridge.bridge import Bridge
-            bridge = Bridge()
-            bridge_thread = threading.Thread(target=bridge.run, daemon=True)
-            bridge_thread.start()
-            print(f"[{ts()}] [csc-service] Started IRC bridge")
+            os.environ["CSC_HEADLESS"] = "true"
 
-        # Start PKI enrollment server if enabled (CA server only)
-        if enable_pki:
-            from csc_service.pki import main as pki_main
-            pki_main.start()
-            print(f"[{ts()}] [csc-service] Started PKI enrollment server")
+            ts = lambda: time.strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{ts()}] [csc-service] Starting (poll every {poll_interval}s)")
+            
+            # Start core threaded components (IRC server, Bridge, Clients)
+            server_thread = None
+            if enable_server:
+                from csc_service.server.server import Server
+                srv = Server()
+                server_thread = threading.Thread(target=srv.run, daemon=True)
+                server_thread.start()
+                print(f"[{ts()}] [csc-service] Started IRC server")
 
-        # Daemon main loop for infra services
-        try:
-            while True:
-                git_sync.pull()
+            # Start Bridge if enabled
+            bridge_thread = None
+            if enable_bridge:
+                from csc_service.bridge.bridge import Bridge
+                bridge = Bridge()
+                bridge_thread = threading.Thread(target=bridge.run, daemon=True)
+                bridge_thread.start()
+                print(f"[{ts()}] [csc-service] Started IRC bridge")
 
-                if enable_test_runner:
-                    from csc_service.infra import test_runner
-                    test_runner.run_cycle(work_dir)
+            # Start PKI enrollment server if enabled (CA server only)
+            if enable_pki:
+                from csc_service.pki import main as pki_main
+                pki_main.start()
+                print(f"[{ts()}] [csc-service] Started PKI enrollment server")
 
-                if enable_queue_worker:
-                    from csc_service.infra import queue_worker
-                    queue_worker.run_cycle(work_dir)
+            # Daemon main loop for infra services
+            try:
+                from csc_service.shared.platform import Platform
+                while True:
+                    # SHUTDOWN Kill Switch
+                    if (Platform.PROJECT_ROOT / "SHUTDOWN").exists():
+                        print(f"[{ts()}] [csc-service] SHUTDOWN kill switch detected. Terminating immediately.")
+                        sys.exit(0)
 
-                if enable_pm:
-                    from csc_service.infra import pm
-                    pm.setup(work_dir)
-                    pm.run_cycle()
-                    # If PM just assigned something, pick it up immediately
-                    # rather than waiting for the next poll tick
+                    git_sync.pull()
+
+                    if enable_test_runner:
+                        from csc_service.infra import test_runner
+                        test_runner.run_cycle(work_dir)
+
                     if enable_queue_worker:
+                        from csc_service.infra import queue_worker
                         queue_worker.run_cycle(work_dir)
 
-                if enable_pr_review:
-                    from csc_service.infra import pr_review
-                    pr_review.run_cycle(work_dir)
+                    if enable_pm:
+                        from csc_service.infra import pm
+                        pm.setup(work_dir)
+                        pm.run_cycle()
+                        # If PM just assigned something, pick it up immediately
+                        # rather than waiting for the next poll tick
+                        if enable_queue_worker:
+                            queue_worker.run_cycle(work_dir)
 
-                # Start PKI enrollment server if enabled (CA server only)
-                if enable_pki:
-                    from csc_service.pki import main as pki_main
-                    pki_main.start()
-                    print(f"[{ts()}] [csc-service] Started PKI enrollment server")
+                    if enable_pr_review:
+                        from csc_service.infra import pr_review
+                        pr_review.run_cycle(work_dir)
 
-                if enable_jules:
-                    from csc_service.infra import jules_monitor
-                    jules_monitor.run_cycle(work_dir)
+                    if enable_jules:
+                        from csc_service.infra import jules_monitor
+                        jules_monitor.run_cycle(work_dir)
 
-                git_sync.push_if_changed()
-                time.sleep(poll_interval)
+                    git_sync.push_if_changed()
+                    time.sleep(poll_interval)
 
-        except KeyboardInterrupt:
-            print(f"\n[{ts()}] [csc-service] Stopped")
-    else:
-        print(__doc__)
+            except KeyboardInterrupt:
+                print(f"\n[{ts()}] [csc-service] Stopped")
+        else:
+            print(__doc__)
+
+    except Exception as e:
+        ts = lambda: time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{ts()}] [csc-service] FATAL ERROR during execution: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

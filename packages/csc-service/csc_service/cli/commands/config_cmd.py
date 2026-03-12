@@ -9,6 +9,7 @@ SERVICE_KEY_MAP = {
     "test-runner": "enable_test_runner",
     "pm": "enable_pm",
     "pr-reviewer": "enable_pr_review",
+    "pki": "enable_pki",
     "server": "enable_server",
     "bridge": "enable_bridge",
 }

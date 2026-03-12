@@ -658,7 +658,7 @@ class Server(Service):
         print("Server has shut down.")
 
     def _wait_for_shutdown(self):
-        """Block the main thread until SIGTERM/SIGINT is received."""
+        """Block the main thread until SIGTERM/SIGINT is received or SHUTDOWN file exists."""
         stop_event = threading.Event()
 
         def _handle_signal(sig, frame):
@@ -666,9 +666,22 @@ class Server(Service):
             self._running = False
             stop_event.set()
 
-        signal.signal(signal.SIGTERM, _handle_signal)
-        signal.signal(signal.SIGINT, _handle_signal)
-        stop_event.wait()
+        try:
+            signal.signal(signal.SIGTERM, _handle_signal)
+            signal.signal(signal.SIGINT, _handle_signal)
+        except ValueError:
+            pass # signal only works in main thread
+
+        from csc_service.shared.platform import Platform
+        shutdown_file = Platform.PROJECT_ROOT / "SHUTDOWN"
+        
+        while not stop_event.is_set():
+            if shutdown_file.exists():
+                self.log("[SHUTDOWN] Kill switch file detected. Terminating.")
+                self._running = False
+                break
+            # Poll with timeout to allow checking the file
+            stop_event.wait(timeout=1.0)
 
     # ======================================================================
     # Helpers for Data layer

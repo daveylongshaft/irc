@@ -41,6 +41,18 @@ def _sc_run(svc_name, action):
         return False, str(e)
 
 
+def _taskkill(pid, force=False):
+    """Kill a process on Windows."""
+    try:
+        cmd = ["taskkill", "/pid", str(pid)]
+        if force:
+            cmd.append("/f")
+        subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return True
+    except Exception:
+        return False
+
+
 def _do_restart(service, force=False):
     entry = UNIT_MAP.get(service)
     if not entry:
@@ -50,11 +62,38 @@ def _do_restart(service, force=False):
 
     if IS_WINDOWS:
         svc_name = unit.replace(".service", "")
+        # Try system service first
         ok, msg = _sc_run(svc_name, "stop")
-        print(f"Stop  {svc_name}: {msg}")
-        ok, msg = _sc_run(svc_name, "start")
-        print(f"Start {svc_name}: {msg}")
-        return ok
+        if ok:
+            print(f"Stop  {svc_name}: {msg}")
+            ok, msg = _sc_run(svc_name, "start")
+            print(f"Start {svc_name}: {msg}")
+            return ok
+        
+        # Fall back to PID file for csc-service
+        if service == "csc-service":
+            from .status_cmd import _get_csc_service_pid
+            pid = _get_csc_service_pid()
+            if pid:
+                print(f"Killing process {pid}...")
+                _taskkill(pid, force=True)
+                time.sleep(2)
+            
+            # Start via background process
+            from csc_service.shared.platform import Platform
+            print("Starting csc-service daemon...")
+            try:
+                cmd = [sys.executable, "bin/csc-service", "--daemon"]
+                print(f"Executing: {' '.join(cmd)}")
+                subprocess.Popen(cmd, 
+                                 cwd=str(Platform.PROJECT_ROOT),
+                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS)
+                print("Process spawned.")
+                return True
+            except Exception as e:
+                print(f"Failed to spawn process: {e}")
+                return False
+        return False
 
     if force:
         _systemctl(scope, "kill", "-s", "SIGKILL", unit)
