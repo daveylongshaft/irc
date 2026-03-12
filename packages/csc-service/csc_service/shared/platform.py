@@ -740,17 +740,20 @@ class Platform(Version):
         return Path(work_base) if work_base else None
 
     @property
-    def run_dir(self):
-        """Get the runtime state and log directory path."""
+    def run_dir(self) -> Path:
+        """Return the absolute path to the run/ directory (PROJECT_ROOT/tmp/run), creating it if needed."""
+        # Check platform_data first
         runtime = self.platform_data.get("runtime", {})
         temp_root = runtime.get("temp_root")
-        if not temp_root:
-            temp_root = self.get_abs_tmp_path([])
-
-        path = Path(temp_root) / "csc" / "run"
-        import os
-        os.makedirs(path, exist_ok=True)
-        return path
+        
+        if temp_root:
+            p = Path(temp_root) / "run"
+        else:
+            # Fallback to PROJECT_ROOT/tmp/run
+            p = self.PROJECT_ROOT / "tmp" / "run"
+            
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     # ------------------------------------------------------------------
     # Persistence
