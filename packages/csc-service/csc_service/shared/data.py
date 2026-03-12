@@ -275,6 +275,14 @@ class Data(Log):
         except ValueError:
             return fnmatch.fnmatch(client_mask.lower(), mask.lower())
 
+    def load_opers(self) -> dict:
+        """Public alias — backward compat for existing callers."""
+        return self._load_opers()
+
+    def save_opers(self, data: dict) -> bool:
+        """Public alias — backward compat for existing callers."""
+        return self._save_opers(data)
+
     def _load_opers(self) -> dict:
         """Load opers.json, migrating v1→v2 if needed."""
         data = self._read_json_file(self._opers_path())

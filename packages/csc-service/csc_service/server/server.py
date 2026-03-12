@@ -123,6 +123,9 @@ class Server(Service):
         s2s_ok, s2s_reason = Platform.check_s2s_cert()
         if not s2s_ok:
             self.log(f"[S2S] Certificate check failed: {s2s_reason} — S2S listener will start without TLS")
+            self.log(f"[S2S] To obtain a certificate, run:")
+            self.log(f"[S2S]   csc-ctl enroll https://facingaddictionwithhope.com/csc/pki/")
+            self.log(f"[S2S] If not pre-approved, an oper must first run: PKI APPROVE <shortname>")
 
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)

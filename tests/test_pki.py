@@ -640,5 +640,327 @@ class TestPKILogFormat(unittest.TestCase):
             os.unlink(log_path)
 
 
+# ---------------------------------------------------------------------------
+# Approved server list tests
+# ---------------------------------------------------------------------------
+
+class TestApprovedListLoad(unittest.TestCase):
+    """Test _load_approved helper."""
+
+    def test_load_empty_when_missing(self):
+        """Returns empty dict when file does not exist."""
+        from csc_service.shared.services.pki_service import _load_approved
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   Path("/nonexistent/path/approved_servers.json")):
+            result = _load_approved()
+        self.assertEqual(result, {})
+
+    def test_load_valid_file(self):
+        """Returns parsed dict from valid JSON."""
+        from csc_service.shared.services.pki_service import _load_approved
+        data = {"haven.ef6e": {"added": "2026-03-12", "note": "hub"}}
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(data, f)
+            path = Path(f.name)
+        try:
+            with patch("csc_service.shared.services.pki_service.APPROVED_FILE", path):
+                result = _load_approved()
+            self.assertEqual(result, data)
+        finally:
+            os.unlink(path)
+
+    def test_load_returns_empty_on_corrupt(self):
+        """Returns empty dict on corrupt JSON."""
+        from csc_service.shared.services.pki_service import _load_approved
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            f.write("not json {{{")
+            path = Path(f.name)
+        try:
+            with patch("csc_service.shared.services.pki_service.APPROVED_FILE", path):
+                result = _load_approved()
+            self.assertEqual(result, {})
+        finally:
+            os.unlink(path)
+
+
+class TestEnrollmentApprovedPath(unittest.TestCase):
+    """Test tokenless enrollment via pre-approved list."""
+
+    def _make_request(self, body_dict, approved_dict):
+        """Build a PKIRequestHandler with mocked socket and patch approved list."""
+        from csc_service.pki.enrollment_server import PKIRequestHandler
+        import io
+
+        body = json.dumps(body_dict).encode("utf-8")
+        raw = (
+            f"POST /enroll HTTP/1.1\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"\r\n"
+        ).encode() + body
+
+        handler = PKIRequestHandler.__new__(PKIRequestHandler)
+        handler.rfile = io.BytesIO(body)
+        handler.wfile = io.BytesIO()
+        handler.headers = {"Content-Length": str(len(body))}
+        handler.path = "/enroll"
+        handler.server = Mock()
+        handler.client_address = ("127.0.0.1", 9999)
+
+        return handler, approved_dict
+
+    @patch("csc_service.pki.enrollment_server._sign_csr")
+    @patch("csc_service.pki.enrollment_server._write_pki_log")
+    @patch("csc_service.pki.enrollment_server._load_approved")
+    def test_approved_shortname_no_token_signs(self, mock_approved, mock_log, mock_sign):
+        """Pre-approved shortname with no token proceeds to signing."""
+        from csc_service.pki.enrollment_server import PKIRequestHandler
+        import io
+
+        mock_approved.return_value = {"haven.ef6e": {"added": "2026-03-12"}}
+        mock_sign.return_value = ("chain_pem", "2026-03-12", "2027-03-12")
+
+        body = json.dumps({
+            "shortname": "haven.ef6e",
+            "csr_pem": "-----BEGIN CERTIFICATE REQUEST\nfake\n-----END CERTIFICATE REQUEST",
+        }).encode("utf-8")
+
+        handler = PKIRequestHandler.__new__(PKIRequestHandler)
+        handler.rfile = io.BytesIO(body)
+        handler.wfile = io.BytesIO()
+        handler.headers = {"Content-Length": str(len(body))}
+        handler.path = "/enroll"
+        handler.server = Mock()
+        handler.client_address = ("127.0.0.1", 9999)
+        handler.request_version = "HTTP/1.1"
+
+        with patch.object(handler, "send_response"), \
+             patch.object(handler, "send_header"), \
+             patch.object(handler, "end_headers"):
+            handler._handle_enroll()
+
+        mock_sign.assert_called_once_with("haven.ef6e", unittest.mock.ANY)
+
+    @patch("csc_service.pki.enrollment_server._write_pki_log")
+    @patch("csc_service.pki.enrollment_server._load_approved")
+    def test_unknown_shortname_no_token_403(self, mock_approved, mock_log):
+        """Unknown shortname with no token returns 403 with hint."""
+        from csc_service.pki.enrollment_server import PKIRequestHandler
+        import io
+
+        mock_approved.return_value = {}
+
+        body = json.dumps({
+            "shortname": "unknown.node",
+            "csr_pem": "-----BEGIN CERTIFICATE REQUEST\nfake\n-----END CERTIFICATE REQUEST",
+        }).encode("utf-8")
+
+        handler = PKIRequestHandler.__new__(PKIRequestHandler)
+        handler.rfile = io.BytesIO(body)
+        handler.wfile = io.BytesIO()
+        handler.headers = {"Content-Length": str(len(body))}
+        handler.path = "/enroll"
+        handler.server = Mock()
+        handler.client_address = ("127.0.0.1", 9999)
+        handler.request_version = "HTTP/1.1"
+
+        sent_code = []
+        sent_data = []
+
+        def capture_json(code, data):
+            sent_code.append(code)
+            sent_data.append(data)
+
+        handler._send_json = capture_json
+        handler._handle_enroll()
+
+        self.assertEqual(sent_code[0], 403)
+        self.assertIn("not in approved server list", sent_data[0]["error"])
+        self.assertIn("hint", sent_data[0])
+
+
+class TestRenewalApprovedRequired(unittest.TestCase):
+    """Test that renewal requires server to be in approved list."""
+
+    @patch("csc_service.pki.enrollment_server._write_pki_log")
+    @patch("csc_service.pki.enrollment_server._load_approved")
+    def test_renewal_not_approved_returns_403(self, mock_approved, mock_log):
+        """Renewal with valid CN but not in approved list returns 403."""
+        from csc_service.pki.enrollment_server import PKIRequestHandler
+        import io
+
+        mock_approved.return_value = {}
+
+        body = json.dumps({
+            "shortname": "haven.ef6e",
+            "csr_pem": "-----BEGIN CERTIFICATE REQUEST\nfake\n-----END CERTIFICATE REQUEST",
+        }).encode("utf-8")
+
+        handler = PKIRequestHandler.__new__(PKIRequestHandler)
+        handler.rfile = io.BytesIO(body)
+        handler.wfile = io.BytesIO()
+        handler.headers = {
+            "Content-Length": str(len(body)),
+            "X-SSL-Client-CN": "haven.ef6e",
+        }
+        handler.path = "/renew"
+        handler.server = Mock()
+        handler.client_address = ("127.0.0.1", 9999)
+
+        sent_code = []
+        sent_data = []
+
+        def capture_json(code, data):
+            sent_code.append(code)
+            sent_data.append(data)
+
+        handler._send_json = capture_json
+        handler._handle_renew()
+
+        self.assertEqual(sent_code[0], 403)
+        self.assertIn("not in approved list", sent_data[0]["error"])
+
+
+class TestPKIServiceApprove(unittest.TestCase):
+    """Test PKI APPROVE IRC command."""
+
+    def setUp(self):
+        self.mock_server = Mock()
+        self.tmpdir = tempfile.mkdtemp()
+        self.approved_file = Path(self.tmpdir) / "approved_servers.json"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("csc_service.shared.services.pki_service.subprocess.run")
+    @patch("csc_service.shared.services.pki_service._write_pki_log")
+    def test_approve_adds_entry(self, mock_log, mock_run):
+        """PKI APPROVE adds shortname to approved list."""
+        from csc_service.shared.services.pki_service import Pki
+
+        mock_run.return_value = Mock(returncode=0)
+        self.approved_file.write_text("{}", encoding="utf-8")
+
+        service = Pki(self.mock_server)
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   self.approved_file):
+            result = service.approve("newnode.aa")
+
+        self.assertIn("newnode.aa", result)
+        data = json.loads(self.approved_file.read_text())
+        self.assertIn("newnode.aa", data)
+
+    @patch("csc_service.shared.services.pki_service.subprocess.run")
+    @patch("csc_service.shared.services.pki_service._write_pki_log")
+    def test_approve_rejects_duplicate(self, mock_log, mock_run):
+        """PKI APPROVE returns message if already approved."""
+        from csc_service.shared.services.pki_service import Pki
+
+        self.approved_file.write_text(
+            json.dumps({"newnode.aa": {"added": "2026-03-12"}}), encoding="utf-8"
+        )
+
+        service = Pki(self.mock_server)
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   self.approved_file):
+            result = service.approve("newnode.aa")
+
+        self.assertIn("already", result)
+
+
+class TestPKIServiceRemove(unittest.TestCase):
+    """Test PKI REMOVE IRC command."""
+
+    def setUp(self):
+        self.mock_server = Mock()
+        self.tmpdir = tempfile.mkdtemp()
+        self.approved_file = Path(self.tmpdir) / "approved_servers.json"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @patch("csc_service.shared.services.pki_service.subprocess.run")
+    @patch("csc_service.shared.services.pki_service._write_pki_log")
+    def test_remove_deletes_entry(self, mock_log, mock_run):
+        """PKI REMOVE removes shortname from approved list."""
+        from csc_service.shared.services.pki_service import Pki
+
+        mock_run.return_value = Mock(returncode=0)
+        self.approved_file.write_text(
+            json.dumps({"haven.ef6e": {"added": "2026-03-12"}}), encoding="utf-8"
+        )
+
+        service = Pki(self.mock_server)
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   self.approved_file):
+            result = service.remove("haven.ef6e")
+
+        data = json.loads(self.approved_file.read_text())
+        self.assertNotIn("haven.ef6e", data)
+
+    def test_remove_unknown_returns_error(self):
+        """PKI REMOVE returns error for unknown shortname."""
+        from csc_service.shared.services.pki_service import Pki
+
+        self.approved_file.write_text("{}", encoding="utf-8")
+
+        service = Pki(self.mock_server)
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   self.approved_file):
+            result = service.remove("nothere.xx")
+
+        self.assertIn("not in the approved list", result)
+
+
+class TestPKIServiceApproved(unittest.TestCase):
+    """Test PKI APPROVED IRC command."""
+
+    def setUp(self):
+        self.mock_server = Mock()
+        self.tmpdir = tempfile.mkdtemp()
+        self.approved_file = Path(self.tmpdir) / "approved_servers.json"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_approved_empty(self):
+        """PKI APPROVED returns message when list is empty."""
+        from csc_service.shared.services.pki_service import Pki
+
+        self.approved_file.write_text("{}", encoding="utf-8")
+
+        service = Pki(self.mock_server)
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   self.approved_file):
+            result = service.approved()
+
+        self.assertIn("No pre-approved", result)
+
+    def test_approved_lists_servers(self):
+        """PKI APPROVED lists servers with dates."""
+        from csc_service.shared.services.pki_service import Pki
+
+        data = {
+            "haven.ef6e": {"added": "2026-03-12", "note": "hub"},
+            "fahu": {"added": "2026-03-12", "note": "colo"},
+        }
+        self.approved_file.write_text(json.dumps(data), encoding="utf-8")
+
+        service = Pki(self.mock_server)
+        with patch("csc_service.shared.services.pki_service.APPROVED_FILE",
+                   self.approved_file):
+            result = service.approved()
+
+        self.assertIn("haven.ef6e", result)
+        self.assertIn("fahu", result)
+        self.assertIn("2026-03-12", result)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -35,11 +35,35 @@ ISSUED_DIR = PKI_DIR / "issued"
 # Token storage
 TOKEN_FILE = Path("/opt/csc/tmp/csc/run/pki_tokens.json")
 
+# Approved server list (repo-tracked)
+APPROVED_FILE = Path("/opt/csc/irc/etc/approved_servers.json")
+
 # PKI log
 PKI_LOG = Path("/opt/csc/logs/pki.log")
 
 # Token lifetime: 24 hours
 TOKEN_TTL = 86400
+
+
+def _load_approved():
+    """Load approved server list."""
+    if APPROVED_FILE.exists():
+        try:
+            return json.loads(APPROVED_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+
+def _save_approved(approved):
+    """Atomically save approved server list."""
+    APPROVED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = APPROVED_FILE.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(approved, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, APPROVED_FILE)
 
 
 def _load_tokens():
@@ -270,6 +294,10 @@ class pki(Service):
         else:
             lines.append("Issued certs: 0")
 
+        # Approved server count
+        approved = _load_approved()
+        lines.append(f"Approved servers: {len(approved)}")
+
         return "\n".join(lines)
 
     def pending(self):
@@ -306,15 +334,122 @@ class pki(Service):
 
         return "\n".join(lines)
 
+    def approve(self, shortname=None):
+        """Add a server to the pre-approved enrollment list and push to GitHub.
+
+        Usage: PKI APPROVE <shortname>
+        Requires: oper flag 'a' or 'A'
+        """
+        if not shortname:
+            return "Usage: PKI APPROVE <shortname>"
+
+        shortname = shortname.strip().lower()
+        if not _SHORTNAME_RE.match(shortname):
+            return "Invalid shortname. Use alphanumeric characters, dots, and hyphens only."
+
+        approved = _load_approved()
+        if shortname in approved:
+            return f"{shortname} is already in the approved list."
+
+        today = time.strftime("%Y-%m-%d")
+        approved[shortname] = {"added": today, "note": ""}
+        _save_approved(approved)
+
+        # Commit and push so all nodes pick it up via git sync
+        try:
+            irc_dir = str(APPROVED_FILE.parent.parent)
+            subprocess.run(
+                ["git", "-C", irc_dir, "add", "etc/approved_servers.json"],
+                capture_output=True, text=True, timeout=15,
+            )
+            subprocess.run(
+                ["git", "-C", irc_dir, "commit", "-m", f"pki: approve {shortname}"],
+                capture_output=True, text=True, timeout=15,
+            )
+            result = subprocess.run(
+                ["git", "-C", irc_dir, "push"],
+                capture_output=True, text=True, timeout=30,
+            )
+            push_ok = result.returncode == 0
+        except Exception as e:
+            push_ok = False
+
+        _write_pki_log(f"approved: {shortname}  pushed={push_ok}")
+        status = "approved and pushed to GitHub." if push_ok else "approved locally (push failed — run git push manually)."
+        return f"{shortname} {status}"
+
+    def remove(self, shortname=None):
+        """Remove a server from the pre-approved enrollment list and push to GitHub.
+
+        Usage: PKI REMOVE <shortname>
+        Requires: oper flag 'a' or 'A'
+        """
+        if not shortname:
+            return "Usage: PKI REMOVE <shortname>"
+
+        shortname = shortname.strip().lower()
+        if not _SHORTNAME_RE.match(shortname):
+            return "Invalid shortname."
+
+        approved = _load_approved()
+        if shortname not in approved:
+            return f"{shortname} is not in the approved list."
+
+        del approved[shortname]
+        _save_approved(approved)
+
+        try:
+            irc_dir = str(APPROVED_FILE.parent.parent)
+            subprocess.run(
+                ["git", "-C", irc_dir, "add", "etc/approved_servers.json"],
+                capture_output=True, text=True, timeout=15,
+            )
+            subprocess.run(
+                ["git", "-C", irc_dir, "commit", "-m", f"pki: remove {shortname}"],
+                capture_output=True, text=True, timeout=15,
+            )
+            result = subprocess.run(
+                ["git", "-C", irc_dir, "push"],
+                capture_output=True, text=True, timeout=30,
+            )
+            push_ok = result.returncode == 0
+        except Exception as e:
+            push_ok = False
+
+        _write_pki_log(f"removed: {shortname}  pushed={push_ok}")
+        status = "removed and pushed to GitHub." if push_ok else "removed locally (push failed — run git push manually)."
+        return f"{shortname} {status}"
+
+    def approved(self):
+        """List all pre-approved servers.
+
+        Usage: PKI APPROVED
+        Requires: oper flag 'o'
+        """
+        approved = _load_approved()
+        if not approved:
+            return "No pre-approved servers."
+
+        lines = [f"Pre-approved servers ({len(approved)}):"]
+        for name, meta in sorted(approved.items()):
+            added = meta.get("added", "unknown")
+            note = meta.get("note", "")
+            note_str = f"  [{note}]" if note else ""
+            lines.append(f"  {name:30s}  added {added}{note_str}")
+        return "\n".join(lines)
+
     def default(self, *args):
         """Default handler — show help."""
         return (
             "PKI commands:\n"
-            "  PKI TOKEN <shortname>  — Generate enrollment token\n"
-            "  PKI LIST               — List issued certificates\n"
-            "  PKI REVOKE <shortname> — Revoke a certificate\n"
-            "  PKI STATUS             — CA health overview\n"
-            "  PKI PENDING            — Show unused tokens"
+            "  PKI APPROVE <shortname> — Pre-approve a server (no token needed to enroll)\n"
+            "  PKI REMOVE <shortname>  — Remove server from approved list\n"
+            "  PKI APPROVED            — List pre-approved servers\n"
+            "  PKI TOKEN <shortname>   — Generate one-time enrollment token\n"
+            "  PKI LIST                — List issued certificates\n"
+            "  PKI REVOKE <shortname>  — Revoke a certificate\n"
+            "  PKI STATUS              — CA health overview\n"
+            "  PKI PENDING             — Show unused tokens"
         )
 
 
