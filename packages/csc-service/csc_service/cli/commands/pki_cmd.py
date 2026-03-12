@@ -49,26 +49,32 @@ def _generate_key_and_csr(shortname):
 
     Returns (key_pem, csr_pem) as strings.
     """
-    tmp_dir = Platform().get_abs_tmp_path([])
-    key_path = os.path.join(tmp_dir, f"{shortname}.key")
-    csr_path = os.path.join(tmp_dir, f"{shortname}.csr")
+    plat = Platform()
+    tmp_dir = Path(plat.get_abs_tmp_path([]))
+    key_path = tmp_dir / f"{shortname}.key"
+    csr_path = tmp_dir / f"{shortname}.csr"
     openssl = _get_openssl_cmd()
+    
+    print(f"DEBUG: openssl path: {openssl}")
+    print(f"DEBUG: tmp_dir: {tmp_dir}")
 
     try:
         # Generate private key
+        print("DEBUG: Executing openssl genrsa...")
         result = subprocess.run(
-            [openssl, "genrsa", "-out", key_path, "4096"],
+            [openssl, "genrsa", "-out", str(key_path), "4096"],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
             raise RuntimeError(f"Key generation failed: {result.stderr.strip()}")
 
         # Generate CSR
+        print("DEBUG: Executing openssl req...")
         result = subprocess.run(
             [
                 openssl, "req", "-new",
-                "-key", key_path,
-                "-out", csr_path,
+                "-key", str(key_path),
+                "-out", str(csr_path),
                 "-subj", f"/CN={shortname}",
             ],
             capture_output=True, text=True, timeout=30,
@@ -76,16 +82,16 @@ def _generate_key_and_csr(shortname):
         if result.returncode != 0:
             raise RuntimeError(f"CSR generation failed: {result.stderr.strip()}")
 
-        key_pem = Path(key_path).read_text(encoding="utf-8")
-        csr_pem = Path(csr_path).read_text(encoding="utf-8")
+        key_pem = key_path.read_text(encoding="utf-8")
+        csr_pem = csr_path.read_text(encoding="utf-8")
 
         return key_pem, csr_pem
 
     finally:
         for p in (key_path, csr_path):
             try:
-                if os.path.exists(p):
-                    os.unlink(p)
+                if p.exists():
+                    p.unlink()
             except OSError:
                 pass
 
