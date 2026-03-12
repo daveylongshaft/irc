@@ -6,6 +6,7 @@ On Windows: uses 'net start/stop' for system services.
 import os
 import sys
 import subprocess
+import time
 
 IS_WINDOWS = os.name == 'nt'
 
