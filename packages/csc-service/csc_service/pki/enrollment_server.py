@@ -239,8 +239,8 @@ class PKIRequestHandler(BaseHTTPRequestHandler):
         csr_pem = body.get("csr_pem", "").strip()
         token = body.get("token", "").strip()
 
-        if not shortname or not csr_pem or not token:
-            self._send_json(400, {"error": "missing shortname, csr_pem, or token"})
+        if not shortname or not csr_pem:
+            self._send_json(400, {"error": "missing shortname or csr_pem"})
             return
 
         # Validate shortname format
