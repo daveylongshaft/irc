@@ -39,6 +39,9 @@ ISSUED_DIR = PKI_DIR / "issued"
 # Token storage
 TOKEN_FILE = plat.run_dir / "pki_tokens.json"
 
+# Approved server list (repo-tracked, git sync keeps it current)
+APPROVED_FILE = Path("/opt/csc/irc/etc/approved_servers.json")
+
 # PKI log
 PKI_LOG = Platform.get_logs_dir() / "pki.log"
 
@@ -51,6 +54,16 @@ TOKEN_TTL = 86400
 # Listen address
 BIND_HOST = "127.0.0.1"
 BIND_PORT = 9530
+
+
+def _load_approved():
+    """Load approved server list from repo-tracked JSON. Returns dict shortname → metadata."""
+    if APPROVED_FILE.exists():
+        try:
+            return json.loads(APPROVED_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
 
 
 def _load_tokens():
@@ -240,34 +253,45 @@ class PKIRequestHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "invalid CSR format"})
             return
 
-        # Validate token
-        tokens = _load_tokens()
-        token_info = tokens.get(token)
+        if not token:
+            # Tokenless path: check pre-approved server list
+            approved = _load_approved()
+            if shortname not in approved:
+                self._send_json(403, {
+                    "error": "not in approved server list",
+                    "hint": (
+                        "Ask an oper to run: PKI APPROVE " + shortname + "  "
+                        "or obtain a one-time token with: PKI TOKEN " + shortname
+                    ),
+                })
+                return
+            _write_pki_log(f"approved enrollment: {shortname} (pre-approved, no token)")
+        else:
+            # Token path: validate one-time token
+            tokens = _load_tokens()
+            token_info = tokens.get(token)
 
-        if not token_info:
-            self._send_json(403, {"error": "invalid token"})
-            return
+            if not token_info:
+                self._send_json(403, {"error": "invalid token"})
+                return
 
-        if token_info.get("used"):
-            self._send_json(403, {"error": "token already used"})
-            return
+            if token_info.get("used"):
+                self._send_json(403, {"error": "token already used"})
+                return
 
-        if token_info.get("shortname") != shortname:
-            self._send_json(403, {"error": "token/shortname mismatch"})
-            return
+            if token_info.get("shortname") != shortname:
+                self._send_json(403, {"error": "token/shortname mismatch"})
+                return
 
-        # Check token expiry
-        if time.time() - token_info.get("created_at", 0) > TOKEN_TTL:
-            self._send_json(403, {"error": "token expired"})
-            return
+            if time.time() - token_info.get("created_at", 0) > TOKEN_TTL:
+                self._send_json(403, {"error": "token expired"})
+                return
 
-        # Mark token as used
-        tokens[token]["used"] = True
-        _save_tokens(tokens)
-
-        _write_pki_log(
-            f"enrollment pending: {shortname} token consumed, queued for signing"
-        )
+            tokens[token]["used"] = True
+            _save_tokens(tokens)
+            _write_pki_log(
+                f"enrollment pending: {shortname} token consumed, queued for signing"
+            )
 
         # Sign the CSR
         try:
@@ -326,6 +350,15 @@ class PKIRequestHandler(BaseHTTPRequestHandler):
             self._send_json(
                 403, {"error": "client cert CN does not match shortname"}
             )
+            return
+
+        # Verify shortname is in approved list
+        approved = _load_approved()
+        if shortname not in approved:
+            self._send_json(403, {
+                "error": "server not in approved list",
+                "hint": "Ask an oper to run: PKI APPROVE " + shortname,
+            })
             return
 
         # Verify that this shortname has an existing cert
