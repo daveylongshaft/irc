@@ -62,54 +62,62 @@ def _get_csc_service_pid():
 
 def _systemd_active(unit, scope="user"):
     """Return 'active', 'inactive', 'failed', or 'unknown'."""
-    if IS_WINDOWS:
-        # Check system service first
-        state = _windows_service_state(unit.replace(".service", ""))
-        if state == "active":
-            return state
-        
-        # Fall back to PID file check for csc-service
-        if unit == "csc-service.service":
-            pid = _get_csc_service_pid()
-            return "active" if pid else "inactive"
-        
-        return state
-
     try:
-        cmd = ["systemctl"]
-        if scope == "user":
-            cmd.append("--user")
-        cmd += ["is-active", "--quiet", unit]
-        r = subprocess.run(cmd, capture_output=True, timeout=5)
-        if r.returncode == 0:
-            return "active"
-        cmd2 = ["systemctl"]
-        if scope == "user":
-            cmd2.append("--user")
-        cmd2 += ["show", unit, "--property=ActiveState", "--value"]
-        r2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=5)
-        return r2.stdout.strip() or "inactive"
-    except Exception:
+        if IS_WINDOWS:
+            # Check system service first
+            state = _windows_service_state(unit.replace(".service", ""))
+            if state == "active":
+                return state
+            
+            # Fall back to PID file check for csc-service
+            if unit == "csc-service.service":
+                pid = _get_csc_service_pid()
+                return "active" if pid else "inactive"
+            
+            return state
+
+        try:
+            cmd = ["systemctl"]
+            if scope == "user":
+                cmd.append("--user")
+            cmd += ["is-active", "--quiet", unit]
+            r = subprocess.run(cmd, capture_output=True, timeout=5)
+            if r.returncode == 0:
+                return "active"
+            cmd2 = ["systemctl"]
+            if scope == "user":
+                cmd2.append("--user")
+            cmd2 += ["show", unit, "--property=ActiveState", "--value"]
+            r2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=5)
+            return r2.stdout.strip() or "inactive"
+        except Exception:
+            return "unknown"
+    except Exception as e:
+        print(f"CRASH AVOIDED in _systemd_active: {e}")
         return "unknown"
 
 
 def _systemd_pid(unit, scope="user"):
     """Return MainPID for a systemd unit, or PID from file on Windows."""
-    if IS_WINDOWS:
-        if unit == "csc-service.service":
-            return _get_csc_service_pid()
-        # For server/bridge, they might also have PID files if we add them
-        return None
-
     try:
-        cmd = ["systemctl"]
-        if scope == "user":
-            cmd.append("--user")
-        cmd += ["show", unit, "--property=MainPID", "--value"]
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        pid = r.stdout.strip()
-        return int(pid) if pid and pid != "0" else None
-    except Exception:
+        if IS_WINDOWS:
+            if unit == "csc-service.service":
+                return _get_csc_service_pid()
+            # For server/bridge, they might also have PID files if we add them
+            return None
+
+        try:
+            cmd = ["systemctl"]
+            if scope == "user":
+                cmd.append("--user")
+            cmd += ["show", unit, "--property=MainPID", "--value"]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            pid = r.stdout.strip()
+            return int(pid) if pid and pid != "0" else None
+        except Exception:
+            return None
+    except Exception as e:
+        print(f"CRASH AVOIDED in _systemd_pid: {e}")
         return None
 
 
@@ -126,18 +134,11 @@ def _windows_service_state(svc_name):
 
 
 def _ss_ports_for_pid(pid):
-    """Return list of (proto, local_addr) tuples for a PID using ss.
-
-    ss output columns: Netid State Recv-Q Send-Q Local:Port Peer:Port [users]
-    idx:               0     1     2      3      4          5
-    """
+    """Return list of (proto, local_addr) tuples for a PID using ss."""
     if IS_WINDOWS or pid is None:
         return []
     results = []
     try:
-        # With -H (no header), Netid col is omitted.
-        # Columns: State Recv-Q Send-Q Local:Port Peer:Port [users]
-        # idx:     0     1      2      3          4
         r = subprocess.run(["ss", "-Hnlup"], capture_output=True, text=True, timeout=5)
         for line in r.stdout.splitlines():
             if f"pid={pid}" not in line:
@@ -152,8 +153,8 @@ def _ss_ports_for_pid(pid):
             parts = line.split()
             local = parts[3] if len(parts) > 3 else "?"
             results.append(("tcp", local))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"CRASH AVOIDED in _ss_ports_for_pid: {e}")
     return results
 
 
@@ -167,38 +168,37 @@ def _server_stats():
         pass
 
     # Uptime from systemd
-    try:
-        r = subprocess.run(
-            ["systemctl", "--user", "show", "csc-server.service",
-             "--property=ActiveEnterTimestamp", "--value"],
-            capture_output=True, text=True, timeout=5
-        )
-        ts_str = r.stdout.strip()
-        if ts_str:
-            from datetime import datetime
-            import locale
-            # Format: "Wed 2026-03-11 01:53:28 CDT"
-            # Strip weekday and timezone, parse middle part
-            parts = ts_str.split()
-            if len(parts) >= 3:
-                try:
-                    dt = datetime.strptime(f"{parts[1]} {parts[2]}", "%Y-%m-%d %H:%M:%S")
-                    elapsed = time.time() - dt.timestamp()
-                    h = int(elapsed // 3600)
-                    m = int((elapsed % 3600) // 60)
-                    s = int(elapsed % 60)
-                    if h >= 24:
-                        d = h // 24
-                        h = h % 24
-                        stats["uptime"] = f"{d}d {h}h {m}m"
-                    elif h > 0:
-                        stats["uptime"] = f"{h}h {m}m {s}s"
-                    else:
-                        stats["uptime"] = f"{m}m {s}s"
-                except Exception:
-                    stats["uptime"] = ts_str
-    except Exception:
-        pass
+    if not IS_WINDOWS:
+        try:
+            r = subprocess.run(
+                ["systemctl", "--user", "show", "csc-server.service",
+                 "--property=ActiveEnterTimestamp", "--value"],
+                capture_output=True, text=True, timeout=5
+            )
+            ts_str = r.stdout.strip()
+            if ts_str:
+                from datetime import datetime
+                import locale
+                parts = ts_str.split()
+                if len(parts) >= 3:
+                    try:
+                        dt = datetime.strptime(f"{parts[1]} {parts[2]}", "%Y-%m-%d %H:%M:%S")
+                        elapsed = time.time() - dt.timestamp()
+                        h = int(elapsed // 3600)
+                        m = int((elapsed % 3600) // 60)
+                        s = int(elapsed % 60)
+                        if h >= 24:
+                            d = h // 24
+                            h = h % 24
+                            stats["uptime"] = f"{d}d {h}h {m}m"
+                        elif h > 0:
+                            stats["uptime"] = f"{h}h {m}m {s}s"
+                        else:
+                            stats["uptime"] = f"{m}m {s}s"
+                    except Exception:
+                        stats["uptime"] = ts_str
+        except Exception as e:
+            print(f"CRASH AVOIDED in _server_stats systemctl: {e}")
 
     # Read from run-dir JSON files
     try:
