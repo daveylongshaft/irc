@@ -740,7 +740,7 @@ class PersistentStorageManager(Data):
 
         Only restores active opers that still have a live connection.
         """
-        data = self.load_opers()
+        data = self._load_opers()
 
         # Load olines from olines.conf (authoritative) then merge with stored olines
         conf_olines = self.parse_olines_conf()
@@ -749,7 +749,7 @@ class PersistentStorageManager(Data):
             merged_olines = dict(stored_olines)
             merged_olines.update(conf_olines)
             data["olines"] = merged_olines
-            self.save_opers(data)
+            self._save_opers(data)
 
         active = data.get("active_opers", [])
         connected_nicks = {info.get("name", "").lower()
@@ -906,7 +906,7 @@ class PersistentStorageManager(Data):
         # Migrate opers
         active_opers = snapshot.get("active_opers", [])
         oper_creds = server.get_data("oper_credentials") or {}
-        self.save_opers({
+        self._save_opers({
             "version": 1,
             "active_opers": active_opers,
             "credentials": oper_creds,
