@@ -97,6 +97,11 @@ def main():
 
     args = parser.parse_args()
 
+    # Handle 'cert' with no subcommand
+    if args.command == "cert" and not getattr(args, "cert_command", None):
+        cert_parser.print_help()
+        sys.exit(1)
+
     if not args.command:
         parser.print_help()
         sys.exit(1)

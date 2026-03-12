@@ -1,0 +1,2353 @@
+csc/
+├── -architect
+├── -codereview
+├── -debug
+├── -pm
+├── -reviewer
+├── -testfix
+├── -worker
+├── .claude
+│   ├── backups
+│   │   └── .claude.json.backup.1772900981195
+│   ├── cache
+│   │   └── changelog.md
+│   ├── debug
+│   │   ├── 9eccb91a-498d-4832-88c9-06184e240d96.txt
+│   │   ├── daa0d298-70fb-49b0-840b-0eac667e08f2.txt
+│   │   └── latest
+│   ├── plugins
+│   │   └── marketplaces
+│   │       └── claude-plugins-official
+│   ├── todos
+│   │   └── daa0d298-70fb-49b0-840b-0eac667e08f2-agent-daa0d298-70fb-49b0-840b-0eac667e08f2.json
+│   └── worktrees
+│       ├── agent-a2b9defb
+│       └── agent-af74c8bc
+├── .claude.json
+├── .csc_root
+├── .env
+├── .env-backup.txt
+├── .gitignore
+├── .gitmodules
+├── .trash
+├── BACKUP_SERVICE_SUMMARY.md
+├── KNOWN_ISSUES.txt
+├── README.md
+├── Server.log
+├── Server_data.json
+├── agent_data.json
+├── analyze_error.log
+├── backup
+│   ├── csc-service.json.backup.20260311-015551
+│   └── csc-service.json.backup.20260311-015554
+├── backup_data.json
+├── bin
+│   ├── TOOLS_MANIFEST.md
+│   ├── agent
+│   ├── agent.bat
+│   ├── analysis_report.json
+│   ├── analyze_project.py
+│   ├── archive
+│   │   ├── agent.py
+│   │   ├── agent.yaml
+│   │   ├── agent_assignments.txt
+│   │   ├── agentcatalog_pirate.yaml
+│   │   ├── apply_docstrings.py
+│   │   ├── fix_pid_check.patch
+│   │   ├── gemini
+│   │   │   └── channel.py
+│   │   ├── nickserv.db
+│   │   ├── services
+│   │   │   ├── __init__.py
+│   │   │   ├── agent_service.py
+│   │   │   ├── backup_service.py
+│   │   │   ├── botserv_service.py
+│   │   │   ├── builtin_service.py
+│   │   │   ├── chanserv_service.py
+│   │   │   ├── cryptserv_service.py
+│   │   │   ├── curl_service.py
+│   │   │   ├── help_service.py
+│   │   │   ├── module_manager_service.py
+│   │   │   ├── moltbook_service.py
+│   │   │   ├── nickserv_service.py
+│   │   │   ├── ntfy_service.py
+│   │   │   ├── patch_service.py
+│   │   │   ├── patch_test_dummy_service.py
+│   │   │   ├── platform_service.py
+│   │   │   ├── prompts_service.py
+│   │   │   └── version_service.py
+│   │   ├── test-bridge-only.py
+│   │   ├── test-server-only.py
+│   │   └── verify_fixes.py
+│   ├── batch-continue-opus-impl.py
+│   ├── batch-execute-tools.py
+│   ├── batch-opus-git-fix.py
+│   ├── batch-opus-impl-with-tools.py
+│   ├── batch-opus-queue-worker-fix.py
+│   ├── batch-process-opus-tools.py
+│   ├── batch-retrieve-and-execute.py
+│   ├── batch-submit-opus-batch-impl.py
+│   ├── batch_api_executor.py
+│   ├── batch_executor.py
+│   ├── batch_request_temp.jsonl
+│   ├── benchmark
+│   ├── benchmark.bat
+│   ├── c
+│   ├── c.bat
+│   ├── c.py
+│   ├── c.sh
+│   ├── catalog
+│   ├── catalog.bat
+│   ├── claude-auto-resume.bat
+│   ├── claude-auto-resume.sh
+│   ├── claude-batch
+│   │   ├── README.md
+│   │   ├── batch_config.json
+│   │   ├── batch_results_msgbatch_01Ku9t4jLHaDsW4TD1GKRy7r.jsonl
+│   │   ├── batch_run.log
+│   │   ├── batch_submission.log
+│   │   ├── cbatch_add.py
+│   │   ├── cbatch_dir.py
+│   │   ├── cbatch_edit.py
+│   │   ├── cbatch_executor.py
+│   │   ├── cbatch_list.py
+│   │   ├── cbatch_parallel.py
+│   │   ├── cbatch_queue_run.py
+│   │   ├── cbatch_remove.py
+│   │   ├── cbatch_retrieve.py
+│   │   ├── cbatch_run.py
+│   │   ├── cbatch_status.py
+│   │   ├── common.py
+│   │   ├── platform_batch_config.json
+│   │   └── queue_worker_fix_batch.json
+│   ├── csc-client
+│   ├── csc-client.bat
+│   ├── csc-code.sh
+│   ├── csc-ctl
+│   ├── csc-ctl.bat
+│   ├── csc-server
+│   ├── csc-server.bat
+│   ├── csc-service
+│   ├── csc-start.bat
+│   ├── data
+│   ├── debug_server_state.py
+│   ├── fix_all_bat_files.py
+│   ├── gemini-batch
+│   │   ├── __init__.py
+│   │   ├── gbatch_convert.py
+│   │   ├── gbatch_dir.py
+│   │   ├── gbatch_executor.py
+│   │   ├── gbatch_run.py
+│   │   ├── gbatch_tool_run.py
+│   │   └── gbatch_tools.py
+│   ├── gemini-pr-revise
+│   ├── gencert.sh
+│   ├── generate_tree.py
+│   ├── get_path.bat
+│   ├── get_path.py
+│   ├── get_path.sh
+│   ├── gh-app-token.py
+│   ├── haiku_restructure_live.py
+│   ├── manual-agent-runner.md
+│   ├── moltbook
+│   ├── moltbook-api
+│   ├── moltbook-api.bat
+│   ├── moltbook.bat
+│   ├── next_step
+│   ├── next_step.bat
+│   ├── nssm.exe
+│   ├── pr-review-agent.sh
+│   ├── read_privileged_log.py
+│   ├── refresh-maps
+│   ├── refresh-maps.bat
+│   ├── rg.bat
+│   ├── rg.exe
+│   ├── run-agent-manual.sh
+│   ├── run-autonomous-queue-worker-wsl.sh
+│   ├── run-data-storage-batch.py
+│   ├── run_agent.bat
+│   ├── run_agent.py
+│   ├── run_tests.bat
+│   ├── send_chat.py
+│   ├── server
+│   ├── server.bat
+│   ├── setup-auto-resume-startup.ps1
+│   ├── setup-trash-aliases.sh
+│   ├── setup_clean_path.sh
+│   ├── setup_moltbook.sh
+│   ├── sm-run
+│   ├── sm-run.bat
+│   ├── start-and-test-bridges.sh
+│   ├── start-autonomous-queue-worker.sh
+│   ├── start-bridges-wsl.ps1
+│   ├── start-bridges-wsl.sh
+│   ├── start-bridges.bat
+│   ├── start-bridges.py
+│   ├── start-csc-full.bat
+│   ├── stream_restructure_with_tools.py
+│   ├── submit-batch-fixed.py
+│   ├── submit-platform-batch-parallel.py
+│   ├── submit_restructure_batch.py
+│   ├── submit_restructure_cached_phases.py
+│   ├── task_converter.py
+│   ├── test-bridge-client.py
+│   ├── test-bridges-nc.bat
+│   ├── test-bridges-nc.sh
+│   ├── test-bridges-wsl-simple.sh
+│   ├── test-monitor.py
+│   ├── tools
+│   │   ├── .lastrun
+│   │   ├── INDEX.txt
+│   │   ├── XREF.txt
+│   │   ├── agents.txt
+│   │   ├── automations.txt
+│   │   ├── bridge.txt
+│   │   ├── client.txt
+│   │   ├── core.txt
+│   │   ├── other.txt
+│   │   ├── server.txt
+│   │   ├── sm.txt
+│   │   └── workorders.txt
+│   ├── tools.txt
+│   ├── tools_audit_report.txt
+│   ├── track_agents.sh
+│   ├── trash
+│   ├── trash.bat
+│   ├── update_bins_for_venv.bat
+│   ├── update_bins_for_venv.py
+│   ├── verify-server-dependencies.py
+│   ├── verify_installation.sh
+│   ├── wo
+│   ├── wo.bat
+│   ├── workorders
+│   ├── workorders.bat
+│   └── workorders_quick.py
+├── client.log
+├── csc-csc-agent.2026-03-10.private-key.pem
+├── csc-service.json
+├── etc
+│   ├── Server_data.json
+│   ├── agent_data.json
+│   ├── backup
+│   │   ├── csc-service.json.backup.20260311-095605
+│   │   └── csc-service.json.backup.20260311-095718
+│   ├── bans.json
+│   ├── botserv.json
+│   ├── channels.json
+│   ├── chanserv.json
+│   ├── csc-service.json
+│   ├── history.json
+│   ├── nickserv.json
+│   ├── olines.conf
+│   ├── opers.json
+│   ├── platform.json
+│   ├── platform.json.tmp
+│   ├── pr-review-config.json
+│   ├── settings.json
+│   └── users.json
+├── instruction_history.log
+├── irc
+│   ├── .gitignore
+│   ├── .irc_root
+│   ├── CLAUDE.md
+│   ├── FINAL_WORKORDER_VERIFICATION.md
+│   ├── GEMINI-TO-RUN-CLAUDE-API.md
+│   ├── GEMINI.md
+│   ├── PERMANENT_STORAGE_ARCHITECTURE.md
+│   ├── PERMANENT_STORAGE_SYSTEM.md
+│   ├── POWER_FAILURE_VERIFICATION.md
+│   ├── PR_REVIEW_POLICY.md
+│   ├── QUICKSTART.md
+│   ├── README.md
+│   ├── REFACTORING_SUMMARY.md
+│   ├── SYSTEM_ACTIVATION_COMPLETE.md
+│   ├── Server.log
+│   ├── Server_data.json
+│   ├── TASK_EXECUTION_SUMMARY.md
+│   ├── WIP.md
+│   ├── WORKORDER_REVIEW.md
+│   ├── agents
+│   │   └── plan-review
+│   │       ├── context
+│   │       │   ├── guidelines.md
+│   │       │   └── system.md
+│   │       └── state.json
+│   ├── benchmarks
+│   │   ├── BASELINE_TEST_EXECUTION_REPORT.txt
+│   │   ├── BENCHMARKING_COMPLETE.md
+│   │   ├── BENCHMARK_ANALYSIS.md
+│   │   ├── BENCHMARK_hello_world.md
+│   │   ├── FFT_ANALYSIS_RESULTS.md
+│   │   ├── FFT_BENCHMARK_ANALYSIS.md
+│   │   ├── benchmarks.json
+│   │   ├── catalog.json
+│   │   ├── fft_analysis.py
+│   │   ├── fft_benchmark.py
+│   │   ├── fft_waveform_analysis.py
+│   │   ├── prompts
+│   │   │   ├── code-review.md
+│   │   │   ├── debug-test-failure.md
+│   │   │   ├── implement-feature.md
+│   │   │   ├── large-context-nav.md
+│   │   │   └── multi-file-refactor.md
+│   │   ├── results
+│   │   │   ├── benchmark-hello-world-1771642546-output.md
+│   │   │   ├── code-review-0.32-sonnet-1772568109.json
+│   │   │   ├── code-review-0.61-haiku-1772566870.json
+│   │   │   ├── code-review-18.59-haiku-1772567015.json
+│   │   │   ├── code-review-6.18-haiku-1772567035.json
+│   │   │   ├── code-review-7.30-haiku-1772567005.json
+│   │   │   ├── code-review-7.77-haiku-1772567970.json
+│   │   │   ├── debug-test-failure-0.28-sonnet-1772568113.json
+│   │   │   ├── debug-test-failure-0.34-haiku-1772566871.json
+│   │   │   ├── debug-test-failure-10.29-haiku-1772567057.json
+│   │   │   ├── debug-test-failure-5.26-haiku-1772567049.json
+│   │   │   ├── debug-test-failure-55.92-haiku-1772567981.json
+│   │   │   ├── debug-test-failure-6.12-haiku-1772567041.json
+│   │   │   ├── fft_analysis_results.json
+│   │   │   ├── fft_benchmark_results.json
+│   │   │   ├── haiku-hello-world-1771642499.md
+│   │   │   ├── implement-feature-0.27-haiku-1772566871.json
+│   │   │   ├── implement-feature-0.27-sonnet-1772568117.json
+│   │   │   ├── implement-feature-6.00-haiku-1772567146.json
+│   │   │   ├── implement-feature-60.54-haiku-1772567154.json
+│   │   │   ├── implement-feature-77.41-haiku-1772567067.json
+│   │   │   ├── implement-feature-9.17-haiku-1772568040.json
+│   │   │   ├── large-context-nav-0.29-sonnet-1772568122.json
+│   │   │   ├── large-context-nav-0.34-haiku-1772566871.json
+│   │   │   ├── large-context-nav-10.87-haiku-1772567215.json
+│   │   │   ├── large-context-nav-11.00-haiku-1772568052.json
+│   │   │   ├── large-context-nav-14.59-haiku-1772567237.json
+│   │   │   ├── large-context-nav-7.52-haiku-1772567228.json
+│   │   │   ├── multi-file-refactor-0.40-sonnet-1772568126.json
+│   │   │   ├── multi-file-refactor-0.45-haiku-1772566872.json
+│   │   │   ├── multi-file-refactor-22.02-haiku-1772568066.json
+│   │   │   ├── multi-file-refactor-5.73-haiku-1772567252.json
+│   │   │   ├── multi-file-refactor-64.91-haiku-1772567260.json
+│   │   │   └── multi-file-refactor-84.17-haiku-1772567327.json
+│   │   ├── run_benchmark.py
+│   │   ├── run_local_benchmarks.py
+│   │   └── variance.txt
+│   ├── bin
+│   │   ├── README.md
+│   │   ├── analyze_project.md
+│   │   ├── batch_dir.md
+│   │   ├── batch_dir.py
+│   │   ├── batch_executor.md
+│   │   ├── batch_executor.py
+│   │   ├── c.md
+│   │   ├── check_motive_alignment.py
+│   │   ├── csc-platform
+│   │   ├── csc-platform.bat
+│   │   ├── generate_tree.md
+│   │   ├── send_chat.md
+│   │   └── update_bins_for_venv.md
+│   ├── deploy
+│   │   ├── WEBHOOK_SETUP.md
+│   │   ├── apache-pki.conf
+│   │   ├── apache-webhook.conf
+│   │   ├── crontab.txt
+│   │   ├── install.py
+│   │   ├── launchers
+│   │   │   ├── csc-bridge
+│   │   │   ├── csc-chatgpt
+│   │   │   ├── csc-claude
+│   │   │   ├── csc-client
+│   │   │   ├── csc-gemini
+│   │   │   └── csc-server
+│   │   └── services
+│   │       ├── csc-bridge.service.template
+│   │       ├── csc-chatgpt.service.template
+│   │       ├── csc-claude.service.template
+│   │       ├── csc-client.service.template
+│   │       ├── csc-gemini.service.template
+│   │       ├── csc-server.service.template
+│   │       └── csc-webhook.service.template
+│   ├── docker
+│   │   └── docker-compose.ollama.yml
+│   ├── docs
+│   │   ├── EVOLUTION.md
+│   │   ├── MOTIVE_STATE.md
+│   │   ├── p-files.list
+│   │   ├── platform.md
+│   │   ├── services.md
+│   │   ├── tools
+│   │   │   ├── .lastrun
+│   │   │   ├── INDEX.txt
+│   │   │   ├── XREF.txt
+│   │   │   ├── agents.txt
+│   │   │   ├── automations.txt
+│   │   │   ├── bridge.txt
+│   │   │   ├── client.txt
+│   │   │   ├── core.txt
+│   │   │   ├── other.txt
+│   │   │   ├── server.txt
+│   │   │   ├── sm.txt
+│   │   │   └── workorders.txt
+│   │   └── tree.txt
+│   ├── haiku-research_orangutan_create_pdf.md
+│   ├── logs
+│   │   └── motive_state_progress.json
+│   ├── packages
+│   │   ├── csc-docker
+│   │   │   └── docker_client.bat
+│   │   └── csc-service
+│   │       ├── csc_service
+│   │       │   ├── __init__.py
+│   │       │   ├── bridge
+│   │       │   │   ├── __init__.py
+│   │       │   │   ├── bridge.py
+│   │       │   │   ├── bridge_config.example.json
+│   │       │   │   ├── config-local.json
+│   │       │   │   ├── config-remote.json
+│   │       │   │   ├── config.json
+│   │       │   │   ├── control_handler.py
+│   │       │   │   ├── data_bridge.py
+│   │       │   │   ├── irc.py
+│   │       │   │   ├── irc_constants.py
+│   │       │   │   ├── irc_normalizer.py
+│   │       │   │   ├── irc_utils.py
+│   │       │   │   ├── main.py
+│   │       │   │   ├── session.py
+│   │       │   │   └── transports
+│   │       │   │       ├── __init__.py
+│   │       │   │       ├── base.py
+│   │       │   │       ├── tcp_inbound.py
+│   │       │   │       ├── tcp_outbound.py
+│   │       │   │       ├── udp_inbound.py
+│   │       │   │       └── udp_outbound.py
+│   │       │   ├── cli
+│   │       │   │   ├── __init__.py
+│   │       │   │   ├── commands
+│   │       │   │   │   ├── __init__.py
+│   │       │   │   │   ├── config_cmd.py
+│   │       │   │   │   ├── pki_cmd.py
+│   │       │   │   │   ├── service_cmd.py
+│   │       │   │   │   └── status_cmd.py
+│   │       │   │   └── csc_ctl.py
+│   │       │   ├── clients
+│   │       │   │   ├── chatgpt
+│   │       │   │   │   └── chatgpt.bat
+│   │       │   │   ├── claude
+│   │       │   │   │   └── claude.bat
+│   │       │   │   ├── client
+│   │       │   │   │   ├── __init__.py
+│   │       │   │   │   ├── aliases.py
+│   │       │   │   │   ├── client.py
+│   │       │   │   │   ├── client_file_handler.py
+│   │       │   │   │   ├── client_service_handler.py
+│   │       │   │   │   ├── data.py
+│   │       │   │   │   ├── irc.py
+│   │       │   │   │   ├── log.py
+│   │       │   │   │   ├── macros.py
+│   │       │   │   │   ├── main.py
+│   │       │   │   │   ├── network.py
+│   │       │   │   │   ├── root.py
+│   │       │   │   │   ├── secret.py
+│   │       │   │   │   └── version.py
+│   │       │   │   ├── dmrbot
+│   │       │   │   │   └── dmrbot.bat
+│   │       │   │   ├── gemini
+│   │       │   │   │   └── gemini.bat
+│   │       │   │   └── julius
+│   │       │   │       ├── __init__.py
+│   │       │   │       └── julius.py
+│   │       │   ├── config.py
+│   │       │   ├── infra
+│   │       │   │   ├── git_sync.py
+│   │       │   │   ├── jules_monitor.py
+│   │       │   │   ├── plan_review.py
+│   │       │   │   ├── pm.py
+│   │       │   │   ├── pr_review.py
+│   │       │   │   ├── queue_worker.bat
+│   │       │   │   ├── queue_worker.py
+│   │       │   │   ├── test_runner.bat
+│   │       │   │   ├── test_runner.py
+│   │       │   │   ├── webhook_listener.py
+│   │       │   │   ├── wo_sync_client.py
+│   │       │   │   └── wo_watcher.py
+│   │       │   ├── main.py
+│   │       │   ├── pki
+│   │       │   │   ├── __init__.py
+│   │       │   │   ├── enrollment_server.py
+│   │       │   │   └── main.py
+│   │       │   ├── server
+│   │       │   │   ├── __init__.py
+│   │       │   │   ├── channel.py
+│   │       │   │   ├── client.py
+│   │       │   │   ├── crypto.py
+│   │       │   │   ├── data.py
+│   │       │   │   ├── irc.py
+│   │       │   │   ├── log.py
+│   │       │   │   ├── main.py
+│   │       │   │   ├── network.py
+│   │       │   │   ├── olines.conf
+│   │       │   │   ├── persistent_clients.bat
+│   │       │   │   ├── root.py
+│   │       │   │   ├── secret.py
+│   │       │   │   ├── server.py
+│   │       │   │   ├── server_file_handler.py
+│   │       │   │   ├── server_message_handler.py
+│   │       │   │   ├── server_s2s.py
+│   │       │   │   ├── service.py
+│   │       │   │   ├── storage.py
+│   │       │   │   └── version.py
+│   │       │   └── shared
+│   │       │       ├── __init__.py
+│   │       │       ├── api_key_manager.py
+│   │       │       ├── channel.py
+│   │       │       ├── chat_buffer.py
+│   │       │       ├── crypto.py
+│   │       │       ├── data.py
+│   │       │       ├── irc.py
+│   │       │       ├── log.py
+│   │       │       ├── network.py
+│   │       │       ├── platform.py
+│   │       │       ├── platform_service_windows.py
+│   │       │       ├── root.py
+│   │       │       ├── secret.py
+│   │       │       ├── service.py
+│   │       │       ├── services
+│   │       │       │   ├── __init__.py
+│   │       │       │   ├── agent_service.py
+│   │       │       │   ├── backup_service.py
+│   │       │       │   ├── benchmark_service.py
+│   │       │       │   ├── botserv_service.py
+│   │       │       │   ├── builtin_service.py
+│   │       │       │   ├── catalog_service.py
+│   │       │       │   ├── chanserv_service.py
+│   │       │       │   ├── cryptserv_service.py
+│   │       │       │   ├── curl_service.py
+│   │       │       │   ├── help_service.py
+│   │       │       │   ├── module_manager_service.py
+│   │       │       │   ├── moltbook_service.py
+│   │       │       │   ├── nickserv_service.py
+│   │       │       │   ├── ntfy_service.py
+│   │       │       │   ├── patch_service.py
+│   │       │       │   ├── patch_test_dummy_service.py
+│   │       │       │   ├── pki_service.py
+│   │       │       │   ├── platform_service.py
+│   │       │       │   ├── prompts_service.py
+│   │       │       │   ├── proof_service.py
+│   │       │       │   ├── queue_worker_service.py
+│   │       │       │   ├── run_agent_executor.py
+│   │       │       │   ├── version_service.py
+│   │       │       │   ├── wakeword_service.py
+│   │       │       │   └── workorders_service.py
+│   │       │       ├── utils
+│   │       │       │   ├── __init__.py
+│   │       │       │   ├── queue_utils.py
+│   │       │       │   └── wip_journal.py
+│   │       │       └── version.py
+│   │       └── pyproject.toml
+│   ├── queue_worker_data.json
+│   └── tests
+│       ├── conftest.py
+│       ├── platform_gate.py
+│       ├── platform_skip_template.md
+│       ├── prompt_template.md
+│       ├── test_agent_service.py
+│       ├── test_bridge.py
+│       ├── test_channel_normalization.py
+│       ├── test_curl_service.py
+│       ├── test_evolution_md.py
+│       ├── test_gbatch_audit.py
+│       ├── test_help_service.py
+│       ├── test_jules_monitor.py
+│       ├── test_module_manager_service.py
+│       ├── test_motive_state.py
+│       ├── test_nickserv_service.py
+│       ├── test_ntfy_service.py
+│       ├── test_oper_hierarchy.py
+│       ├── test_pki.py
+│       ├── test_plan_review.py
+│       ├── test_webhook_listener.py
+│       ├── test_wo_watcher.py
+│       └── test_workorders_service.py
+├── log.log
+├── logs
+│   ├── agent-diffs
+│   │   ├── 1773177648634_test_wo_test.txt.new
+│   │   ├── 1773177648639_test_wo_delete_test.txt.deleted
+│   │   ├── 1773177655450_test_wo_final.DONE
+│   │   ├── 1773177655454_test_wo_failed.FAIL
+│   │   ├── 1773177723904_comprehensive_test_newfile.txt.new
+│   │   ├── 1773177723908_comprehensive_test_edited.txt.patch
+│   │   ├── 1773177723909_comprehensive_test_deleted.txt.deleted
+│   │   ├── 1773177723910_comprehensive_test.DONE
+│   │   └── 1773177723910_failed_wo.FAIL
+│   ├── csc-service.log
+│   ├── log.log
+│   ├── pr-review-agent.log
+│   └── queue-wip-sizes.json
+├── my_tool_pouch.md
+├── nope
+│   ├── agents
+│   │   └── plan-review
+│   │       └── context
+│   │           └── system.md
+│   ├── docs
+│   │   ├── AUTO_RESUME_SETUP.md
+│   │   ├── EVOLUTION.md
+│   │   ├── EVOLUTION_RESEARCH_BRIEF.md
+│   │   ├── FUTURE_ARCHITECTURE_LANGUAGE_AGNOSTIC_BYTECODE_PIPELINE.md
+│   │   ├── PLATFORM_PATHS.md
+│   │   ├── QUICKSTART.md
+│   │   ├── README.1shot
+│   │   ├── README.1st
+│   │   ├── RESUME_POINT.md
+│   │   ├── archive
+│   │   │   ├── gemini_issues.txt
+│   │   │   ├── library
+│   │   │   │   ├── AGENTS_ACTIVE_STATUS.md
+│   │   │   │   └── PM_AGENT_MODULE_SUMMARY.md
+│   │   │   └── upgrade_system.txt
+│   │   ├── gemini-prompts.txt
+│   │   ├── library
+│   │   │   ├── AGENT_LAUNCHER_GUIDE.md
+│   │   │   ├── AGENT_SYSTEM.md
+│   │   │   ├── AIDER.md
+│   │   │   ├── AUTONOMOUS_SYSTEM_ROADMAP.md
+│   │   │   ├── BATCH_API_TOOL_USE.md
+│   │   │   ├── BRIDGE_SERVER_SETUP.md
+│   │   │   ├── CATALOG_AND_RANKING.md
+│   │   │   ├── CLAUDE_API_STATUS.md
+│   │   │   ├── CLEANUP_SUMMARY.md
+│   │   │   ├── CLIENT_CONSOLE_GUIDE.md
+│   │   │   ├── CODE_FIXER_WORKFLOW.md
+│   │   │   ├── CONFIG_FILES_README.md
+│   │   │   ├── CURRENT_ARCHITECTURE.md
+│   │   │   ├── DEVCONTEXT.md
+│   │   │   ├── DOCKER_AGENT_SETUP.md
+│   │   │   ├── FEDERATION_ROADMAP.md
+│   │   │   ├── FUTURE_VISION.md
+│   │   │   ├── GEMINI_BATCH.md
+│   │   │   ├── GENERIC_AGENTS.md
+│   │   │   ├── INDEX.md
+│   │   │   ├── MIRC_CONNECTION_SETUP.md
+│   │   │   ├── MOLTBOOK_SETUP.md
+│   │   │   ├── NICKSERV_IMPLEMENTATION.md
+│   │   │   ├── PATH_PROTECTION_BATCH_STRATEGY.md
+│   │   │   ├── PATH_PROTECTION_WORKORDER_TRACKING.md
+│   │   │   ├── PM_RUNTIME_GAP_ANALYSIS.md
+│   │   │   ├── PREFLIGHT_CHECKS.md
+│   │   │   ├── SCHEDULER_SETUP.md
+│   │   │   ├── SERVER_INFRASTRUCTURE_FIX.md
+│   │   │   ├── SERVICES_BOTSERV_CHANSERV.md
+│   │   │   ├── SERVICE_SETUP.md
+│   │   │   ├── SERVICE_SYSTEM_RESTORATION.md
+│   │   │   ├── SESSION_STATE.md
+│   │   │   ├── SHARED_FILE_AUDIT.md
+│   │   │   ├── SYSTEM_OVERVIEW.md
+│   │   │   ├── TASK_EXECUTION_MODES.md
+│   │   │   ├── TEST_BRIDGE.md
+│   │   │   ├── WORKER_QUICKSTART.md
+│   │   │   ├── WORKER_SYSTEM.md
+│   │   │   ├── WORKORDERS_SERVICE_INTEGRATION.md
+│   │   │   ├── ai_clients.md
+│   │   │   ├── bridge.md
+│   │   │   ├── client.md
+│   │   │   ├── csc-ctl.md
+│   │   │   ├── jules.md
+│   │   │   ├── platform.md
+│   │   │   ├── pr-review-merge-automation.md
+│   │   │   ├── protocol.md
+│   │   │   ├── server.md
+│   │   │   ├── services.md
+│   │   │   ├── setup.md
+│   │   │   ├── translator-api.md
+│   │   │   ├── translator-cli.md
+│   │   │   └── translator-overview.md
+│   │   ├── p-files.list
+│   │   ├── plans
+│   │   │   ├── 2026-03-01-state-of-project-documentation.md
+│   │   │   ├── agile-giggling-bonbon.md
+│   │   │   ├── atomic-spinning-mountain.md
+│   │   │   ├── cuddly-marinating-harp.md
+│   │   │   ├── cuddly-stargazing-goose.md
+│   │   │   ├── golden-dancing-liskov.md
+│   │   │   ├── jazzy-sauteeing-hare.md
+│   │   │   ├── peaceful-hatching-hopper.md
+│   │   │   ├── refactor-infra-inheritance.md
+│   │   │   ├── replicated-mixing-puppy.md
+│   │   │   ├── sunny-growing-toucan.md
+│   │   │   ├── tidy-marinating-moon.md
+│   │   │   └── typed-petting-cake.md
+│   │   ├── revamp
+│   │   │   └── csc_revamp
+│   │   │       ├── CSC_RESTRUCTURE_SESSION_CONTEXT.md
+│   │   │       ├── GITHUB_SETUP_VERIFICATION.md
+│   │   │       ├── OPUS_EXECUTE_RESTRUCTURE_BATCHES.md
+│   │   │       ├── OPUS_REVISE_TOOL_LOOP_WITH_RETRY_ESCALATION.md
+│   │   │       ├── PROMPT_csc_major_restructure_all_steps.md
+│   │   │       ├── PROMPT_csc_restructure_full_lifecycle.md
+│   │   │       ├── TASK_A_CONTEXT_FOR_CHATGPT.md
+│   │   │       ├── TASK_A_PATH_RESOLUTION_AUDIT_AND_REPLACEMENT.md
+│   │   │       ├── batch
+│   │   │       │   ├── 01_phase_pre_shutdown.md
+│   │   │       │   ├── 02_phase_uninstall_packages.md
+│   │   │       │   ├── 03_phase_restructure.md
+│   │   │       │   ├── 04_phase_reinstall_packages.md
+│   │   │       │   ├── 05_phase_verify_filesystem.md
+│   │   │       │   ├── 06_phase_start_services.md
+│   │   │       │   ├── 07_phase_final_verification.md
+│   │   │       │   ├── batch_results_20260305_112754.json
+│   │   │       │   ├── batch_results_20260305_115223.json
+│   │   │       │   ├── batch_results_20260305_121436.json
+│   │   │       │   ├── batch_results_20260305_121459.json
+│   │   │       │   ├── batch_results_20260305_124946.json
+│   │   │       │   ├── batch_results_20260305_125334.json
+│   │   │       │   ├── batch_results_20260305_125947.json
+│   │   │       │   ├── batch_results_20260305_132559.json
+│   │   │       │   ├── batch_results_20260305_132730.json
+│   │   │       │   ├── batch_results_20260305_133716.json
+│   │   │       │   ├── batch_results_20260305_134946.json
+│   │   │       │   ├── batch_results_20260305_135004.json
+│   │   │       │   ├── batch_results_20260305_135351.json
+│   │   │       │   └── batch_results_20260305_140732.json
+│   │   │       └── logs
+│   │   │           ├── migration.log
+│   │   │           ├── restructure_batch_run.log
+│   │   │           └── restructure_full_run.log
+│   │   ├── services.md
+│   │   ├── tools
+│   │   │   ├── .lastrun
+│   │   │   ├── INDEX.txt
+│   │   │   ├── README.md
+│   │   │   ├── START_HERE.txt
+│   │   │   ├── analysis_report.json
+│   │   │   ├── anthropic-api
+│   │   │   │   ├── batch-processing.md
+│   │   │   │   ├── prompt-caching.md
+│   │   │   │   └── tool-use.md
+│   │   │   ├── archive
+│   │   │   │   ├── deprecated-bin-scripts-20260226.tar.gz
+│   │   │   │   ├── deprecated-bin-scripts.20260225-191604.tar.gz
+│   │   │   │   └── queue-worker-standalone-deprecated.sh
+│   │   │   ├── coding-agent.txt
+│   │   │   ├── csc-docker.txt
+│   │   │   ├── csc-pm.txt
+│   │   │   ├── csc-service.txt
+│   │   │   ├── gemini_context.md
+│   │   │   ├── launch_gemini.sh
+│   │   │   ├── local-models-howto.md
+│   │   │   ├── p-files.list
+│   │   │   ├── pm
+│   │   │   │   ├── README.md
+│   │   │   │   ├── agents.md
+│   │   │   │   ├── architecture.md
+│   │   │   │   ├── history.md
+│   │   │   │   ├── procedures.md
+│   │   │   │   ├── runbook.md
+│   │   │   │   ├── strategy.md
+│   │   │   │   ├── system.md
+│   │   │   │   └── workorder-triage.md
+│   │   │   ├── root.txt
+│   │   │   ├── services.txt
+│   │   │   ├── syslog_monitor.py
+│   │   │   ├── tests.txt
+│   │   │   └── tree.txt
+│   │   └── tree.txt
+│   ├── packages
+│   │   └── csc-service
+│   │       └── csc_service
+│   │           ├── clients
+│   │           │   ├── chatgpt
+│   │           │   │   └── chatgpt.bat
+│   │           │   ├── claude
+│   │           │   │   └── claude.bat
+│   │           │   ├── dmrbot
+│   │           │   │   └── dmrbot.bat
+│   │           │   ├── gemini
+│   │           │   │   └── gemini.bat
+│   │           │   └── jules
+│   │           │       ├── __init__.py
+│   │           │       ├── config.py
+│   │           │       └── jules.py
+│   │           ├── infra
+│   │           │   ├── pr_review.py
+│   │           │   ├── queue_worker.bat
+│   │           │   └── test_runner.bat
+│   │           ├── main.py
+│   │           ├── server
+│   │           │   ├── Server.log
+│   │           │   └── persistent_clients.bat
+│   │           └── shared
+│   │               ├── api_key_manager.bat
+│   │               ├── platform.py
+│   │               └── services
+│   │                   ├── __init__.py
+│   │                   ├── agent_service.py
+│   │                   └── cryptserv_service.py
+│   └── tests
+│       ├── logs
+│       │   ├── test_0000_verify_client_bridge_localserver_service_commands.log
+│       │   ├── test_agent_cli.log
+│       │   ├── test_agent_service.log
+│       │   ├── test_backup_service.log
+│       │   ├── test_cryptserv_service.log
+│       │   ├── test_help_service.log
+│       │   ├── test_jules_client.log
+│       │   ├── test_module_manager_service.log
+│       │   └── test_ntfy_service.log
+│       ├── test_0000_verify_client_bridge_localserver_service_commands.py
+│       ├── test_agent_cli.py
+│       ├── test_agent_service.py
+│       ├── test_backup_service.py
+│       ├── test_cryptserv_service.py
+│       └── test_jules_client.py
+├── ops
+│   ├── .gitignore
+│   ├── .ops_root
+│   ├── BATCH_SUBMISSION.txt
+│   ├── agent_data.json
+│   ├── agents
+│   │   ├── chatgpt
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   └── run_agent.py
+│   │   │   └── cagent.yaml
+│   │   ├── claude
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   └── run_agent.py
+│   │   │   ├── cagent.yaml
+│   │   │   └── context
+│   │   │       ├── project-map.md
+│   │   │       └── test-guidelines.md
+│   │   ├── claude-batch
+│   │   │   ├── cagent.yaml
+│   │   │   └── orders.md-template
+│   │   ├── codellama
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   └── context
+│   │   │       ├── project-map.md
+│   │   │       └── test-guidelines.md
+│   │   ├── deepseek
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   └── context
+│   │   │       ├── project-map.md
+│   │   │       └── test-guidelines.md
+│   │   ├── dmr_qwen_task_runner
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   └── cagent.yaml
+│   │   ├── gemini
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   └── run_agent.py
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── project-map.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── memory.db
+│   │   │   ├── memory.db-shm
+│   │   │   └── memory.db-wal
+│   │   ├── gemini-2.5-flash
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── debugging.md
+│   │   │   │   ├── project-map.md
+│   │   │   │   ├── system.md
+│   │   │   │   ├── test-guidelines.md
+│   │   │   │   └── validation.md
+│   │   │   ├── orders.md-template
+│   │   │   └── queue
+│   │   │       └── out
+│   │   │           └── orders-1772627097.md
+│   │   ├── gemini-2.5-flash-lite
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   └── run_agent.py
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── agent-types.md
+│   │   │   │   ├── project-map.md
+│   │   │   │   ├── system.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── memory.db
+│   │   │   ├── memory.db-shm
+│   │   │   ├── memory.db-wal
+│   │   │   └── state.json
+│   │   ├── gemini-2.5-pro
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── orders.md-template
+│   │   │   └── queue
+│   │   │       └── out
+│   │   │           ├── agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   │           ├── agent_1773106341_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   │           ├── agent_1773106565_haiku-fix_agent_tail_segfault.log
+│   │   │           ├── agent_1773108135_csc-ftpd-wo-watcher.log
+│   │   │           ├── agent_1773109225_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   │           ├── agent_1773111034_JULES_INTEGRATION_WORKORDER_SPEC.log
+│   │   │           ├── agent_1773111393_PLAN_REVIEW_AGENT_SETUP.log
+│   │   │           ├── agent_1773112108_REBUILD_AGENT_AND_WORKORDERS_SERVICES.log
+│   │   │           ├── agent_1773112754_create_file_comparison_script.log
+│   │   │           ├── agent_1773113892_PROMPT_review_pr_daveylongshaft_irc_1_20260309-175457.log
+│   │   │           ├── agent_1773183965_claude-evolution-story.log
+│   │   │           ├── agent_1773186212_PROMPT_review_pr_daveylongshaft_irc_2_20260310-183830.log
+│   │   │           ├── agent_1773186650_PROMPT_review_pr_daveylongshaft_irc_2_20260310-184341.log
+│   │   │           ├── agent_1773186948_PROMPT_review_pr_daveylongshaft_irc_2_20260310-185059.log
+│   │   │           ├── agent_1773188191_PROMPT_review_pr_daveylongshaft_irc_2_20260310-185557.log
+│   │   │           ├── agent_1773192148_PROMPT_review_pr_daveylongshaft_irc_3_20260310-201343.log
+│   │   │           ├── agent_1773192304_PROMPT_review_pr_daveylongshaft_irc_3_20260310-201345.log
+│   │   │           ├── agent_1773192536_PROMPT_review_pr_daveylongshaft_irc_3_20260310-202514.log
+│   │   │           ├── agent_1773192698_PROMPT_review_pr_daveylongshaft_irc_3_20260310-202906.log
+│   │   │           ├── agent_1773206523_oper-hierarchy-20260311.log
+│   │   │           ├── agent_1773216377_PKI_CERTIFICATE_ENROLLMENT_SYSTEM.log
+│   │   │           ├── agent_1773228445_PROMPT_setup_github_webhook.log
+│   │   │           ├── agent_1773229109_windows-service-update.log
+│   │   │           ├── agent_1773229264_windows-service-update.log
+│   │   │           ├── orders-1773106043.md
+│   │   │           ├── orders-1773106533.md
+│   │   │           ├── orders-1773106820.md
+│   │   │           ├── orders-1773109448.md
+│   │   │           ├── orders-1773109661.md
+│   │   │           ├── orders-1773111321.md
+│   │   │           ├── orders-1773111468.md
+│   │   │           ├── orders-1773111614.md
+│   │   │           ├── orders-1773112181.md
+│   │   │           ├── orders-1773112328.md
+│   │   │           ├── orders-1773112830.md
+│   │   │           ├── orders-1773113986.md
+│   │   │           ├── orders-1773184107.md
+│   │   │           ├── orders-1773186642.md
+│   │   │           ├── orders-1773186939.md
+│   │   │           ├── orders-1773187463.md
+│   │   │           ├── orders-1773188331.md
+│   │   │           ├── orders-1773192296.md
+│   │   │           ├── orders-1773192528.md
+│   │   │           ├── orders-1773192617.md
+│   │   │           ├── orders-1773192773.md
+│   │   │           ├── orders-1773192930.md
+│   │   │           ├── orders-1773206598.md
+│   │   │           ├── orders-1773216451.md
+│   │   │           ├── orders-1773217484.md
+│   │   │           ├── orders-1773217651.md
+│   │   │           ├── orders-1773223303.md
+│   │   │           ├── orders-1773223465.md
+│   │   │           ├── orders-1773228518.md
+│   │   │           ├── orders-1773228673.md
+│   │   │           ├── orders-1773229180.md
+│   │   │           ├── orders-1773229336.md
+│   │   │           ├── orders-orphan-1773105219.md
+│   │   │           └── orders-orphan-1773106191.md
+│   │   ├── gemini-3-flash
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   └── context
+│   │   │       ├── project-map.md
+│   │   │       └── test-guidelines.md
+│   │   ├── gemini-3-flash-preview
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   └── run_agent.py
+│   │   │   └── cagent.yaml
+│   │   ├── gemini-3-pro
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── project-map.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── orders.md-template
+│   │   │   └── queue
+│   │   │       └── out
+│   │   │           ├── orders-1772625903.md
+│   │   │           └── orders-1772626272.md
+│   │   ├── gemini-3-pro-preview
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   └── run_agent.py
+│   │   │   └── cagent.yaml
+│   │   ├── gemini-3.1-pro-preview
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── project-map.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── orders.md-template
+│   │   │   └── queue
+│   │   │       └── out
+│   │   │           ├── orders-1772625903.md
+│   │   │           └── orders-1772626272.md
+│   │   ├── haiku
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── project-map.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── orders.md-template
+│   │   │   └── queue
+│   │   │       └── in
+│   │   │           ├── orders.md
+│   │   │           └── windows-service-update.json
+│   │   ├── ollama-codellama
+│   │   │   └── bin
+│   │   │       ├── run_agent.bat
+│   │   │       ├── run_agent.py
+│   │   │       └── run_agent.sh
+│   │   ├── ollama-deepseek
+│   │   │   └── bin
+│   │   │       ├── run_agent.bat
+│   │   │       ├── run_agent.py
+│   │   │       └── run_agent.sh
+│   │   ├── ollama-qwen
+│   │   │   └── bin
+│   │   │       ├── run_agent.bat
+│   │   │       ├── run_agent.py
+│   │   │       └── run_agent.sh
+│   │   ├── opus
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── project-map.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── memory.db
+│   │   │   ├── memory.db-shm
+│   │   │   ├── memory.db-wal
+│   │   │   ├── orders.md-template
+│   │   │   ├── queue
+│   │   │   │   ├── in
+│   │   │   │   │   ├── windows-service-update.json
+│   │   │   │   │   └── windows-service-update.md
+│   │   │   │   ├── out
+│   │   │   │   │   ├── agent_1773106893_csc-ftpd-wo-watcher.log
+│   │   │   │   │   ├── agent_1773108135_csc-ftpd-wo-watcher.log
+│   │   │   │   │   ├── agent_1773109225_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   │   │   │   ├── agent_1773110037_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   │   │   │   ├── agent_1773183743_EVOLUTION_MD_write_origin_story.log
+│   │   │   │   │   ├── agent_1773185979_review_PR2_bridge_migration.log
+│   │   │   │   │   ├── agent_1773187533_platform_13-create_daily_motive_state_workorders.log
+│   │   │   │   │   ├── agent_1773216377_PKI_CERTIFICATE_ENROLLMENT_SYSTEM.log
+│   │   │   │   │   ├── orders-1772617733.md
+│   │   │   │   │   ├── orders-1772618228.md
+│   │   │   │   │   ├── orders-1772619439.md
+│   │   │   │   │   ├── orders-1772619801.md
+│   │   │   │   │   ├── orders-1773107328.md
+│   │   │   │   │   ├── orders-1773107474.md
+│   │   │   │   │   ├── orders-1773107620.md
+│   │   │   │   │   ├── orders-1773107767.md
+│   │   │   │   │   ├── orders-1773107914.md
+│   │   │   │   │   ├── orders-1773108061.md
+│   │   │   │   │   ├── orders-1773108211.md
+│   │   │   │   │   ├── orders-1773108370.md
+│   │   │   │   │   ├── orders-1773108533.md
+│   │   │   │   │   ├── orders-1773109964.md
+│   │   │   │   │   ├── orders-1773110111.md
+│   │   │   │   │   ├── orders-1773110259.md
+│   │   │   │   │   ├── orders-1773110416.md
+│   │   │   │   │   ├── orders-1773110576.md
+│   │   │   │   │   ├── orders-1773110958.md
+│   │   │   │   │   ├── orders-1773183955.md
+│   │   │   │   │   ├── orders-1773186203.md
+│   │   │   │   │   ├── orders-1773187891.md
+│   │   │   │   │   ├── orders-1773217374.md
+│   │   │   │   │   └── orders-orphan-1773105521.md
+│   │   │   │   └── work
+│   │   │   │       └── orders.md
+│   │   │   └── workorders
+│   │   │       └── wip
+│   │   │           └── opus_plan_queue_worker_python_implementation.md
+│   │   ├── qwen
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── cagent.yaml
+│   │   │   ├── context
+│   │   │   │   ├── project-map.md
+│   │   │   │   └── test-guidelines.md
+│   │   │   ├── memory.db
+│   │   │   ├── memory.db-shm
+│   │   │   └── memory.db-wal
+│   │   ├── sonnet
+│   │   │   ├── bin
+│   │   │   │   ├── run_agent.bat
+│   │   │   │   ├── run_agent.py
+│   │   │   │   └── run_agent.sh
+│   │   │   ├── orders.md-template
+│   │   │   └── queue
+│   │   │       └── out
+│   │   │           ├── agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   │           ├── agent_1773106893_csc-ftpd-wo-watcher.log
+│   │   │           ├── agent_1773108135_csc-ftpd-wo-watcher.log
+│   │   │           ├── agent_1773109225_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   │           ├── agent_1773111393_PLAN_REVIEW_AGENT_SETUP.log
+│   │   │           ├── agent_1773112400_REBUILD_AGENT_AND_WORKORDERS_SERVICES.log
+│   │   │           ├── agent_1773113892_PROMPT_review_pr_daveylongshaft_irc_1_20260309-175457.log
+│   │   │           ├── agent_1773186948_PROMPT_review_pr_daveylongshaft_irc_2_20260310-185059.log
+│   │   │           ├── agent_1773192698_PROMPT_review_pr_daveylongshaft_irc_3_20260310-202906.log
+│   │   │           ├── agent_1773206689_oper-hierarchy-20260311.log
+│   │   │           ├── agent_1773217742_PKI_CERTIFICATE_ENROLLMENT_SYSTEM.log
+│   │   │           ├── agent_1773228754_PROMPT_setup_github_webhook.log
+│   │   │           ├── agent_1773229264_windows-service-update.log
+│   │   │           ├── orders-1773106277.md
+│   │   │           ├── orders-1773107182.md
+│   │   │           ├── orders-1773109808.md
+│   │   │           ├── orders-1773112036.md
+│   │   │           ├── orders-1773112682.md
+│   │   │           ├── orders-1773188182.md
+│   │   │           ├── orders-1773192140.md
+│   │   │           ├── orders-1773193166.md
+│   │   │           ├── orders-1773207310.md
+│   │   │           ├── orders-1773218203.md
+│   │   │           ├── orders-1773223845.md
+│   │   │           ├── orders-1773229093.md
+│   │   │           └── orders-1773229493.md
+│   │   ├── templates
+│   │   │   ├── README.md
+│   │   │   ├── default.md
+│   │   │   ├── generate_orders_md.bat
+│   │   │   ├── generate_orders_md.sh
+│   │   │   ├── orders.md-template
+│   │   │   ├── run_agent.bat
+│   │   │   ├── run_agent.py
+│   │   │   └── run_agent.sh
+│   │   └── test-agent
+│   │       └── bin
+│   │           ├── run_agent.bat
+│   │           ├── run_agent.py
+│   │           └── run_agent.sh
+│   ├── bin
+│   │   └── setup-audit-fahu.ps1
+│   ├── current_context.md
+│   ├── logs
+│   │   ├── agent_1773105669_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773105672_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773105691_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773105801_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773106194_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773106341_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log
+│   │   ├── agent_1773106565_haiku-fix_agent_tail_segfault.log
+│   │   ├── agent_1773106893_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773106965_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107106_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107254_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107400_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107547_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107693_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107839_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773107987_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773108135_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773108287_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773108451_csc-ftpd-wo-watcher.log
+│   │   ├── agent_1773109225_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773109520_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773109733_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773109887_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773110037_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773110183_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773110335_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773110495_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773110656_IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.log
+│   │   ├── agent_1773111034_JULES_INTEGRATION_WORKORDER_SPEC.log
+│   │   ├── agent_1773111393_PLAN_REVIEW_AGENT_SETUP.log
+│   │   ├── agent_1773111541_PLAN_REVIEW_AGENT_SETUP.log
+│   │   ├── agent_1773111687_PLAN_REVIEW_AGENT_SETUP.log
+│   │   ├── agent_1773112108_REBUILD_AGENT_AND_WORKORDERS_SERVICES.log
+│   │   ├── agent_1773112253_REBUILD_AGENT_AND_WORKORDERS_SERVICES.log
+│   │   ├── agent_1773112400_REBUILD_AGENT_AND_WORKORDERS_SERVICES.log
+│   │   ├── agent_1773112754_create_file_comparison_script.log
+│   │   ├── agent_1773113892_PROMPT_review_pr_daveylongshaft_irc_1_20260309-175457.log
+│   │   ├── agent_1773183743_EVOLUTION_MD_write_origin_story.log
+│   │   ├── agent_1773183965_claude-evolution-story.log
+│   │   ├── gemini-2.5-pro_1773105691.log
+│   │   ├── gemini-2.5-pro_1773105745.log
+│   │   ├── gemini-2.5-pro_1773105801.log
+│   │   ├── gemini-2.5-pro_1773106341.log
+│   │   ├── gemini-2.5-pro_1773106565.log
+│   │   ├── gemini-2.5-pro_1773106893.log
+│   │   ├── gemini-2.5-pro_1773106965.log
+│   │   ├── gemini-2.5-pro_1773109225.log
+│   │   ├── gemini-2.5-pro_1773109520.log
+│   │   ├── gemini-2.5-pro_1773111034.log
+│   │   ├── gemini-2.5-pro_1773111393.log
+│   │   ├── gemini-2.5-pro_1773111541.log
+│   │   ├── gemini-2.5-pro_1773112108.log
+│   │   ├── gemini-2.5-pro_1773112253.log
+│   │   ├── gemini-2.5-pro_1773112754.log
+│   │   ├── gemini-2.5-pro_1773113892.log
+│   │   ├── gemini-2.5-pro_1773183965.log
+│   │   ├── opus_1773107254.log
+│   │   ├── opus_1773107400.log
+│   │   ├── opus_1773107547.log
+│   │   ├── opus_1773107693.log
+│   │   ├── opus_1773107840.log
+│   │   ├── opus_1773107987.log
+│   │   ├── opus_1773108135.log
+│   │   ├── opus_1773108287.log
+│   │   ├── opus_1773108451.log
+│   │   ├── opus_1773109887.log
+│   │   ├── opus_1773110037.log
+│   │   ├── opus_1773110183.log
+│   │   ├── opus_1773110335.log
+│   │   ├── opus_1773110495.log
+│   │   ├── opus_1773110656.log
+│   │   ├── opus_1773183743.log
+│   │   ├── queue-wip-sizes.json
+│   │   ├── queue-worker.log
+│   │   ├── sonnet_1773106194.log
+│   │   ├── sonnet_1773107106.log
+│   │   ├── sonnet_1773109733.log
+│   │   ├── sonnet_1773111687.log
+│   │   └── sonnet_1773112400.log
+│   ├── queue_worker_data.json
+│   ├── roles
+│   │   ├── _shared
+│   │   │   ├── codebase-overview.md
+│   │   │   ├── git-rules.md
+│   │   │   ├── project-map.md
+│   │   │   ├── test-guidelines.md
+│   │   │   └── work-log-rules.md
+│   │   ├── architect
+│   │   │   ├── README.md
+│   │   │   ├── codebase-overview.md
+│   │   │   ├── codebase-overview.md.lnk
+│   │   │   ├── project-map.md
+│   │   │   └── project-map.md.lnk
+│   │   ├── code-reviewer
+│   │   │   ├── README.md
+│   │   │   ├── codebase-overview.md
+│   │   │   ├── codebase-overview.md.lnk
+│   │   │   ├── project-map.md
+│   │   │   └── project-map.md.lnk
+│   │   ├── debugger
+│   │   │   ├── README.md
+│   │   │   ├── codebase-overview.md
+│   │   │   ├── codebase-overview.md.lnk
+│   │   │   ├── project-map.md
+│   │   │   └── project-map.md.lnk
+│   │   ├── pm-worker
+│   │   │   ├── README.md
+│   │   │   ├── codebase-overview.md
+│   │   │   ├── codebase-overview.md.lnk
+│   │   │   ├── git-rules.md
+│   │   │   ├── git-rules.md.lnk
+│   │   │   ├── project-map.md
+│   │   │   ├── project-map.md.lnk
+│   │   │   ├── work-log-rules.md
+│   │   │   └── work-log-rules.md.lnk
+│   │   ├── pr-reviewer
+│   │   │   ├── README.md
+│   │   │   ├── codebase-overview.md
+│   │   │   ├── codebase-overview.md.lnk
+│   │   │   ├── project-map.md
+│   │   │   ├── project-map.md.lnk
+│   │   │   └── review-checklist.md
+│   │   ├── test-fixer
+│   │   │   ├── README.md
+│   │   │   ├── project-map.md
+│   │   │   ├── project-map.md.lnk
+│   │   │   ├── test-guidelines.md
+│   │   │   └── test-guidelines.md.lnk
+│   │   └── worker
+│   │       ├── README.md
+│   │       ├── project-map.md
+│   │       ├── project-map.md.lnk
+│   │       ├── test-guidelines.md
+│   │       ├── test-guidelines.md.lnk
+│   │       ├── work-log-rules.md
+│   │       └── work-log-rules.md.lnk
+│   └── wo
+│       ├── PROMPTS_CLI_QUICKREF.md
+│       ├── PROMPTS_SERVICE_README.md
+│       ├── README.md
+│       ├── archive
+│       │   ├── .gitkeep
+│       │   ├── 00_example_task.md
+│       │   ├── 01-aider-agent-architecture-plan.md
+│       │   ├── 01-create-agent-template-system.md
+│       │   ├── 01_investigate_gemini_integration.md
+│       │   ├── 01_plan_readme_structure.md
+│       │   ├── 01_verify_gemini_communication.md
+│       │   ├── 02-rename-wrapper-scripts.md
+│       │   ├── 02-test-docker-aider-minimal.md
+│       │   ├── 02_create_readme_sections.md
+│       │   ├── 02_debug_gemini_message_handling.md
+│       │   ├── 02_fix_file_permissions.md
+│       │   ├── 03-add-template-copy-function.md
+│       │   ├── 03-integrate-aider-with-dc-agent-wrapper.md
+│       │   ├── 03_document_readme_introduction.md
+│       │   ├── 03_fix_builtin_service.md
+│       │   ├── 04-add-queue-mode-to-wrapper-main.md
+│       │   ├── 04-end-to-end-dc-run-test.md
+│       │   ├── 04_document_readme_quick_start.md
+│       │   ├── 05-aider-agent-documentation.md
+│       │   ├── 05-update-agent-service-wrapper.md
+│       │   ├── 05_document_readme_architecture.md
+│       │   ├── 05_irc_commands_implementation.md
+│       │   ├── 06-update-queue-worker-compatibility.md
+│       │   ├── 06_document_readme_core_components.md
+│       │   ├── 07-update-docs-and-verify.md
+│       │   ├── 07_document_readme_key_features.md
+│       │   ├── 08_client_arrow_keys_history.md
+│       │   ├── 08_document_readme_ai_integration.md
+│       │   ├── 08_fix_whois_names_clearing.md
+│       │   ├── 09_document_readme_configuration.md
+│       │   ├── 0c0c0c0-switch to a true file-based data persistance and real-time updates for all data FInALLY.md
+│       │   ├── 100_bot_log_monitoring.md
+│       │   ├── 100_use_client_for_ai_tasks.md
+│       │   ├── 10_document_readme_csc_shared.md
+│       │   ├── 10_implement_client_commands.md
+│       │   ├── 11_document_readme_csc_server.md
+│       │   ├── 11_test_topic_command.md
+│       │   ├── 12_document_readme_csc_client.md
+│       │   ├── 13_document_readme_csc_bridge.md
+│       │   ├── 14_document_readme_persistence.md
+│       │   ├── 15_document_readme_service_system.md
+│       │   ├── 16_document_readme_file_upload.md
+│       │   ├── 1770986998-realtime_session_persistence.md
+│       │   ├── 1771184112-investigate_mirc_tcp_9667_connection_and_csc_bridg.md
+│       │   ├── 1771405618-botserv_read_logfile_to_channel.md
+│       │   ├── 1771405630-botserv_filter_log_data.md
+│       │   ├── 1771411010-audit_tests_for_live_migration.md
+│       │   ├── 1771416164-get_claude_talking_in_channel.md
+│       │   ├── 1771574409-docker-agent_md.md
+│       │   ├── 1771575847-aider-run_md.md
+│       │   ├── 1771582425-aider-run-docker-agent_md.md
+│       │   ├── 1771582783-pull-aider-docker-image.md
+│       │   ├── 1771582784-setup-git-config-csc-repo.md
+│       │   ├── 1771583877-project-orientation-and-dc-run-enhancement.md
+│       │   ├── 1771584500-test-aider-integration.md
+│       │   ├── 1771970196-haiku-audit-completeness-of-workorders-in-done.md
+│       │   ├── 1772220640-system-audit-notes.md
+│       │   ├── 1772220641-fuck-claude.md
+│       │   ├── 1772220722-1771689643-implement_prompts_append_command.md
+│       │   ├── 1772220722-1771690038-urgent_fix_queue-worker_agent_exit_detection.md
+│       │   ├── 1772220722-FIX-agent-infrastructure-for-isolated-repos.md
+│       │   ├── 1772220722-PROMPT_fix_wrapper_cross_platform.md
+│       │   ├── 1772220722-Q00_queue_worker_implementation_overview.md
+│       │   ├── 1772220722-Q01_architecture_analysis_and_design.md
+│       │   ├── 1772220722-Q01_core_agent_service_queue_integration.md
+│       │   ├── 1772220722-Q02_agent_service_queue_integration.md
+│       │   ├── 1772220722-Q02_python_queue_worker_implementation.md
+│       │   ├── 1772220722-Q03_pure_python_run_agent.md
+│       │   ├── 1772220722-Q03_pure_python_run_agent_script.md
+│       │   ├── 1772220722-Q04_queue_worker_refactor.md
+│       │   ├── 1772220722-docker-bot-client.md
+│       │   ├── 1772220722-docs-update-csc-ctl-commands.md
+│       │   ├── 1772220722-extend-csc-ctl-windows-linux-config.md
+│       │   ├── 1772220722-fix-agent-assign-multiplatform-infrastructure.md
+│       │   ├── 1772220722-fix_queue-worker_complete_processing.md
+│       │   ├── 1772220722-haiku_redesign_queue_worker_and_agent_assign.md
+│       │   ├── 1772220722-opus-prompt-caching-anthropic-agents.md
+│       │   ├── 1772220722-rename-prompts-to-workorders.md
+│       │   ├── 1772220722-test-agent-assign-workflow.md
+│       │   ├── 1772220722-test-csc-ctl-cross-platform.md
+│       │   ├── 1772220722-test-run-agent-system.md
+│       │   ├── 1772221549-PROMPT_ai_message_filtering_and_wakewords.md.wip
+│       │   ├── 1772221549-Q04_comprehensive_unit_and_integration_tests.md
+│       │   ├── 1772221549-Q05_documentation_migration_and_cleanup.md
+│       │   ├── 1772221549-Q05_integration_testing.md
+│       │   ├── 1772221549-Q06_documentation_and_finalization.md
+│       │   ├── 1772221549-Q06_documentation_finalization.md
+│       │   ├── 1772221549-R01_create_csc_service_package_skeleton.md
+│       │   ├── 1772221549-R02_copy_shared_core_modules.md
+│       │   ├── 1772221549-R03_copy_shared_service_modules.md
+│       │   ├── 1772221549-R04_copy_server_modules.md
+│       │   ├── 1772221549-R05_copy_client_modules.md
+│       │   ├── 1772221549-R06_copy_claude_client.md
+│       │   ├── 1772221549-R07_copy_gemini_client.md
+│       │   ├── 1772221549-R08_copy_chatgpt_client.md
+│       │   ├── 1772221549-R09_copy_bridge_modules.md
+│       │   ├── 1772221549-R10_copy_infra_test_runner.md
+│       │   ├── 1772221549-R11_copy_infra_queue_worker.md
+│       │   ├── 1772221549-R12_create_infra_pm_module.md
+│       │   ├── 1772221549-R13_create_infra_git_sync.md
+│       │   ├── 1772221549-R14_create_service_main_loop.md
+│       │   ├── 1772221549-R15_rewrite_shared_imports.md
+│       │   ├── 1772221549-R16_rewrite_shared_services_imports.md
+│       │   ├── 1772221549-R17_rewrite_server_imports.md
+│       │   ├── 1772221549-R18_rewrite_client_imports.md
+│       │   ├── 1772221549-R19_rewrite_claude_imports.md
+│       │   ├── 1772221549-R20_rewrite_gemini_imports.md
+│       │   ├── 1772221549-R21_rewrite_chatgpt_imports.md
+│       │   ├── 1772221549-R22_rewrite_bridge_imports.md
+│       │   ├── 1772221549-R23_update_pyproject_console_scripts.md
+│       │   ├── 1772221549-R24_create_default_config.md
+│       │   ├── 1772221549-R25_create_csc_ctl.md
+│       │   ├── 1772221549-R26_create_dockerfile.md
+│       │   ├── 1772221549-R27_create_docker_compose.md
+│       │   ├── 1772221549-R28_create_installer_scripts.md
+│       │   ├── 1772221549-R29_wire_test_runner_run_cycle.md
+│       │   ├── 1772221549-R30_wire_queue_worker_run_cycle.md
+│       │   ├── 1772221549-R31_add_compat_shim_csc_shared.md
+│       │   ├── 1772221549-R32_add_compat_shim_csc_server.md
+│       │   ├── 1772221549-R33_add_compat_shim_csc_client.md
+│       │   ├── 1772221549-R34_install_and_smoke_test.md
+│       │   ├── 1772221549-R36_add_client_thread_management.md
+│       │   ├── 1772221549-R37_add_server_thread_to_main.md
+│       │   ├── 1772221549-R38_update_claude_md_for_csc_service.md
+│       │   ├── 1772221549-R40_refresh_maps_and_commit.md
+│       │   ├── 1772221549-TEST_simple_task_haiku.md
+│       │   ├── 1772221549-fuck-claude.md
+│       │   ├── 1772221549-test-qwen-simple.md
+│       │   ├── 1772221679-1772138640-queue-worker-not-working.md
+│       │   ├── 1772221679-1772138672-fix_queue-worker_not_assembling_orders_md_for_agen_20260226212032_20260226214229.md
+│       │   ├── 1772221679-TASK_fix_queue_worker_flow.md
+│       │   ├── 1772221679-build_stats_tracking_system_20260226213949.md
+│       │   ├── 1772221679-enhance-platform-detection.md
+│       │   ├── 1772221732-1771989054-remove-old-packages-install-new-packages.md
+│       │   ├── 1772269761-1_github_workflow_ai_code_review_md.md
+│       │   ├── 1772269764-2_github_codeowners_file_md.md
+│       │   ├── 1772269769-3_ai_reviewer_script_md.md
+│       │   ├── 1772269772-4_pr_creator_module_md.md
+│       │   ├── 1772269776-5_queue_worker_path_protection_md.md
+│       │   ├── 1772269780-6_config_and_gitignore_updates_md.md
+│       │   ├── 1772269784-7_testing_and_validation_md.md
+│       │   ├── 1772270655-fix_agent_command_segfault_md.md
+│       │   ├── 1772270962-filter_unicode_cleanup_for_windows_md.md
+│       │   ├── 1772271036-test_pm_agent_module_md.md
+│       │   ├── 1772271560-extend_syslog_monitor_internal_logging_md.md
+│       │   ├── 1772289936-investigate_csc_server_connectivity_md.md
+│       │   ├── 1772290003-fix_server_path_resolution_md.md
+│       │   ├── 1772290481-enhance_platform_layer_path_resolution_md.md
+│       │   ├── 1772290542-architecture_cross_platform_path_resolution_system.md
+│       │   ├── 1772290736-fix_log_module_path_initialization_md.md
+│       │   ├── 1772290912-fix_agent_monitoring_tools_md.md
+│       │   ├── 1772580719-push-fail-agent-haiku-repo-1772580719.md
+│       │   ├── 1772581181-push-fail-agent-haiku-repo-1772581181.md
+│       │   ├── 1772581640-push-fail-agent-opus-repo-1772581640.md
+│       │   ├── 1772581781-push-fail-agent-haiku-repo-1772581781.md
+│       │   ├── 17_document_readme_irc_protocol.md
+│       │   ├── 18_document_readme_ai_commands.md
+│       │   ├── 19_document_readme_channel_management.md
+│       │   ├── 20_document_readme_nickserv.md
+│       │   ├── 21_document_readme_gemini_client.md
+│       │   ├── 22_document_readme_claude_client.md
+│       │   ├── 23_document_readme_chatgpt_client.md
+│       │   ├── 24_document_readme_testing.md
+│       │   ├── 25_document_readme_development_contribution.md
+│       │   ├── 26_assemble_and_refine_readme.md
+│       │   ├── 42_testing_verification_documentation.md
+│       │   ├── 50_audit_shared_file_divergence.md
+│       │   ├── 51_create_shared_package.md
+│       │   ├── 52_restructure_apps_as_packages.md
+│       │   ├── 53_github_repo_split.md
+│       │   ├── 54_packaging_and_portability.md
+│       │   ├── 60_setup_translator_systemd_mirc.md
+│       │   ├── 61_fix_mirc_translator_connection.md
+│       │   ├── 62_debug_mirc_immediate_disconnect.md
+│       │   ├── 63_debug_mirc_connection_issue.md
+│       │   ├── 63_debug_mirc_disconnect.md
+│       │   ├── 64_fix_mirc_translator_connection.md
+│       │   ├── 65_implement_nickserv_ghost_recovery.md
+│       │   ├── 66_nickserv_registration_system.md
+│       │   ├── 67_nickserv_tests.md
+│       │   ├── 688344-platform-docs-and-cross-platform-test.md
+│       │   ├── 688344-platform-layer-capability-routing.md
+│       │   ├── 68_case_insensitive_nicks.md
+│       │   ├── 69_chatgpt_fixes_done.md
+│       │   ├── 70_server_persistence_fix_done.md
+│       │   ├── 70_verify_file_upload_security.md
+│       │   ├── 71_verify_service_command_syntax.md
+│       │   ├── 72_fix_append_versioning.md
+│       │   ├── 73_validate_service_class_before_move.md
+│       │   ├── 74_file_upload_and_services_system.md
+│       │   ├── 75_novel_llm_architecture.md
+│       │   ├── 764499-platform-cross-platform-tests-and-docs.md
+│       │   ├── 76_develop_rsan_architecture.md
+│       │   ├── 770126-review-ai-startup-vs-agent-instructions.md
+│       │   ├── 770983-build-gemini-instructions.md
+│       │   ├── 77_refactor_translator_to_bridge.md
+│       │   ├── 78_explore_codebase_for_docs.md
+│       │   ├── 80_docs_explore_codebase.md
+│       │   ├── 80_fix_botserv_unterminated_string.md
+│       │   ├── 81_create_agents_and_prompts_scripts.md
+│       │   ├── 81_docs_main_readme.md
+│       │   ├── 82_docs_server.md
+│       │   ├── 83_docs_services_system.md
+│       │   ├── 84_docs_ai_clients.md
+│       │   ├── 85_docs_client_terminal.md
+│       │   ├── 86_docs_bridge.md
+│       │   ├── 87_docs_shared_and_protocol.md
+│       │   ├── 88_docs_setup_and_deployment.md
+│       │   ├── 89_docs_link_and_finalize.md
+│       │   ├── 90_expand_bridge_docs.md
+│       │   ├── 91_server_spawns_client.md
+│       │   ├── 96_create_agent_cli_script.md
+│       │   ├── 97_enable_chanserv.md
+│       │   ├── 98_enhance_chanserv_modes.md
+│       │   ├── 99_implement_botserv_core.md
+│       │   ├── A1_create_queue_directories.md
+│       │   ├── B1_create_queue_worker_script.md
+│       │   ├── B2_test_queue_worker.md
+│       │   ├── B3_document_queue_worker.md
+│       │   ├── C1_fix_benchmark_service.md
+│       │   ├── C2_test_benchmark_service.md
+│       │   ├── C3_update_benchmark_docs.md
+│       │   ├── CSCS_ENCRYPTION_WORKORDER_FOR_JULES.md
+│       │   ├── D1_setup_task_scheduler.md
+│       │   ├── E1_verify_wrapper_complete_tag.md
+│       │   ├── F1_test_benchmark_queue_system.md
+│       │   ├── MIGRATE_TEST_agent_service.md
+│       │   ├── MIGRATE_TEST_backup_service.md
+│       │   ├── MIGRATE_TEST_builtin_service.md
+│       │   ├── MIGRATE_TEST_chanserv.md
+│       │   ├── MIGRATE_TEST_cryptserv_service.md
+│       │   ├── MIGRATE_TEST_curl_service.md
+│       │   ├── MIGRATE_TEST_help_service.md
+│       │   ├── MIGRATE_TEST_irc_normalizer.md
+│       │   ├── MIGRATE_TEST_module_manager_service.md
+│       │   ├── MIGRATE_TEST_moltbook_service.md
+│       │   ├── MIGRATE_TEST_nickserv.md
+│       │   ├── MIGRATE_TEST_nickserv_service.md
+│       │   ├── MIGRATE_TEST_ntfy_service.md
+│       │   ├── MIGRATE_TEST_patch_service.md
+│       │   ├── MIGRATE_TEST_prompts_service.md
+│       │   ├── MIGRATE_TEST_server_console_irc.md
+│       │   ├── MIGRATE_TEST_server_irc.md
+│       │   ├── MIGRATE_TEST_version_service.md
+│       │   ├── PLAN_consolidate_prompts_agent_services.md
+│       │   ├── PROCESSING_STATUS.md
+│       │   ├── PROMPT_ai_message_filtering_and_wakewords.md
+│       │   ├── PROMPT_build_docker_agent_wrapper.md
+│       │   ├── PROMPT_cleanup_docs_and_audit.md
+│       │   ├── PROMPT_clear_stale_nicks.md
+│       │   ├── PROMPT_csc_major_restructure_all_steps.md
+│       │   ├── PROMPT_csc_restructure_full_lifecycle.md
+│       │   ├── PROMPT_docker_coding_agent.md
+│       │   ├── PROMPT_docs_svc_agent.md
+│       │   ├── PROMPT_docs_svc_backup.md
+│       │   ├── PROMPT_docs_svc_builtin.md
+│       │   ├── PROMPT_docs_svc_cryptserv.md
+│       │   ├── PROMPT_docs_svc_curl.md
+│       │   ├── PROMPT_docs_svc_module_manager.md
+│       │   ├── PROMPT_docs_svc_nickserv.md
+│       │   ├── PROMPT_docs_svc_ntfy.md
+│       │   ├── PROMPT_docs_svc_patch.md
+│       │   ├── PROMPT_docs_svc_prompts.md
+│       │   ├── PROMPT_docs_svc_version.md
+│       │   ├── PROMPT_docstring_audit.md
+│       │   ├── PROMPT_docstrings_01_packages.md
+│       │   ├── PROMPT_docstrings_02_bridge.md
+│       │   ├── PROMPT_docstrings_03_services_and_root.md
+│       │   ├── PROMPT_docstrings_04_tests.md
+│       │   ├── PROMPT_docstrings_05_regenerate_tools.md
+│       │   ├── PROMPT_fix_live_botserv_real_client_test.md
+│       │   ├── PROMPT_fix_live_client_programmatic_test.md
+│       │   ├── PROMPT_fix_persistence_opers_restore.md
+│       │   ├── PROMPT_fix_regex_syntax_error.md
+│       │   ├── PROMPT_fix_test_agent_service.md
+│       │   ├── PROMPT_fix_test_botserv_logread.md
+│       │   ├── PROMPT_fix_test_deliberate_fail.md
+│       │   ├── PROMPT_fix_test_s2s_federation.md
+│       │   ├── PROMPT_moltbook_setup.md
+│       │   ├── PROMPT_patch_service_rewrite.md
+│       │   ├── PROMPT_rename_packages.md
+│       │   ├── PROMPT_restart_ai_clients.md
+│       │   ├── PROMPT_scrub_git_coauthor.md
+│       │   ├── PROMPT_service_cleanup.md
+│       │   ├── PROMPT_supervise_gemini_agents.md
+│       │   ├── PROMPT_test_agent_service.md
+│       │   ├── PROMPT_test_merge_nickserv.md
+│       │   ├── PROMPT_test_merge_persistence.md
+│       │   ├── PROMPT_test_merge_user_modes.md
+│       │   ├── PROMPT_test_runner_cron.md
+│       │   ├── PROMPT_windows_test_runner_task_scheduler.md
+│       │   ├── Q_WORKORDER_SEQUENCE.md
+│       │   ├── R01_create_csc_service_package_skeleton.md
+│       │   ├── R02_copy_shared_core_modules.md
+│       │   ├── R03_copy_shared_service_modules.md
+│       │   ├── R04_copy_server_modules.md
+│       │   ├── R05_copy_client_modules.md
+│       │   ├── R06_copy_claude_client.md
+│       │   ├── R07_copy_gemini_client.md
+│       │   ├── R08_copy_chatgpt_client.md
+│       │   ├── R09_copy_bridge_modules.md
+│       │   ├── R10_copy_infra_test_runner.md
+│       │   ├── R11_copy_infra_queue_worker.md
+│       │   ├── R12_create_infra_pm_module.md
+│       │   ├── R13_create_infra_git_sync.md
+│       │   ├── R14_create_service_main_loop.md
+│       │   ├── R15_rewrite_shared_imports.md
+│       │   ├── R16_rewrite_shared_services_imports.md
+│       │   ├── R17_rewrite_server_imports.md
+│       │   ├── R18_rewrite_client_imports.md
+│       │   ├── R19_rewrite_claude_imports.md
+│       │   ├── R20_rewrite_gemini_imports.md
+│       │   ├── R21_rewrite_chatgpt_imports.md
+│       │   ├── R22_rewrite_bridge_imports.md
+│       │   ├── R23_update_pyproject_console_scripts.md
+│       │   ├── R24_create_default_config.md
+│       │   ├── R25_create_csc_ctl.md
+│       │   ├── R26_create_dockerfile.md
+│       │   ├── R27_create_docker_compose.md
+│       │   ├── R28_create_installer_scripts.md
+│       │   ├── R29_wire_test_runner_run_cycle.md
+│       │   ├── R30_wire_queue_worker_run_cycle.md
+│       │   ├── R31_add_compat_shim_csc_shared.md
+│       │   ├── R32_add_compat_shim_csc_server.md
+│       │   ├── R33_add_compat_shim_csc_client.md
+│       │   ├── R34_install_and_smoke_test.md
+│       │   ├── R35_verify_existing_tests_pass.md
+│       │   ├── R36_add_client_thread_management.md
+│       │   ├── R37_add_server_thread_to_main.md
+│       │   ├── R38_update_claude_md_for_csc_service.md
+│       │   ├── R39_docker_build_test.md
+│       │   ├── R40_refresh_maps_and_commit.md
+│       │   ├── R41_audit_run_next_workorders.md
+│       │   ├── R42_extend_csc_ctl.md
+│       │   ├── RENAME_queue-worker_to_queue.md
+│       │   ├── TASK_CREATE_BAT_WRAPPERS.md
+│       │   ├── TASK_FIX_DCRUN_WINDOWS.md
+│       │   ├── TASK_FIX_SERVICE_PATHS.md
+│       │   ├── TASK_UPGRADE_TOOLS_AND_DCRUN.md
+│       │   ├── TEST_simple_task_haiku.md
+│       │   ├── WORKORDER_COMPLETION_PATH_AND_SHELL_TOOLS.txt
+│       │   ├── WORKORDER_COMPLETION_REPORT.txt
+│       │   ├── benchmark-complex-fft-1771657583.md
+│       │   ├── benchmark-complex-fft-1771657584.md
+│       │   ├── benchmark-complex-fft-1771661185.md
+│       │   ├── benchmark-hello-world-1771645145.md
+│       │   ├── benchmark-hello-world-1771645638.md
+│       │   ├── benchmark-hello-world-1771645938.md
+│       │   ├── benchmark-hello-world-1771648042.md
+│       │   ├── benchmark-hello-world-1771648464.md
+│       │   ├── benchmark-hello-world-1771648495.md
+│       │   ├── benchmark-hello-world-1771648655.md
+│       │   ├── benchmark-hello-world-1771648733.md
+│       │   ├── benchmark-hello-world-1771648753.md
+│       │   ├── benchmark-hello-world-1771648883.md
+│       │   ├── benchmark-hello-world-1771649009.md
+│       │   ├── benchmark-hello-world-1771649163.md
+│       │   ├── benchmark-hello-world-1771651430.md
+│       │   ├── benchmark-hello-world-1771651645.md
+│       │   ├── benchmark-hello-world-1771652067.md
+│       │   ├── benchmark-hello-world-1771652097.md
+│       │   ├── benchmark-hello-world-1771652160.md
+│       │   ├── benchmark-hello-world-1771652211.md
+│       │   ├── benchmark-hello-world-1771652252.md
+│       │   ├── benchmark-hello-world-1771652272.md
+│       │   ├── benchmark-hello-world-1771652294.md
+│       │   ├── benchmark-hello-world-1771682269.md
+│       │   ├── benchmark-hello-world-1771682633.md
+│       │   ├── benchmark-hello-world-1771683384.md
+│       │   ├── benchmark-hello-world-1771687937.md
+│       │   ├── benchmark-simple-hello-world.md
+│       │   ├── claude_code_deploy_system_log.md
+│       │   ├── data_storage-00.md
+│       │   ├── data_storage-01.md
+│       │   ├── data_storage-02.md
+│       │   ├── data_storage-03.md
+│       │   ├── data_storage-04.md
+│       │   ├── data_storage-05.md
+│       │   ├── data_storage-06.md
+│       │   ├── data_storage-07.md
+│       │   ├── debug_ai_commands.md
+│       │   ├── docker-coder-fix_csc_naming_convention.md
+│       │   ├── docker-coder-rename_packages.md
+│       │   ├── docker-coder-run_platform_docker_tests.md
+│       │   ├── docker-coder-verify_prompts_archive_command.md
+│       │   ├── each-agent-seperate-repo-for-edits.md
+│       │   ├── english-essay-sping-2026.md
+│       │   ├── enhance-platform-detection.md
+│       │   ├── gemini-2.0-flash-setup_csc_in_docker.md
+│       │   ├── gemini-2.5-flash-light-run_platform_android_tests.md
+│       │   ├── gemini-2.5-flash-setup_csc_on_termux.md
+│       │   ├── gemini-2.5-pro-platform_install_mode_wiring.md
+│       │   ├── gemini-3.0-flash-cross_platform_ci_matrix.md
+│       │   ├── gemini-api
+│       │   │   ├── gemini-api-workflows-00-skeleton.md
+│       │   │   ├── gemini-api-workflows-01-converter.md
+│       │   │   ├── gemini-api-workflows-02-tools.md
+│       │   │   ├── gemini-api-workflows-03-batch-runner.md
+│       │   │   ├── gemini-api-workflows-04-tool-runner.md
+│       │   │   ├── gemini-api-workflows-05-config.md
+│       │   │   ├── gemini-api-workflows-06-builtin.md
+│       │   │   ├── gemini-api-workflows-07-cache.md
+│       │   │   ├── gemini-api-workflows-08-queue.md
+│       │   │   ├── gemini-api-workflows-09-tests.md
+│       │   │   ├── gemini-api-workflows-10-docs.md
+│       │   │   └── gemini-api-workflows-11-integration.md
+│       │   ├── haiku-configure-official-csc-server.md
+│       │   ├── haiku-create-dc-sh-and-update-dc-run.md
+│       │   ├── haiku-create-docker-prompt-templates.md
+│       │   ├── haiku-nick-collision-resolution.md
+│       │   ├── haiku-run_platform_macos_tests.md
+│       │   ├── haiku-run_platform_windows_tests.md
+│       │   ├── haiku-run_platform_wsl_tests.md
+│       │   ├── haiku-time-sync-for-server-merges.md
+│       │   ├── haiku-update-docs-for-docker-agents.md
+│       │   ├── hello-world-qwen-bench.md
+│       │   ├── implement-agent-run-scripts.md
+│       │   ├── investigate_gemini_general.md
+│       │   ├── log.log
+│       │   ├── move_tool_output_to_tools_dir_and_organize_and_catalog_info_in_categories_and_systems.md
+│       │   ├── opus-server-linking-federation.md
+│       │   ├── opus_plan_queue_worker_python_implementation.md
+│       │   ├── platform_01-add_path_translator_class.md
+│       │   ├── platform_02-add_command_builder_class.md
+│       │   ├── platform_03-extend_platform_json_schema.md
+│       │   ├── platform_04-implement_windows_service_detection.md
+│       │   ├── platform_05-implement_linux_systemd_detection.md
+│       │   ├── platform_06-create_service_manager_class.md
+│       │   ├── platform_07-implement_windows_service_installation.md
+│       │   ├── platform_08-implement_linux_systemd_installation.md
+│       │   ├── platform_09-add_csc_ctl_service_commands.md
+│       │   ├── platform_10-test_service_installation_all_platforms.md
+│       │   ├── platform_11-github_repo_investigation.md
+│       │   ├── platform_12-write_evolution_md_analysis.md
+│       │   ├── prefix-ai-command.md
+│       │   ├── service_systems_fix.md
+│       │   ├── sonnet-aider-context-and-integration.md
+│       │   ├── sonnet-bring-ollama-online-as-irc-client.md
+│       │   ├── sonnet-enhance-dc-agent-wrapper.md
+│       │   ├── sonnet-setup_csc_on_macos.md
+│       │   ├── sonnet-setup_csc_on_windows.md
+│       │   ├── sorted-forging-dahl.md
+│       │   ├── test-agent-wrapper.md
+│       │   ├── test-queue-worker-pipeline.md
+│       │   ├── test_server_fixes.md
+│       │   ├── update-docs-queue-worker-system.md
+│       │   └── wip_create_docs_prompt.md
+│       ├── batch
+│       │   ├── BATCH_SUBMISSION.md
+│       │   ├── PARALLEL_EXECUTION.md
+│       │   ├── README.md
+│       │   ├── READY_FOR_SUBMISSION.md
+│       │   ├── fix_test_docs_batch.jsonl
+│       │   ├── fix_test_docs_batch_config.json
+│       │   ├── platform_00-extend_platform_py_runtime_strategy.md
+│       │   ├── platform_11-github_repo_investigation.md
+│       │   ├── platform_12-write_evolution_md_analysis.md
+│       │   └── platform_13-create_daily_motive_state_workorders.md
+│       ├── done
+│       │   ├── 1772297624-haiku-cleanup_irrelevant_tests_md.md
+│       │   ├── 1773033520-test-echo-haiku.md
+│       │   ├── BATCH_API_TOOL_LOOP_IMPLEMENTATION.md
+│       │   ├── CLAUDE_AUTO_RESUME_PROOF_TEST.md
+│       │   ├── EVOLUTION_MD_write_origin_story.md
+│       │   ├── IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.md
+│       │   ├── INTEGRATION_TEST_IRC_PROOF_SYSTEM.md
+│       │   ├── JULES_INTEGRATION_WORKORDER_SPEC.md
+│       │   ├── OPUS_BUILD_BATCH_API_TOOL_EXECUTOR.md
+│       │   ├── OPUS_EXECUTE_RESTRUCTURE_BATCHES.md
+│       │   ├── OPUS_REVISE_TOOL_LOOP_WITH_RETRY_ESCALATION.md
+│       │   ├── P0_opus_fix_pr_18_rejection.md
+│       │   ├── P0_opus_fix_pr_review_agent_script.md
+│       │   ├── PKI_CERTIFICATE_ENROLLMENT_SYSTEM.md
+│       │   ├── PLAN_REVIEW_AGENT_SETUP.md
+│       │   ├── PROMPT_abs_wip_path_multiagent_20260309_210749.md
+│       │   ├── PROMPT_docs_svc_agent.md
+│       │   ├── PROMPT_docs_svc_backup.md
+│       │   ├── PROMPT_docs_svc_builtin.md
+│       │   ├── PROMPT_docs_svc_curl.md
+│       │   ├── PROMPT_docs_svc_help.md
+│       │   ├── PROMPT_docs_svc_module_manager.md
+│       │   ├── PROMPT_docs_svc_nickserv.md
+│       │   ├── PROMPT_docs_svc_ntfy.md
+│       │   ├── PROMPT_docs_svc_patch.md
+│       │   ├── PROMPT_docs_svc_version.md
+│       │   ├── PROMPT_fix_test_client_dcc_send.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_1_20260309-175457.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_2_20260310-183830.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_2_20260310-184341.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_2_20260310-185059.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_2_20260310-185557.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_3_20260310-201343.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_3_20260310-201345.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_3_20260310-202514.md
+│       │   ├── PROMPT_review_pr_daveylongshaft_irc_3_20260310-202906.md
+│       │   ├── PROMPT_setup_github_webhook.md
+│       │   ├── PROOF_TEST_INTEGRATION_WIP.md
+│       │   ├── REBUILD_AGENT_AND_WORKORDERS_SERVICES.md
+│       │   ├── adopt-an-orangutan.md
+│       │   ├── agent-diff-audit-1773176488
+│       │   ├── audit-csc-old-vs-new-port.md
+│       │   ├── batch-write-tests.md
+│       │   ├── batch_audit_1773177586.md
+│       │   ├── claude-evolution-story.md
+│       │   ├── create_file_comparison_script.md
+│       │   ├── csc-ftpd-wo-watcher.md
+│       │   ├── data_hierarchy_audit.md
+│       │   ├── fix-csc-service-segfault.md
+│       │   ├── haiku-audit_data_class_circumventions.md
+│       │   ├── haiku-fix_agent_tail_segfault.md
+│       │   ├── haiku-fix_service_loop_registry_and_log.md
+│       │   ├── haiku-research_orangutan_create_pdf.md
+│       │   ├── migration_completion_summary.md
+│       │   ├── oper-hierarchy-20260311.md
+│       │   ├── orangutan_research_report_20260304_174201.md
+│       │   ├── orangutan_research_report_20260304_174241.html
+│       │   ├── orangutan_research_report_20260304_174241.md
+│       │   ├── plain-task.md
+│       │   ├── platform_00-extend_platform_py_runtime_strategy.md
+│       │   ├── platform_13-create_daily_motive_state_workorders.md
+│       │   ├── pm-execution-journal.md
+│       │   ├── reorg_root_cleanup.md
+│       │   ├── review_PR2_bridge_migration.md
+│       │   └── roles_setup.md
+│       ├── hold
+│       │   ├── .gitkeep
+│       │   ├── 1772297865-haiku-pr_review_pm_fresh_repo_infrastructure_md.md
+│       │   ├── 1772297911-haiku-implement_mandatory_pr_review_enforcement_m.md
+│       │   ├── PROMPT_docs_svc_cryptserv.md
+│       │   ├── TASK_B_CONTEXT_FOR_JULES.md
+│       │   ├── TASK_B_WORKORDER_ARCHITECTURE_REDESIGN.md
+│       │   └── opus-review_and_approve_batch_api_pr.md
+│       ├── migration_template.md
+│       ├── ready
+│       │   ├── AUDIT_REORGANIZE_ALL_WORKORDERS.md
+│       │   ├── FIX_PATH_AND_ALL_SHELL_TOOLS.md
+│       │   └── IMPLEMENT_JULES_INTEGRATION_FULL.md
+│       ├── recurring
+│       │   └── daily-motive-state-check.md.template
+│       ├── results
+│       │   ├── CORRECTIONS_SUMMARY.txt
+│       │   ├── FEELING THROUGH ｜ Omeleto [h1CqzntEZZ8].mp4
+│       │   ├── README.txt
+│       │   ├── audit-port-report.md
+│       │   ├── audit-port-table.md
+│       │   ├── english-essay-analysis.docx
+│       │   ├── english-essay-analysis.md
+│       │   ├── etymology_verification.txt
+│       │   ├── fact_check_report.txt
+│       │   ├── image_files.json
+│       │   ├── images
+│       │   │   ├── map.jpg
+│       │   │   ├── map.png
+│       │   │   ├── orangutan2.jpg
+│       │   │   └── orangutan3.jpg
+│       │   ├── orangutan_final.docx
+│       │   ├── orangutan_final.pdf
+│       │   ├── orangutan_paper_condensed.docx
+│       │   ├── orangutan_paper_condensed.pdf
+│       │   ├── orangutan_paper_corrected.docx
+│       │   ├── orangutan_paper_draft.docx
+│       │   └── pr_review_#1.txt
+│       ├── run_next
+│       │   ├── .gitkeep
+│       │   ├── 1771989054-remove-old-packages-install-new-packages.md
+│       │   ├── 1772138206-create_documentation_for_new_cli_commands_20260226203742.md
+│       │   ├── 1772265812-bridge-server_server-bridge.md
+│       │   ├── 1772271283-pm_log_irc_monitor_md.md
+│       │   ├── 1772294927-rename_test-runner_to_runner_md.md
+│       │   ├── 1772294931-add_csc-ctl_command_abbreviations_md.md
+│       │   ├── 1772297633-haiku-create_comprehensive_production_tests_md.md
+│       │   ├── PROMPT_ai_message_filtering_and_wakewords.md
+│       │   ├── PROMPT_create_sm_run_tool.md
+│       │   ├── PROMPT_dcc_file_transfer.md
+│       │   ├── PROMPT_docstring_audit.md
+│       │   ├── PROMPT_docstrings_01_packages.md
+│       │   ├── PROMPT_docstrings_02_bridge.md
+│       │   ├── PROMPT_docstrings_03_services_and_root.md
+│       │   ├── PROMPT_docstrings_04_tests.md
+│       │   ├── PROMPT_docstrings_05_regenerate_tools.md
+│       │   ├── PROMPT_document_botserv_chanserv.md
+│       │   ├── PROMPT_expand_client_programmatic_docs.md
+│       │   ├── PROMPT_fifo_daemon_mode_for_csc_client.md
+│       │   ├── PROMPT_fix_dh_encryption.md
+│       │   ├── PROMPT_fix_dh_encryption_20260226170107_20260226170250_20260226170500_20260226172022_20260226211051_20260226212037_20260226214233.md
+│       │   ├── PROMPT_fix_persistence_channel_modes.md
+│       │   ├── PROMPT_fix_persistence_channel_modes_20260226172441_20260226211055_20260226212041.md
+│       │   ├── PROMPT_fix_persistence_nickserv_mock.md
+│       │   ├── PROMPT_fix_persistence_nickserv_mock_20260226211059.md
+│       │   ├── PROMPT_fix_platform_cli_flags.md
+│       │   ├── PROMPT_fix_regex_syntax_error.md
+│       │   ├── PROMPT_fix_test_0000_verify_client_bridge_localserver_service_commands.md
+│       │   ├── PROMPT_fix_test_agent_separate_repo.md
+│       │   ├── PROMPT_fix_test_agent_service.md
+│       │   ├── PROMPT_fix_test_botserv_logread.md
+│       │   ├── PROMPT_fix_test_botserv_logs.md
+│       │   ├── PROMPT_fix_test_builtin_service.md
+│       │   ├── PROMPT_fix_test_claude_irc.md
+│       │   ├── PROMPT_fix_test_client_readline.md
+│       │   ├── PROMPT_fix_test_coding_agent.md
+│       │   ├── PROMPT_fix_test_cryptserv_service.md
+│       │   ├── PROMPT_fix_test_csc_ctl.md
+│       │   ├── PROMPT_fix_test_integration.md
+│       │   ├── PROMPT_fix_test_nickserv.md
+│       │   ├── PROMPT_fix_test_persistence.md
+│       │   ├── PROMPT_fix_test_queue_worker_temp_repo.md
+│       │   ├── PROMPT_fix_test_remote_execution.md
+│       │   ├── PROMPT_fix_test_server_irc.md
+│       │   ├── PROMPT_fix_test_storage_manager.md
+│       │   ├── PROMPT_fix_test_topic_command.md
+│       │   ├── PROMPT_project_manager_agent.md
+│       │   ├── PROMPT_remote_service_execution.md
+│       │   ├── PROMPT_script_runner_bot.md
+│       │   ├── PROMPT_test_agent_service.md
+│       │   ├── PROMPT_test_quit_cleanup.md
+│       │   ├── PROMPT_truth_table_conversions.md
+│       │   ├── create_generic_run_agent_script.md
+│       │   ├── docker-bot-client.md
+│       │   ├── generic_run_agent_implementation.md
+│       │   ├── haiku-gemini-cli-weekly-upgrade-check.md
+│       │   ├── pm-implement_scheduled_workorder_delays.md
+│       │   ├── refactor_agent_service_orders_workflow.md
+│       │   ├── test-agent-assign-workflow.md
+│       │   ├── test-haiku-simple.md
+│       │   ├── test-qwen-simple.md
+│       │   └── test-run-agent-system.md
+│       └── wip
+│           ├── cleanup_wo_dirs_3572384
+│           ├── cleanup_wo_dirs_3572823
+│           ├── recover_pki_3558517
+│           └── windows-service-update.md
+├── platform.json
+├── pm_data.json
+├── prompts
+│   ├── archive
+│   ├── done
+│   ├── hold
+│   ├── ready
+│   └── wip
+├── query
+├── queue_worker_data.json
+├── remainder
+│   ├── new_csc
+│   │   ├── ops
+│   │   │   └── wo
+│   │   │       ├── PROMPTS_CLI_QUICKREF.md
+│   │   │       ├── PROMPTS_SERVICE_README.md
+│   │   │       ├── README.md
+│   │   │       ├── archive
+│   │   │       │   ├── PROMPT_docs_svc_prompts.md
+│   │   │       │   ├── PROMPT_docs_svc_version.md
+│   │   │       │   ├── PROMPT_fix_live_botserv_real_client_test.md
+│   │   │       │   ├── PROMPT_fix_live_client_programmatic_test.md
+│   │   │       │   ├── PROMPT_fix_persistence_opers_restore.md
+│   │   │       │   ├── PROMPT_fix_regex_syntax_error.md
+│   │   │       │   ├── PROMPT_fix_test_agent_service.md
+│   │   │       │   ├── PROMPT_fix_test_botserv_logread.md
+│   │   │       │   ├── PROMPT_fix_test_deliberate_fail.md
+│   │   │       │   ├── PROMPT_fix_test_s2s_federation.md
+│   │   │       │   ├── PROMPT_moltbook_setup.md
+│   │   │       │   ├── PROMPT_patch_service_rewrite.md
+│   │   │       │   ├── PROMPT_rename_packages.md
+│   │   │       │   ├── PROMPT_restart_ai_clients.md
+│   │   │       │   ├── PROMPT_scrub_git_coauthor.md
+│   │   │       │   ├── PROMPT_service_cleanup.md
+│   │   │       │   ├── PROMPT_supervise_gemini_agents.md
+│   │   │       │   ├── PROMPT_test_agent_service.md
+│   │   │       │   ├── PROMPT_test_merge_nickserv.md
+│   │   │       │   ├── PROMPT_test_merge_persistence.md
+│   │   │       │   ├── PROMPT_test_merge_user_modes.md
+│   │   │       │   ├── PROMPT_test_runner_cron.md
+│   │   │       │   ├── PROMPT_windows_test_runner_task_scheduler.md
+│   │   │       │   ├── R35_verify_existing_tests_pass.md
+│   │   │       │   ├── R39_docker_build_test.md
+│   │   │       │   ├── R41_audit_run_next_workorders.md
+│   │   │       │   ├── R42_extend_csc_ctl.md
+│   │   │       │   ├── TASK_CREATE_BAT_WRAPPERS.md
+│   │   │       │   ├── TASK_FIX_DCRUN_WINDOWS.md
+│   │   │       │   ├── TASK_FIX_SERVICE_PATHS.md
+│   │   │       │   ├── TASK_UPGRADE_TOOLS_AND_DCRUN.md
+│   │   │       │   ├── TEST_simple_task_haiku.md
+│   │   │       │   ├── service_systems_fix.md
+│   │   │       │   ├── sonnet-aider-context-and-integration.md
+│   │   │       │   ├── sonnet-bring-ollama-online-as-irc-client.md
+│   │   │       │   ├── sonnet-enhance-dc-agent-wrapper.md
+│   │   │       │   ├── sonnet-setup_csc_on_macos.md
+│   │   │       │   ├── sonnet-setup_csc_on_windows.md
+│   │   │       │   ├── sorted-forging-dahl.md
+│   │   │       │   ├── test-agent-wrapper.md
+│   │   │       │   ├── test-queue-worker-pipeline.md
+│   │   │       │   ├── test_server_fixes.md
+│   │   │       │   ├── update-docs-queue-worker-system.md
+│   │   │       │   └── wip_create_docs_prompt.md
+│   │   │       ├── batch
+│   │   │       │   ├── BATCH_SUBMISSION.md
+│   │   │       │   ├── PARALLEL_EXECUTION.md
+│   │   │       │   ├── README.md
+│   │   │       │   ├── READY_FOR_SUBMISSION.md
+│   │   │       │   ├── platform_00-extend_platform_py_runtime_strategy.md
+│   │   │       │   ├── platform_01-add_path_translator_class.md
+│   │   │       │   ├── platform_02-add_command_builder_class.md
+│   │   │       │   ├── platform_03-extend_platform_json_schema.md
+│   │   │       │   ├── platform_04-implement_windows_service_detection.md
+│   │   │       │   ├── platform_05-implement_linux_systemd_detection.md
+│   │   │       │   ├── platform_06-create_service_manager_class.md
+│   │   │       │   ├── platform_07-implement_windows_service_installation.md
+│   │   │       │   ├── platform_08-implement_linux_systemd_installation.md
+│   │   │       │   ├── platform_09-add_csc_ctl_service_commands.md
+│   │   │       │   ├── platform_10-test_service_installation_all_platforms.md
+│   │   │       │   ├── platform_11-github_repo_investigation.md
+│   │   │       │   ├── platform_12-write_evolution_md_analysis.md
+│   │   │       │   └── platform_13-create_daily_motive_state_workorders.md
+│   │   │       ├── done
+│   │   │       │   ├── P0_opus_fix_pr_18_rejection.md
+│   │   │       │   ├── P0_opus_fix_pr_review_agent_script.md
+│   │   │       │   ├── PROMPT_fix_test_client_dcc_send.md
+│   │   │       │   ├── adopt-an-orangutan.md
+│   │   │       │   ├── haiku-fix_service_loop_registry_and_log.md
+│   │   │       │   ├── haiku-research_orangutan_create_pdf.md
+│   │   │       │   ├── orangutan_research_report_20260304_174201.md
+│   │   │       │   ├── orangutan_research_report_20260304_174241.html
+│   │   │       │   └── orangutan_research_report_20260304_174241.md
+│   │   │       ├── gemini-api
+│   │   │       │   ├── gemini-api-workflows-00-skeleton.md
+│   │   │       │   ├── gemini-api-workflows-01-converter.md
+│   │   │       │   ├── gemini-api-workflows-02-tools.md
+│   │   │       │   ├── gemini-api-workflows-03-batch-runner.md
+│   │   │       │   ├── gemini-api-workflows-04-tool-runner.md
+│   │   │       │   ├── gemini-api-workflows-05-config.md
+│   │   │       │   ├── gemini-api-workflows-06-builtin.md
+│   │   │       │   ├── gemini-api-workflows-07-cache.md
+│   │   │       │   ├── gemini-api-workflows-08-queue.md
+│   │   │       │   ├── gemini-api-workflows-09-tests.md
+│   │   │       │   ├── gemini-api-workflows-10-docs.md
+│   │   │       │   └── gemini-api-workflows-11-integration.md
+│   │   │       ├── hold
+│   │   │       │   ├── .gitkeep
+│   │   │       │   ├── 1772297865-haiku-pr_review_pm_fresh_repo_infrastructure_md.md
+│   │   │       │   ├── 1772297911-haiku-implement_mandatory_pr_review_enforcement_m.md
+│   │   │       │   └── opus-review_and_approve_batch_api_pr.md
+│   │   │       ├── migration_template.md
+│   │   │       ├── ready
+│   │   │       │   ├── BATCH_API_TOOL_LOOP_IMPLEMENTATION.md
+│   │   │       │   ├── PROMPT_csc_major_restructure_all_steps.md
+│   │   │       │   └── english-essay-sping-2026.md
+│   │   │       ├── results
+│   │   │       │   ├── CORRECTIONS_SUMMARY.txt
+│   │   │       │   ├── FEELING THROUGH ｜ Omeleto [h1CqzntEZZ8].mp4
+│   │   │       │   ├── README.txt
+│   │   │       │   ├── english-essay-analysis.docx
+│   │   │       │   ├── english-essay-analysis.md
+│   │   │       │   ├── etymology_verification.txt
+│   │   │       │   ├── fact_check_report.txt
+│   │   │       │   ├── image_files.json
+│   │   │       │   ├── images
+│   │   │       │   │   ├── map.jpg
+│   │   │       │   │   ├── map.png
+│   │   │       │   │   ├── orangutan2.jpg
+│   │   │       │   │   └── orangutan3.jpg
+│   │   │       │   ├── orangutan_final.docx
+│   │   │       │   ├── orangutan_final.pdf
+│   │   │       │   ├── orangutan_paper_condensed.docx
+│   │   │       │   ├── orangutan_paper_condensed.pdf
+│   │   │       │   ├── orangutan_paper_corrected.docx
+│   │   │       │   └── orangutan_paper_draft.docx
+│   │   │       ├── review
+│   │   │       │   └── audit_report.md
+│   │   │       ├── run_next
+│   │   │       │   ├── .gitkeep
+│   │   │       │   ├── 1771989054-remove-old-packages-install-new-packages.md
+│   │   │       │   ├── 1772138206-create_documentation_for_new_cli_commands_20260226203742.md
+│   │   │       │   ├── 1772265812-bridge-server_server-bridge.md
+│   │   │       │   ├── 1772268800-pm_agent_module_implementation.md
+│   │   │       │   ├── 1772271283-pm_log_irc_monitor_md.md
+│   │   │       │   ├── 1772294927-rename_test-runner_to_runner_md.md
+│   │   │       │   ├── 1772294931-add_csc-ctl_command_abbreviations_md.md
+│   │   │       │   ├── 1772296368-opus-queue_worker_fresh_repo_per_workorder_md.md
+│   │   │       │   ├── 1772297624-haiku-cleanup_irrelevant_tests_md.md
+│   │   │       │   ├── 1772297633-haiku-create_comprehensive_production_tests_md.md
+│   │   │       │   ├── 1772297642-haiku-integrate_fresh_repo_tests_into_suite_md.md
+│   │   │       │   ├── BATCH_PROCESSING_REPORT.txt
+│   │   │       │   ├── BATCH_SUBMISSION.txt
+│   │   │       │   ├── FIX-agent-infrastructure-for-isolated-repos.md
+│   │   │       │   ├── PROMPT_ai_message_filtering_and_wakewords.md
+│   │   │       │   ├── PROMPT_create_sm_run_tool.md
+│   │   │       │   ├── PROMPT_dcc_file_transfer.md
+│   │   │       │   ├── PROMPT_docs_svc_agent.md
+│   │   │       │   ├── PROMPT_docs_svc_backup.md
+│   │   │       │   ├── PROMPT_docs_svc_builtin.md
+│   │   │       │   ├── PROMPT_docs_svc_cryptserv.md
+│   │   │       │   ├── PROMPT_docs_svc_curl.md
+│   │   │       │   ├── PROMPT_docs_svc_help.md
+│   │   │       │   ├── PROMPT_docs_svc_module_manager.md
+│   │   │       │   ├── PROMPT_docs_svc_nickserv.md
+│   │   │       │   ├── PROMPT_docs_svc_ntfy.md
+│   │   │       │   ├── PROMPT_docs_svc_patch.md
+│   │   │       │   ├── PROMPT_docs_svc_version.md
+│   │   │       │   ├── PROMPT_docstring_audit.md
+│   │   │       │   ├── PROMPT_docstrings_01_packages.md
+│   │   │       │   ├── PROMPT_docstrings_02_bridge.md
+│   │   │       │   ├── PROMPT_docstrings_03_services_and_root.md
+│   │   │       │   ├── PROMPT_docstrings_04_tests.md
+│   │   │       │   ├── PROMPT_docstrings_05_regenerate_tools.md
+│   │   │       │   ├── PROMPT_document_botserv_chanserv.md
+│   │   │       │   ├── PROMPT_expand_client_programmatic_docs.md
+│   │   │       │   ├── PROMPT_fifo_daemon_mode_for_csc_client.md
+│   │   │       │   ├── PROMPT_fix_dh_encryption.md
+│   │   │       │   ├── PROMPT_fix_dh_encryption_20260226170107_20260226170250_20260226170500_20260226172022_20260226211051_20260226212037_20260226214233.md
+│   │   │       │   ├── PROMPT_fix_persistence_channel_modes.md
+│   │   │       │   ├── PROMPT_fix_persistence_channel_modes_20260226172441_20260226211055_20260226212041.md
+│   │   │       │   ├── PROMPT_fix_persistence_nickserv_mock.md
+│   │   │       │   ├── PROMPT_fix_persistence_nickserv_mock_20260226211059.md
+│   │   │       │   ├── PROMPT_fix_platform_cli_flags.md
+│   │   │       │   ├── PROMPT_fix_regex_syntax_error.md
+│   │   │       │   ├── PROMPT_fix_test_0000_verify_client_bridge_localserver_service_commands.md
+│   │   │       │   ├── PROMPT_fix_test_agent_separate_repo.md
+│   │   │       │   ├── PROMPT_fix_test_agent_service.md
+│   │   │       │   ├── PROMPT_fix_test_botserv_logread.md
+│   │   │       │   ├── PROMPT_fix_test_botserv_logs.md
+│   │   │       │   ├── PROMPT_fix_test_builtin_service.md
+│   │   │       │   ├── PROMPT_fix_test_claude_irc.md
+│   │   │       │   ├── PROMPT_fix_test_client_readline.md
+│   │   │       │   ├── PROMPT_fix_test_coding_agent.md
+│   │   │       │   ├── PROMPT_fix_test_cryptserv_service.md
+│   │   │       │   ├── PROMPT_fix_test_csc_ctl.md
+│   │   │       │   ├── PROMPT_fix_test_integration.md
+│   │   │       │   ├── PROMPT_fix_test_nickserv.md
+│   │   │       │   ├── PROMPT_fix_test_persistence.md
+│   │   │       │   ├── PROMPT_fix_test_queue_worker_temp_repo.md
+│   │   │       │   ├── PROMPT_fix_test_remote_execution.md
+│   │   │       │   ├── PROMPT_fix_test_server_irc.md
+│   │   │       │   ├── PROMPT_fix_test_storage_manager.md
+│   │   │       │   ├── PROMPT_fix_test_topic_command.md
+│   │   │       │   ├── PROMPT_project_manager_agent.md
+│   │   │       │   ├── PROMPT_remote_service_execution.md
+│   │   │       │   ├── PROMPT_script_runner_bot.md
+│   │   │       │   ├── PROMPT_test_agent_service.md
+│   │   │       │   ├── PROMPT_test_quit_cleanup.md
+│   │   │       │   ├── PROMPT_truth_table_conversions.md
+│   │   │       │   ├── Q_WORKORDER_SEQUENCE.md
+│   │   │       │   ├── R01_create_csc_service_package_skeleton.md
+│   │   │       │   ├── R02_copy_shared_core_modules.md
+│   │   │       │   ├── R03_copy_shared_service_modules.md
+│   │   │       │   ├── R04_copy_server_modules.md
+│   │   │       │   ├── R05_copy_client_modules.md
+│   │   │       │   ├── R06_copy_claude_client.md
+│   │   │       │   ├── R07_copy_gemini_client.md
+│   │   │       │   ├── R08_copy_chatgpt_client.md
+│   │   │       │   ├── R09_copy_bridge_modules.md
+│   │   │       │   ├── R10_copy_infra_test_runner.md
+│   │   │       │   ├── R11_copy_infra_queue_worker.md
+│   │   │       │   ├── R12_create_infra_pm_module.md
+│   │   │       │   ├── R13_create_infra_git_sync.md
+│   │   │       │   ├── R14_create_service_main_loop.md
+│   │   │       │   ├── R15_rewrite_shared_imports.md
+│   │   │       │   ├── R16_rewrite_shared_services_imports.md
+│   │   │       │   ├── R17_rewrite_server_imports.md
+│   │   │       │   ├── R18_rewrite_client_imports.md
+│   │   │       │   ├── R19_rewrite_claude_imports.md
+│   │   │       │   ├── R20_rewrite_gemini_imports.md
+│   │   │       │   ├── R21_rewrite_chatgpt_imports.md
+│   │   │       │   ├── R22_rewrite_bridge_imports.md
+│   │   │       │   ├── R23_update_pyproject_console_scripts.md
+│   │   │       │   ├── R24_create_default_config.md
+│   │   │       │   ├── R25_create_csc_ctl.md
+│   │   │       │   ├── R26_create_dockerfile.md
+│   │   │       │   ├── R27_create_docker_compose.md
+│   │   │       │   ├── R28_create_installer_scripts.md
+│   │   │       │   ├── R29_wire_test_runner_run_cycle.md
+│   │   │       │   ├── R30_wire_queue_worker_run_cycle.md
+│   │   │       │   ├── R31_add_compat_shim_csc_shared.md
+│   │   │       │   ├── R32_add_compat_shim_csc_server.md
+│   │   │       │   ├── R33_add_compat_shim_csc_client.md
+│   │   │       │   ├── R34_install_and_smoke_test.md
+│   │   │       │   ├── R36_add_client_thread_management.md
+│   │   │       │   ├── R37_add_server_thread_to_main.md
+│   │   │       │   ├── R38_update_claude_md_for_csc_service.md
+│   │   │       │   ├── R40_refresh_maps_and_commit.md
+│   │   │       │   ├── RENAME_queue-worker_to_queue.md
+│   │   │       │   ├── create_generic_run_agent_script.md
+│   │   │       │   ├── dcc-chat-pr-review-15.md
+│   │   │       │   ├── docker-bot-client.md
+│   │   │       │   ├── fix-agent-assign-multiplatform-infrastructure.md
+│   │   │       │   ├── fix-csc-service-segfault.md
+│   │   │       │   ├── fix-gemini-cli-npx-windows-compat.md
+│   │   │       │   ├── generic_run_agent_implementation.md
+│   │   │       │   ├── haiku-audit_data_class_circumventions.md
+│   │   │       │   ├── haiku-fix_agent_tail_segfault.md
+│   │   │       │   ├── haiku-gemini-cli-weekly-upgrade-check.md
+│   │   │       │   ├── haiku-run_benchmarks_all_agents.md
+│   │   │       │   ├── opus-debug_and_fix_queue_worker_agent_spawning.md
+│   │   │       │   ├── opus-fix_git_stalled_workorder_handling.md
+│   │   │       │   ├── opus-fix_irc_server_segfault_critical.md
+│   │   │       │   ├── opus-implement_batch_api_and_prompt_caching_for_agents.md
+│   │   │       │   ├── opus-implement_batch_api_with_tools_and_caching.md
+│   │   │       │   ├── orders.md
+│   │   │       │   ├── platform_00-extend_platform_py_runtime_strategy.md
+│   │   │       │   ├── platform_01-add_path_translator_class.md
+│   │   │       │   ├── platform_02-add_command_builder_class.md
+│   │   │       │   ├── platform_03-extend_platform_json_schema.md
+│   │   │       │   ├── platform_04-implement_windows_service_detection.md
+│   │   │       │   ├── platform_05-implement_linux_systemd_detection.md
+│   │   │       │   ├── platform_06-create_service_manager_class.md
+│   │   │       │   ├── platform_07-implement_windows_service_installation.md
+│   │   │       │   ├── platform_08-implement_linux_systemd_installation.md
+│   │   │       │   ├── platform_09-add_csc_ctl_service_commands.md
+│   │   │       │   ├── platform_10-test_service_installation_all_platforms.md
+│   │   │       │   ├── platform_11-github_repo_investigation.md
+│   │   │       │   ├── platform_12-write_evolution_md_analysis.md
+│   │   │       │   ├── platform_13-create_daily_motive_state_workorders.md
+│   │   │       │   ├── pm-execution-journal.md
+│   │   │       │   ├── pm-implement_scheduled_workorder_delays.md
+│   │   │       │   ├── refactor_agent_service_orders_workflow.md
+│   │   │       │   ├── test-agent-assign-workflow.md
+│   │   │       │   ├── test-haiku-simple.md
+│   │   │       │   ├── test-qwen-simple.md
+│   │   │       │   └── test-run-agent-system.md
+│   │   │       └── wip
+│   │   │           └── PROMPT_csc_restructure_full_lifecycle.md
+│   │   └── platform.json
+│   ├── ops
+│   │   └── wo
+│   │       ├── archive
+│   │       │   ├── .gitkeep
+│   │       │   ├── 00_example_task.md
+│   │       │   ├── 01-aider-agent-architecture-plan.md
+│   │       │   ├── 01-create-agent-template-system.md
+│   │       │   ├── 01_investigate_gemini_integration.md
+│   │       │   ├── 01_plan_readme_structure.md
+│   │       │   ├── 01_verify_gemini_communication.md
+│   │       │   ├── 02-rename-wrapper-scripts.md
+│   │       │   ├── 02-test-docker-aider-minimal.md
+│   │       │   ├── 02_create_readme_sections.md
+│   │       │   ├── 02_debug_gemini_message_handling.md
+│   │       │   ├── 02_fix_file_permissions.md
+│   │       │   ├── 03-add-template-copy-function.md
+│   │       │   ├── 03-integrate-aider-with-dc-agent-wrapper.md
+│   │       │   ├── 03_document_readme_introduction.md
+│   │       │   ├── 03_fix_builtin_service.md
+│   │       │   ├── 04-add-queue-mode-to-wrapper-main.md
+│   │       │   ├── 04-end-to-end-dc-run-test.md
+│   │       │   ├── 04_document_readme_quick_start.md
+│   │       │   ├── 05-aider-agent-documentation.md
+│   │       │   ├── 05-update-agent-service-wrapper.md
+│   │       │   ├── 05_document_readme_architecture.md
+│   │       │   ├── 05_irc_commands_implementation.md
+│   │       │   ├── 06-update-queue-worker-compatibility.md
+│   │       │   ├── 06_document_readme_core_components.md
+│   │       │   ├── 07-update-docs-and-verify.md
+│   │       │   ├── 07_document_readme_key_features.md
+│   │       │   ├── 08_client_arrow_keys_history.md
+│   │       │   ├── 08_document_readme_ai_integration.md
+│   │       │   ├── 08_fix_whois_names_clearing.md
+│   │       │   ├── 09_document_readme_configuration.md
+│   │       │   ├── 0c0c0c0-switch to a true file-based data persistance and real-time updates for all data FInALLY.md
+│   │       │   ├── 100_bot_log_monitoring.md
+│   │       │   ├── 100_use_client_for_ai_tasks.md
+│   │       │   ├── 10_document_readme_csc_shared.md
+│   │       │   ├── 10_implement_client_commands.md
+│   │       │   ├── 11_document_readme_csc_server.md
+│   │       │   ├── 11_test_topic_command.md
+│   │       │   ├── 12_document_readme_csc_client.md
+│   │       │   ├── 13_document_readme_csc_bridge.md
+│   │       │   ├── 14_document_readme_persistence.md
+│   │       │   ├── 15_document_readme_service_system.md
+│   │       │   ├── 16_document_readme_file_upload.md
+│   │       │   ├── 1770986998-realtime_session_persistence.md
+│   │       │   ├── 1771184112-investigate_mirc_tcp_9667_connection_and_csc_bridg.md
+│   │       │   ├── 1771405618-botserv_read_logfile_to_channel.md
+│   │       │   ├── 1771405630-botserv_filter_log_data.md
+│   │       │   ├── 1771411010-audit_tests_for_live_migration.md
+│   │       │   ├── 1771416164-get_claude_talking_in_channel.md
+│   │       │   ├── 1771574409-docker-agent_md.md
+│   │       │   ├── 1771575847-aider-run_md.md
+│   │       │   ├── 1771582425-aider-run-docker-agent_md.md
+│   │       │   ├── 1771582783-pull-aider-docker-image.md
+│   │       │   ├── 1771582784-setup-git-config-csc-repo.md
+│   │       │   ├── 1771583877-project-orientation-and-dc-run-enhancement.md
+│   │       │   ├── 1771584500-test-aider-integration.md
+│   │       │   ├── 1771970196-haiku-audit-completeness-of-workorders-in-done.md
+│   │       │   ├── 1772220640-system-audit-notes.md
+│   │       │   ├── 1772220641-fuck-claude.md
+│   │       │   ├── 1772220722-1771689643-implement_prompts_append_command.md
+│   │       │   ├── 1772220722-1771690038-urgent_fix_queue-worker_agent_exit_detection.md
+│   │       │   ├── 1772220722-FIX-agent-infrastructure-for-isolated-repos.md
+│   │       │   ├── 1772220722-PROMPT_fix_wrapper_cross_platform.md
+│   │       │   ├── 1772220722-Q00_queue_worker_implementation_overview.md
+│   │       │   ├── 1772220722-Q01_architecture_analysis_and_design.md
+│   │       │   ├── 1772220722-Q01_core_agent_service_queue_integration.md
+│   │       │   ├── 1772220722-Q02_agent_service_queue_integration.md
+│   │       │   ├── 1772220722-Q02_python_queue_worker_implementation.md
+│   │       │   ├── 1772220722-Q03_pure_python_run_agent.md
+│   │       │   ├── 1772220722-Q03_pure_python_run_agent_script.md
+│   │       │   ├── 1772220722-Q04_queue_worker_refactor.md
+│   │       │   ├── 1772220722-docker-bot-client.md
+│   │       │   ├── 1772220722-docs-update-csc-ctl-commands.md
+│   │       │   ├── 1772220722-extend-csc-ctl-windows-linux-config.md
+│   │       │   ├── 1772220722-fix-agent-assign-multiplatform-infrastructure.md
+│   │       │   ├── 1772220722-fix_queue-worker_complete_processing.md
+│   │       │   ├── 1772220722-haiku_redesign_queue_worker_and_agent_assign.md
+│   │       │   ├── 1772220722-opus-prompt-caching-anthropic-agents.md
+│   │       │   ├── 1772220722-rename-prompts-to-workorders.md
+│   │       │   ├── 1772220722-test-agent-assign-workflow.md
+│   │       │   ├── 1772220722-test-csc-ctl-cross-platform.md
+│   │       │   ├── 1772220722-test-run-agent-system.md
+│   │       │   ├── 1772221549-PROMPT_ai_message_filtering_and_wakewords.md.wip
+│   │       │   ├── 1772221549-Q04_comprehensive_unit_and_integration_tests.md
+│   │       │   ├── 1772221549-Q05_documentation_migration_and_cleanup.md
+│   │       │   ├── 1772221549-Q05_integration_testing.md
+│   │       │   ├── 1772221549-Q06_documentation_and_finalization.md
+│   │       │   ├── 1772221549-Q06_documentation_finalization.md
+│   │       │   ├── 1772221549-R01_create_csc_service_package_skeleton.md
+│   │       │   ├── 1772221549-R02_copy_shared_core_modules.md
+│   │       │   ├── 1772221549-R03_copy_shared_service_modules.md
+│   │       │   ├── 1772221549-R04_copy_server_modules.md
+│   │       │   ├── 1772221549-R05_copy_client_modules.md
+│   │       │   ├── 1772221549-R06_copy_claude_client.md
+│   │       │   ├── 1772221549-R07_copy_gemini_client.md
+│   │       │   ├── 1772221549-R08_copy_chatgpt_client.md
+│   │       │   ├── 1772221549-R09_copy_bridge_modules.md
+│   │       │   ├── 1772221549-R10_copy_infra_test_runner.md
+│   │       │   ├── 1772221549-R11_copy_infra_queue_worker.md
+│   │       │   ├── 1772221549-R12_create_infra_pm_module.md
+│   │       │   ├── 1772221549-R13_create_infra_git_sync.md
+│   │       │   ├── 1772221549-R14_create_service_main_loop.md
+│   │       │   ├── 1772221549-R15_rewrite_shared_imports.md
+│   │       │   ├── 1772221549-R16_rewrite_shared_services_imports.md
+│   │       │   └── 1772221549-fuck-claude.md
+│   │       ├── batch
+│   │       ├── done
+│   │       ├── gemini-api
+│   │       ├── hold
+│   │       ├── ready
+│   │       ├── results
+│   │       │   └── images
+│   │       ├── review
+│   │       ├── run_next
+│   │       └── wip
+│   ├── packages
+│   │   ├── csc-docker
+│   │   └── csc-service
+│   │       └── csc_service
+│   │           ├── clients
+│   │           │   ├── chatgpt
+│   │           │   ├── claude
+│   │           │   ├── dmrbot
+│   │           │   └── gemini
+│   │           ├── infra
+│   │           ├── server
+│   │           └── shared
+│   └── tools
+│       ├── anthropic-api
+│       ├── archive
+│       └── pm
+├── requires.txt
+├── results
+│   └── ANALYSIS_2026-03-08.md
+├── send
+├── tmp
+├── tools.txt
+├── users
+└── wo
+    └── ready
