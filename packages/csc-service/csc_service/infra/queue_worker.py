@@ -942,7 +942,7 @@ def spawn_agent(agent_name, prompt_filename, agent_repo=None):
             proc = subprocess.Popen(
                 cmd, cwd=spawn_cwd,
                 stdin=None, stdout=log_fh, stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                creationflags=subprocess.CREATE_NO_WINDOW,
                 env=child_env
             )
         else:
