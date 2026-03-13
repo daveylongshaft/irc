@@ -23,6 +23,8 @@ import fnmatch
 import os
 import time
 
+from csc_service.shared.config_loader import load_config
+
 
 class ServerData:
     """All IRC-specific file-backed persistence.  Pure mixin, no parent."""
@@ -130,13 +132,13 @@ class ServerData:
                     pass
         return ok
 
-    def _atomic_read(self, filepath):
+    def _atomic_read(self, filepath, schema_name):
         """Read a JSON file safely via Data._read_json_file."""
         from pathlib import Path as _Path
         p = _Path(filepath)
         if not p.exists():
             return None
-        data = self._read_json_file(p)
+        data = load_config(p, schema_name)
         if not data and p.exists() and p.stat().st_size > 10:
             self._quarantine(filepath)
             return None
@@ -194,7 +196,7 @@ class ServerData:
 
     def _load_opers(self):
         """Load opers.json, migrating v1->v2 if needed."""
-        data = self._read_json_file(self._opers_path())
+        data = self._atomic_read(self._opers_path(), "opers")
         if not data:
             return dict(self.DEFAULTS["opers"])
         if data.get("version", 1) < 2:
@@ -347,7 +349,7 @@ class ServerData:
     # ==================================================================
 
     def _load_channels_from_disk(self):
-        data = self._atomic_read(self._file_path("channels"))
+        data = self._atomic_read(self._file_path("channels"), "channels")
         if data is None:
             return dict(self.DEFAULTS["channels"])
         return data
@@ -386,7 +388,7 @@ class ServerData:
     # ==================================================================
 
     def load_users(self):
-        data = self._atomic_read(self._file_path("users"))
+        data = self._atomic_read(self._file_path("users"), "users")
         if data is None:
             return dict(self.DEFAULTS["users"])
         return data
@@ -441,7 +443,7 @@ class ServerData:
     # ==================================================================
 
     def load_bans(self):
-        data = self._atomic_read(self._file_path("bans"))
+        data = self._atomic_read(self._file_path("bans"), "bans")
         if data is None:
             return dict(self.DEFAULTS["bans"])
         return data
@@ -463,7 +465,7 @@ class ServerData:
     # ==================================================================
 
     def load_history(self):
-        data = self._atomic_read(self._file_path("history"))
+        data = self._atomic_read(self._file_path("history"), "history")
         if data is None:
             return dict(self.DEFAULTS["history"])
         return data
@@ -507,7 +509,7 @@ class ServerData:
     # ==================================================================
 
     def load_nickserv(self):
-        data = self._atomic_read(self._file_path("nickserv"))
+        data = self._atomic_read(self._file_path("nickserv"), "nickserv")
         if data is None:
             return dict(self.DEFAULTS["nickserv"])
         return data
@@ -551,7 +553,7 @@ class ServerData:
     # ==================================================================
 
     def load_chanserv(self):
-        data = self._atomic_read(self._file_path("chanserv"))
+        data = self._atomic_read(self._file_path("chanserv"), "chanserv")
         if data is None:
             return dict(self.DEFAULTS["chanserv"])
         return data
@@ -599,7 +601,7 @@ class ServerData:
     # ==================================================================
 
     def load_botserv(self):
-        data = self._atomic_read(self._file_path("botserv"))
+        data = self._atomic_read(self._file_path("botserv"), "botserv")
         if data is None:
             return dict(self.DEFAULTS["botserv"])
         return data
@@ -645,7 +647,7 @@ class ServerData:
     # ==================================================================
 
     def load_settings(self):
-        data = self._atomic_read(self._file_path("settings"))
+        data = self._atomic_read(self._file_path("settings"), "settings")
         if data is None:
             return dict(self.DEFAULTS["settings"])
         return data
