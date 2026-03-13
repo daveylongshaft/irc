@@ -1368,17 +1368,25 @@ def main():
     if len(sys.argv) > 1:
         arg = sys.argv[1]
         if arg == "--daemon":
-            log("Daemon mode - event-driven (Ctrl+C to stop)")
+            log("Daemon mode - event-driven with smart backpressure (Ctrl+C to stop)")
             try:
+                idle_cycles = 0  # Track consecutive idle cycles
                 while True:
                     had_work = run_cycle(work_dir_arg=work_dir)
+
                     if had_work:
-                        # Work was processed -> immediately cycle again
-                        log("Work completed, cycling immediately...")
-                        continue
+                        # Work was done -> reset idle counter and cycle again immediately
+                        idle_cycles = 0
+                        # Tight loop continues
                     else:
-                        # Idle -> poll with delay
-                        time.sleep(60)
+                        # No work found
+                        idle_cycles += 1
+                        if idle_cycles >= 3:
+                            # 3+ idle cycles -> fall back to 60s polling
+                            log(f"Idle for {idle_cycles} cycles, polling in 60s...")
+                            time.sleep(60)
+                            idle_cycles = 0
+                        # else: keep cycling fast for a few attempts
             except KeyboardInterrupt:
                 log("Stopped")
         elif arg == "--setup-scheduler":
