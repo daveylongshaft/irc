@@ -62,6 +62,9 @@ ERR_ALREADYREGISTRED = "462"
 ERR_PASSWDMISMATCH = "464"
 ERR_CHANOPRIVSNEEDED = "482"
 
+# Custom / non-standard or missing from base RFC
+ERR_UNKNOWNERROR = '400'  # Custom: generic error for try/except blocks
+
 
 # ---------------------------------------------------------------------------
 # IRCMessage dataclass

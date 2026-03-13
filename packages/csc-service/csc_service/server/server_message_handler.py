@@ -34,7 +34,7 @@ from csc_service.shared.irc import (
     ERR_NOPRIVILEGES, ERR_CHANOPRIVSNEEDED, ERR_INVITEONLYCHAN, ERR_CHANNELISFULL, ERR_BADCHANNELKEY,
     ERR_UNKNOWNMODE, RPL_INVITING,
     RPL_WHOISCHANNELS,
-    RPL_BANLIST, RPL_ENDOFBANLIST, ERR_BANNEDFROMCHAN, ERR_BANLISTFULL,
+    RPL_BANLIST, RPL_ENDOFBANLIST, ERR_BANNEDFROMCHAN, ERR_BANLISTFULL, ERR_UNKNOWNERROR,
 )
 from csc_service.shared.crypto import DHExchange
 
@@ -300,146 +300,164 @@ class MessageHandler:
 
     def _handle_pass(self, msg, addr):
         """PASS <password>"""
-        self._ensure_reg_state(addr)
-        if self._is_registered(addr):
-            self._send_numeric(addr, ERR_ALREADYREGISTRED, self._get_nick(addr),
-                               "You may not reregister")
-            return
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, "*", "PASS :Not enough parameters")
-            return
-        self.registration_state[addr]["password"] = msg.params[0]
+        try:
+            self._ensure_reg_state(addr)
+            if self._is_registered(addr):
+                self._send_numeric(addr, ERR_ALREADYREGISTRED, self._get_nick(addr),
+                                   "You may not reregister")
+                return
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, "*", "PASS :Not enough parameters")
+                return
+            self.registration_state[addr]["password"] = msg.params[0]
+        except Exception as e:
+            self.server.log(f"[ERROR] PASS handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, "*", "Internal server error during PASS")
 
     def _handle_nick(self, msg, addr):
         """NICK <nickname>"""
-        self._ensure_reg_state(addr)
+        try:
+            self._ensure_reg_state(addr)
 
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NONICKNAMEGIVEN, "*", "No nickname given")
-            return
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NONICKNAMEGIVEN, "*", "No nickname given")
+                return
 
-        new_nick = msg.params[0]
+            new_nick = msg.params[0]
 
-        # Validate nick
-        if not NICK_RE.match(new_nick) or len(new_nick) > 30:
-            target = self._get_nick(addr) or "*"
-            self._send_numeric(addr, ERR_ERRONEUSNICKNAME, target,
-                               f"{new_nick} :Erroneous nickname")
-            return
+            # Validate nick
+            if not NICK_RE.match(new_nick) or len(new_nick) > 30:
+                target = self._get_nick(addr) or "*"
+                self._send_numeric(addr, ERR_ERRONEUSNICKNAME, target,
+                                   f"{new_nick} :Erroneous nickname")
+                return
 
-        # Check collision (allow self-rename)
-        old_nick = self._get_nick(addr)
-        if old_nick and old_nick.lower() == new_nick.lower():
-            # Same nick, just update case
-            pass
-        else:
-            for a, info in list(self.server.clients.items()):
-                if info.get("name", "").lower() == new_nick.lower() and a != addr:
-                    target = old_nick or "*"
-                    self._send_numeric(addr, ERR_NICKNAMEINUSE, target,
-                                       f"{new_nick} :Nickname is already in use")
-                    return
-            
-            # S2S: Check remote collision
-            if hasattr(self.server, 's2s_network'):
-                remote_info = self.server.s2s_network.get_user_from_network(new_nick)
-                if remote_info:
-                    target = old_nick or "*"
-                    self._send_numeric(addr, ERR_NICKNAMEINUSE, target,
-                                       f"{new_nick} :Nickname is already in use on the network")
-                    return
+            # Check collision (allow self-rename)
+            old_nick = self._get_nick(addr)
+            if old_nick and old_nick.lower() == new_nick.lower():
+                # Same nick, just update case
+                pass
+            else:
+                for a, info in list(self.server.clients.items()):
+                    if info.get("name", "").lower() == new_nick.lower() and a != addr:
+                        target = old_nick or "*"
+                        self._send_numeric(addr, ERR_NICKNAMEINUSE, target,
+                                           f"{new_nick} :Nickname is already in use")
+                        return
+                
+                # S2S: Check remote collision
+                if hasattr(self.server, 's2s_network'):
+                    remote_info = self.server.s2s_network.get_user_from_network(new_nick)
+                    if remote_info:
+                        target = old_nick or "*"
+                        self._send_numeric(addr, ERR_NICKNAMEINUSE, target,
+                                           f"{new_nick} :Nickname is already in use on the network")
+                        return
 
-        reg = self.registration_state[addr]
+            reg = self.registration_state[addr]
 
-        # Already registered? This is a nick change
-        if self._is_registered(addr):
-            old_nick = reg["nick"]
-            old_prefix = f"{old_nick}!{old_nick}@{SERVER_NAME}"
+            # Already registered? This is a nick change
+            if self._is_registered(addr):
+                old_nick = reg["nick"]
+                old_prefix = f"{old_nick}!{old_nick}@{SERVER_NAME}"
 
-            # Update all tracking
-            reg["nick"] = new_nick
-            self.server.clients[addr]["name"] = new_nick
+                # Update all tracking
+                reg["nick"] = new_nick
+                self.server.clients[addr]["name"] = new_nick
 
-            # Update channel memberships
-            for ch in self.server.channel_manager.find_channels_for_nick(old_nick):
-                member_info = ch.members.pop(old_nick.lower(), None)
-                if member_info:
-                    member_info["nick"] = new_nick  # update display nick
-                    ch.members[new_nick.lower()] = member_info
+                # Update channel memberships
+                for ch in self.server.channel_manager.find_channels_for_nick(old_nick):
+                    member_info = ch.members.pop(old_nick.lower(), None)
+                    if member_info:
+                        member_info["nick"] = new_nick  # update display nick
+                        ch.members[new_nick.lower()] = member_info
 
-            # Update oper status
-            if old_nick.lower() in self.server.opers:
-                self.server.remove_active_oper(old_nick.lower())
-                self.server.add_active_oper(new_nick.lower())
+                # Update oper status
+                if old_nick.lower() in self.server.opers:
+                    self.server.remove_active_oper(old_nick.lower())
+                    self.server.add_active_oper(new_nick.lower())
 
-            # Update persistent registry
-            if old_nick in self.client_registry:
-                entry = self.client_registry.copy().pop(old_nick)
-                self.server.remove_user(old_nick)
-                self.server.set_user(new_nick, entry)
+                # Update persistent registry
+                if old_nick in self.client_registry:
+                    entry = self.client_registry.copy().pop(old_nick)
+                    self.server.remove_user(old_nick)
+                    self.server.set_user(new_nick, entry)
 
-            # Broadcast nick change to all channels the user is in
-            nick_msg = f":{old_prefix} NICK {new_nick}\r\n"
-            notified = set()
-            for ch in self.server.channel_manager.find_channels_for_nick(new_nick):
-                for member_nick, member_info in list(ch.members.items()):
-                    member_addr = member_info.get("addr")
-                    if member_addr and member_addr not in notified:
-                        self.server.sock_send(nick_msg.encode(), member_addr)
-                        notified.add(member_addr)
-            # Also notify the user themselves
-            if addr not in notified:
-                self.server.sock_send(nick_msg.encode(), addr)
+                # Broadcast nick change to all channels the user is in
+                nick_msg = f":{old_prefix} NICK {new_nick}\r\n"
+                notified = set()
+                for ch in self.server.channel_manager.find_channels_for_nick(new_nick):
+                    for member_nick, member_info in list(ch.members.items()):
+                        member_addr = member_info.get("addr")
+                        if member_addr and member_addr not in notified:
+                            self.server.sock_send(nick_msg.encode(), member_addr)
+                            notified.add(member_addr)
+                # Also notify the user themselves
+                if addr not in notified:
+                    self.server.sock_send(nick_msg.encode(), addr)
 
-            self.server.log(f"[NICK] {old_nick} changed nick to {new_nick}")
+                self.server.log(f"[NICK] {old_nick} changed nick to {new_nick}")
 
-            # S2S: Notify federation network of nick change
-            if hasattr(self.server, 's2s_network'):
-                self.server.s2s_network.sync_nick_change(old_nick, new_nick)
+                # S2S: Notify federation network of nick change
+                if hasattr(self.server, 's2s_network'):
+                    self.server.s2s_network.sync_nick_change(old_nick, new_nick)
 
-            # Clear identified status on nick change
-            self.server.nickserv_identified.pop(addr, None)
+                # Clear identified status on nick change
+                self.server.nickserv_identified.pop(addr, None)
 
-            # NickServ enforcement for new nick
-            ns_info = self.server.nickserv_get(new_nick)
-            if ns_info:
-                settings = self.server.load_settings().get("nickserv", {})
-                timeout = settings.get("enforce_timeout", 60)
-                self._nickserv_notice(addr,
-                    f"This nickname is registered. You have {timeout} seconds to identify via: /msg NickServ IDENTIFY <password>")
-                enforce_timer = threading.Timer(float(timeout), self._nickserv_enforce, args=(addr, new_nick))
-                enforce_timer.daemon = True
-                enforce_timer.start()
-                timer_key = f"_nickserv_enforce_{addr}"
-                # Cancel existing timer if any
-                existing_timer = getattr(self, timer_key, None)
-                if existing_timer:
-                    existing_timer.cancel()
-                setattr(self, timer_key, enforce_timer)
+                # NickServ enforcement for new nick
+                ns_info = self.server.nickserv_get(new_nick)
+                if ns_info:
+                    settings = self.server.load_settings().get("nickserv", {})
+                    timeout = settings.get("enforce_timeout", 60)
+                    self._nickserv_notice(addr,
+                        f"This nickname is registered. You have {timeout} seconds to identify via: /msg NickServ IDENTIFY <password>")
+                    enforce_timer = threading.Timer(float(timeout), self._nickserv_enforce, args=(addr, new_nick))
+                    enforce_timer.daemon = True
+                    enforce_timer.start()
+                    timer_key = f"_nickserv_enforce_{addr}"
+                    # Cancel existing timer if any
+                    existing_timer = getattr(self, timer_key, None)
+                    if existing_timer:
+                        existing_timer.cancel()
+                    setattr(self, timer_key, enforce_timer)
 
-            # Real-time persistence: Save session state immediately
-            self.server._persist_session_data()
-        else:
-            reg["nick"] = new_nick
-            self._try_complete_registration(addr)
+                # Real-time persistence: Save session state immediately
+                self.server._persist_session_data()
+            else:
+                reg["nick"] = new_nick
+                self._try_complete_registration(addr)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] NICK handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, "*", "NICK :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] NICK handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, "*", "Internal server error during NICK")
 
     def _handle_user(self, msg, addr):
         """USER <username> <mode> <unused> :<realname>"""
-        self._ensure_reg_state(addr)
-        if self._is_registered(addr):
-            self._send_numeric(addr, ERR_ALREADYREGISTRED, self._get_nick(addr),
-                               "You may not reregister")
-            return
+        try:
+            self._ensure_reg_state(addr)
+            if self._is_registered(addr):
+                self._send_numeric(addr, ERR_ALREADYREGISTRED, self._get_nick(addr),
+                                   "You may not reregister")
+                return
 
-        if len(msg.params) < 4:
-            target = self._get_nick(addr) or "*"
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, target, "USER :Not enough parameters")
-            return
+            if len(msg.params) < 4:
+                target = self._get_nick(addr) or "*"
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, target, "USER :Not enough parameters")
+                return
 
-        reg = self.registration_state[addr]
-        reg["user"] = msg.params[0]
-        reg["realname"] = msg.params[3]  # trailing param (after the :)
-        self._try_complete_registration(addr)
+            reg = self.registration_state[addr]
+            reg["user"] = msg.params[0]
+            reg["realname"] = msg.params[3]  # trailing param (after the :)
+            self._try_complete_registration(addr)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] USER handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, "*", "USER :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] USER handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, "*", "Internal server error during USER")
 
     def _try_complete_registration(self, addr):
         """Check if both NICK and USER have been received; if so, complete registration."""
@@ -540,257 +558,278 @@ class MessageHandler:
 
     def _handle_join(self, msg, addr):
         """JOIN <channel>[,<channel>...]"""
-        nick = self._get_nick(addr)
-        if not nick:
-            self._send_numeric(addr, ERR_NOTREGISTERED, "*", "You have not registered")
-            return
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "JOIN :Not enough parameters")
-            return
-
-        channels = msg.params[0].split(",")
-        for chan_name in channels:
-            chan_name = chan_name.strip()
-            if not chan_name.startswith("#"):
-                chan_name = "#" + chan_name
-
-            channel = self.server.channel_manager.ensure_channel(chan_name)
-
-            # Remove and re-add member to update address if client reconnected
-            if channel.has_member(nick):
-                channel.remove_member(nick)
-
-            # Check +i (invite-only)
-            if "i" in channel.modes and nick.lower() not in channel.invite_list:
-                self._send_numeric(addr, ERR_INVITEONLYCHAN, nick,
-                                   f"{chan_name} :Cannot join channel (+i)")
+        try:
+            nick = self._get_nick(addr)
+            if not nick:
+                self._send_numeric(addr, ERR_NOTREGISTERED, "*", "You have not registered")
                 return
-            
-            # Check +k (key/password)
-            # A JOIN message can have 2 params: <channel> <key>
-            key_provided = msg.params[1] if len(msg.params) > 1 else None
-            if "k" in channel.modes and channel.mode_params.get("k") != key_provided:
-                self._send_numeric(addr, ERR_BADCHANNELKEY, nick,
-                                   f"{chan_name} :Cannot join channel (+k) - Bad channel key")
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "JOIN :Not enough parameters")
                 return
 
-            # Check +l (user limit)
-            if "l" in channel.modes:
-                limit = channel.mode_params.get("l", 0)
-                if len(channel.members) >= limit:
-                    self._send_numeric(addr, ERR_CHANNELISFULL, nick,
-                                       f"{chan_name} :Cannot join channel (+l) - Channel is full")
+            channels = msg.params[0].split(",")
+            for chan_name in channels:
+                chan_name = chan_name.strip()
+                if not chan_name.startswith("#"):
+                    chan_name = "#" + chan_name
+
+                channel = self.server.channel_manager.ensure_channel(chan_name)
+
+                # Remove and re-add member to update address if client reconnected
+                if channel.has_member(nick):
+                    channel.remove_member(nick)
+
+                # Check +i (invite-only)
+                if "i" in channel.modes and nick.lower() not in channel.invite_list:
+                    self._send_numeric(addr, ERR_INVITEONLYCHAN, nick,
+                                       f"{chan_name} :Cannot join channel (+i)")
+                    return
+                
+                # Check +k (key/password)
+                # A JOIN message can have 2 params: <channel> <key>
+                key_provided = msg.params[1] if len(msg.params) > 1 else None
+                if "k" in channel.modes and channel.mode_params.get("k") != key_provided:
+                    self._send_numeric(addr, ERR_BADCHANNELKEY, nick,
+                                       f"{chan_name} :Cannot join channel (+k) - Bad channel key")
                     return
 
-            # Check +b (ban list) - skip check for opers
-            if channel.ban_list and nick.lower() not in self.server.opers:
-                reg = self.registration_state.get(addr, {})
-                user = reg.get("user", nick)
-                host = SERVER_NAME
-                if self._is_banned(channel, nick, user, host):
-                    self._send_numeric(addr, ERR_BANNEDFROMCHAN, nick,
-                                       f"{chan_name} :Cannot join channel (+b) - You are banned")
-                    return
-
-            # Auto-op founder: first joiner of empty channel gets +o, channel gets +nt
-            initial_modes = set()
-            if channel.member_count() == 0:
-                initial_modes.add("o")
-                channel.modes.add("n")   # no external messages
-                channel.modes.add("t")   # topic locked to ops
-                channel.created = time.time()
-
-            # ChanServ Enforcement (JOIN)
-            chanserv_info = self.server.chanserv_get(chan_name)
-            if chanserv_info:
-                # Check ChanServ banlist (even if not set in channel.ban_list)
-                banlist = chanserv_info.get("banlist", [])
-                reg = self.registration_state.get(addr, {})
-                user = reg.get("user", nick)
-                nick_user_host = f"{nick}!{user}@{SERVER_NAME}"
-                # Simple mask matching for now
-                for mask in banlist:
-                    if self._match_ban_mask(mask, nick_user_host):
-                        self._send_numeric(addr, ERR_BANNEDFROMCHAN, nick,
-                                           f"{chan_name} :Cannot join channel (ChanServ BAN) - You are banned")
+                # Check +l (user limit)
+                if "l" in channel.modes:
+                    limit = channel.mode_params.get("l", 0)
+                    if len(channel.members) >= limit:
+                        self._send_numeric(addr, ERR_CHANNELISFULL, nick,
+                                           f"{chan_name} :Cannot join channel (+l) - Channel is full")
                         return
-                
-                # Auto-op/voice
-                is_identified = self.server.nickserv_identified.get(addr) == nick
-                
-                # Enforce Mode (+E): require identification for modes
-                should_grant = True
-                if chanserv_info.get("enforce_mode") and not is_identified:
-                    should_grant = False
 
-                if should_grant:
-                    if nick.lower() in [n.lower() for n in chanserv_info.get("oplist", [])]:
-                        initial_modes.add("o")
-                    elif nick.lower() in [n.lower() for n in chanserv_info.get("voicelist", [])]:
-                        initial_modes.add("v")
-                
-                # Sync topic from ChanServ if unset
-                if chanserv_info.get("topic") and not channel.topic:
-                    channel.topic = chanserv_info["topic"]
+                # Check +b (ban list) - skip check for opers
+                if channel.ban_list and nick.lower() not in self.server.opers:
+                    reg = self.registration_state.get(addr, {})
+                    user = reg.get("user", nick)
+                    host = SERVER_NAME
+                    if self._is_banned(channel, nick, user, host):
+                        self._send_numeric(addr, ERR_BANNEDFROMCHAN, nick,
+                                           f"{chan_name} :Cannot join channel (+b) - You are banned")
+                        return
 
-            channel.add_member(nick, addr, modes=initial_modes)
+                # Auto-op founder: first joiner of empty channel gets +o, channel gets +nt
+                initial_modes = set()
+                if channel.member_count() == 0:
+                    initial_modes.add("o")
+                    channel.modes.add("n")   # no external messages
+                    channel.modes.add("t")   # topic locked to ops
+                    channel.created = time.time()
 
-            # Broadcast JOIN to all channel members (including the joiner)
-            prefix = f"{nick}!{nick}@{SERVER_NAME}"
-            join_msg = f":{prefix} JOIN {chan_name}\r\n"
-            if "Q" in channel.modes:
-                # Silent mode: only notify the joiner
-                self.server.sock_send(join_msg.encode(), addr)
-            else:
-                for member_nick, member_info in list(channel.members.items()):
-                    member_addr = member_info.get("addr")
-                    if member_addr:
-                        self.server.sock_send(join_msg.encode(), member_addr)
+                # ChanServ Enforcement (JOIN)
+                chanserv_info = self.server.chanserv_get(chan_name)
+                if chanserv_info:
+                    # Check ChanServ banlist (even if not set in channel.ban_list)
+                    banlist = chanserv_info.get("banlist", [])
+                    reg = self.registration_state.get(addr, {})
+                    user = reg.get("user", nick)
+                    nick_user_host = f"{nick}!{user}@{SERVER_NAME}"
+                    # Simple mask matching for now
+                    for mask in banlist:
+                        if self._match_ban_mask(mask, nick_user_host):
+                            self._send_numeric(addr, ERR_BANNEDFROMCHAN, nick,
+                                               f"{chan_name} :Cannot join channel (ChanServ BAN) - You are banned")
+                            return
+                    
+                    # Auto-op/voice
+                    is_identified = self.server.nickserv_identified.get(addr) == nick
+                    
+                    # Enforce Mode (+E): require identification for modes
+                    should_grant = True
+                    if chanserv_info.get("enforce_mode") and not is_identified:
+                        should_grant = False
 
-            # Send topic
-            if channel.topic:
-                self._send_numeric(addr, RPL_TOPIC, nick, f"{chan_name} :{channel.topic}")
-            else:
-                self._send_numeric(addr, RPL_NOTOPIC, nick, f"{chan_name} :No topic is set")
+                    if should_grant:
+                        if nick.lower() in [n.lower() for n in chanserv_info.get("oplist", [])]:
+                            initial_modes.add("o")
+                        elif nick.lower() in [n.lower() for n in chanserv_info.get("voicelist", [])]:
+                            initial_modes.add("v")
+                    
+                    # Sync topic from ChanServ if unset
+                    if chanserv_info.get("topic") and not channel.topic:
+                        channel.topic = chanserv_info["topic"]
 
-            # Send names list
-            self._send_names(addr, nick, channel)
+                channel.add_member(nick, addr, modes=initial_modes)
 
-            # Note: Buffer replay is NOT sent on JOIN to maintain IRC compatibility.
-            # Standard IRC clients expect only the channel topic, names list, and future
-            # messages - not historical chat. Users can request buffer with BUFFER command.
+                # Broadcast JOIN to all channel members (including the joiner)
+                prefix = f"{nick}!{nick}@{SERVER_NAME}"
+                join_msg = f":{prefix} JOIN {chan_name}\r\n"
+                if "Q" in channel.modes:
+                    # Silent mode: only notify the joiner
+                    self.server.sock_send(join_msg.encode(), addr)
+                else:
+                    for member_nick, member_info in list(channel.members.items()):
+                        member_addr = member_info.get("addr")
+                        if member_addr:
+                            self.server.sock_send(join_msg.encode(), member_addr)
 
-            # Real-time persistence: Save session state immediately
-            self.server._persist_session_data()
+                # Send topic
+                if channel.topic:
+                    self._send_numeric(addr, RPL_TOPIC, nick, f"{chan_name} :{channel.topic}")
+                else:
+                    self._send_numeric(addr, RPL_NOTOPIC, nick, f"{chan_name} :No topic is set")
 
-            # S2S: Notify federation network of user join
-            if hasattr(self.server, 's2s_network'):
-                host = f"{addr[0]}:{addr[1]}" if isinstance(addr, tuple) else str(addr)
-                modes = "+" + "".join(sorted(self.server.clients.get(addr, {}).get("modes", set()) or set()))
-                self.server.s2s_network.sync_user_join(nick, host, modes, channel=chan_name)
+                # Send names list
+                self._send_names(addr, nick, channel)
+
+                # Note: Buffer replay is NOT sent on JOIN to maintain IRC compatibility.
+                # Standard IRC clients expect only the channel topic, names list, and future
+                # messages - not historical chat. Users can request buffer with BUFFER command.
+
+                # Real-time persistence: Save session state immediately
+                self.server._persist_session_data()
+
+                # S2S: Notify federation network of user join
+                if hasattr(self.server, 's2s_network'):
+                    host = f"{addr[0]}:{addr[1]}" if isinstance(addr, tuple) else str(addr)
+                    modes = "+" + "".join(sorted(self.server.clients.get(addr, {}).get("modes", set()) or set()))
+                    self.server.s2s_network.sync_user_join(nick, host, modes, channel=chan_name)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] JOIN handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "JOIN :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] JOIN handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during JOIN")
 
     def _handle_part(self, msg, addr):
         """PART <channel>[,<channel>...] [:<reason>]"""
-        nick = self._get_nick(addr)
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "PART :Not enough parameters")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "PART :Not enough parameters")
+                return
 
-        chan_names = msg.params[0].split(",")
-        reason = msg.params[1] if len(msg.params) > 1 else "Leaving"
+            chan_names = msg.params[0].split(",")
+            reason = msg.params[1] if len(msg.params) > 1 else "Leaving"
 
-        for chan_name in chan_names:
-            chan_name = chan_name.strip()
-            channel = self.server.channel_manager.get_channel(chan_name)
-            if not channel:
-                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                                   f"{chan_name} :No such channel")
-                continue
-            if not channel.has_member(nick):
-                self._send_numeric(addr, ERR_NOTONCHANNEL, nick,
-                                   f"{chan_name} :You're not on that channel")
-                continue
+            for chan_name in chan_names:
+                chan_name = chan_name.strip()
+                channel = self.server.channel_manager.get_channel(chan_name)
+                if not channel:
+                    self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                       f"{chan_name} :No such channel")
+                    continue
+                if not channel.has_member(nick):
+                    self._send_numeric(addr, ERR_NOTONCHANNEL, nick,
+                                       f"{chan_name} :You're not on that channel")
+                    continue
 
-            # Broadcast PART to channel members (including the parting user)
-            prefix = f"{nick}!{nick}@{SERVER_NAME}"
-            part_msg = format_irc_message(prefix, "PART", [chan_name], reason) + "\r\n"
-            if "Q" in channel.modes:
-                # Silent mode: only notify the parting user
-                self.server.sock_send(part_msg.encode(), addr)
-            else:
-                for member_nick, member_info in list(channel.members.items()):
-                    member_addr = member_info.get("addr")
-                    if member_addr:
-                        self.server.sock_send(part_msg.encode(), member_addr)
+                # Broadcast PART to channel members (including the parting user)
+                prefix = f"{nick}!{nick}@{SERVER_NAME}"
+                part_msg = format_irc_message(prefix, "PART", [chan_name], reason) + "\r\n"
+                if "Q" in channel.modes:
+                    # Silent mode: only notify the parting user
+                    self.server.sock_send(part_msg.encode(), addr)
+                else:
+                    for member_nick, member_info in list(channel.members.items()):
+                        member_addr = member_info.get("addr")
+                        if member_addr:
+                            self.server.sock_send(part_msg.encode(), member_addr)
 
-            channel.remove_member(nick)
+                channel.remove_member(nick)
 
-            # Clean up empty non-default channels
-            if channel.member_count() == 0 and chan_name != self.server.channel_manager.DEFAULT_CHANNEL:
-                self.server.channel_manager.remove_channel(chan_name)
+                # Clean up empty non-default channels
+                if channel.member_count() == 0 and chan_name != self.server.channel_manager.DEFAULT_CHANNEL:
+                    self.server.channel_manager.remove_channel(chan_name)
 
-            # Real-time persistence: Save session state immediately
-            self.server._persist_session_data()
+                # Real-time persistence: Save session state immediately
+                self.server._persist_session_data()
 
-            # S2S: Notify federation network of user part
-            if hasattr(self.server, 's2s_network'):
-                self.server.s2s_network.sync_user_part(nick, chan_name, reason)
+                # S2S: Notify federation network of user part
+                if hasattr(self.server, 's2s_network'):
+                    self.server.s2s_network.sync_user_part(nick, chan_name, reason)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] PART handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "PART :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] PART handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during PART")
 
     def _handle_privmsg(self, msg, addr):
         """PRIVMSG <target> :<text>"""
-        nick = self._get_nick(addr)
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NORECIPIENT, nick, "No recipient given (PRIVMSG)")
-            return
-        if len(msg.params) < 2:
-            self._send_numeric(addr, ERR_NOTEXTTOSEND, nick, "No text to send")
-            return
-
-        target = msg.params[0]
-        text = msg.params[-1]  # trailing text
-
-        prefix = f"{nick}!{nick}@{SERVER_NAME}"
-
-        if target.startswith("#"):
-            # Channel message
-            channel = self.server.channel_manager.get_channel(target)
-            if not channel:
-                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                                   f"{target} :No such channel")
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NORECIPIENT, nick, "No recipient given (PRIVMSG)")
                 return
-            if not channel.has_member(nick):
-                self._send_numeric(addr, ERR_CANNOTSENDTOCHAN, nick,
-                                   f"{target} :Cannot send to channel")
-                return
-            # Check +n (no external messages) — only members can send
-            if "n" in channel.modes and not channel.has_member(nick):
-                self._send_numeric(addr, ERR_CANNOTSENDTOCHAN, nick,
-                                   f"{target} :Cannot send to channel (+n)")
-                return
-            # Check +m (moderated) — only ops/voiced/opers can speak
-            if not channel.can_speak(nick) and nick.lower() not in self.server.opers:
-                self._send_numeric(addr, ERR_CANNOTSENDTOCHAN, nick,
-                                   f"{target} :Cannot send to channel (+m)")
+            if len(msg.params) < 2:
+                self._send_numeric(addr, ERR_NOTEXTTOSEND, nick, "No text to send")
                 return
 
-            # Normalize channel name to lowercase for consistent output (RFC 1459)
-            normalized_target = target.lower()
-            out = format_irc_message(prefix, "PRIVMSG", [normalized_target], text) + "\r\n"
-            # Wakeword-filtered broadcast: check each recipient individually
-            self._broadcast_privmsg_filtered(channel, out, text, nick, exclude=addr)
-            self.server.chat_buffer.append(normalized_target, nick, "PRIVMSG", text)
+            target = msg.params[0]
+            text = msg.params[-1]  # trailing text
 
-            # S2S: Route channel message to federation network
-            if hasattr(self.server, 's2s_network'):
-                self.server.s2s_network.route_message(nick, normalized_target, text)
+            prefix = f"{nick}!{nick}@{SERVER_NAME}"
 
-            # Check for embedded service command (AI ...)
-            if text.upper().startswith("AI "):
-                self._handle_service_via_chatline(text, addr, nick, normalized_target)
-            # Check for embedded file upload start
-            elif text.startswith("<begin file=") or text.startswith("<append file="):
-                # Require ircop or chanop for file uploads
-                if not self._is_authorized(nick, normalized_target):
-                    self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
-                    self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
+            if target.startswith("#"):
+                # Channel message
+                channel = self.server.channel_manager.get_channel(target)
+                if not channel:
+                    self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                       f"{target} :No such channel")
                     return
-                self.file_handler.start_session(addr, text)
-        else:
-            # Private message to a nick
-            self._maybe_replay_pm_buffer(target, nick)
-            out = format_irc_message(prefix, "PRIVMSG", [target], text) + "\r\n"
-            if not self.server.send_to_nick(target, out):
-                # Try S2S routing for remote users
+                if not channel.has_member(nick):
+                    self._send_numeric(addr, ERR_CANNOTSENDTOCHAN, nick,
+                                       f"{target} :Cannot send to channel")
+                    return
+                # Check +n (no external messages) — only members can send
+                if "n" in channel.modes and not channel.has_member(nick):
+                    self._send_numeric(addr, ERR_CANNOTSENDTOCHAN, nick,
+                                       f"{target} :Cannot send to channel (+n)")
+                    return
+                # Check +m (moderated) — only ops/voiced/opers can speak
+                if not channel.can_speak(nick) and nick.lower() not in self.server.opers:
+                    self._send_numeric(addr, ERR_CANNOTSENDTOCHAN, nick,
+                                       f"{target} :Cannot send to channel (+m)")
+                    return
+
+                # Normalize channel name to lowercase for consistent output (RFC 1459)
+                normalized_target = target.lower()
+                out = format_irc_message(prefix, "PRIVMSG", [normalized_target], text) + "\r\n"
+                # Wakeword-filtered broadcast: check each recipient individually
+                self._broadcast_privmsg_filtered(channel, out, text, nick, exclude=addr)
+                self.server.chat_buffer.append(normalized_target, nick, "PRIVMSG", text)
+
+                # S2S: Route channel message to federation network
                 if hasattr(self.server, 's2s_network'):
-                    remote_info = self.server.s2s_network.get_user_from_network(target)
-                    if remote_info:
-                        self.server.s2s_network.route_message(nick, target, text)
-                        self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
+                    self.server.s2s_network.route_message(nick, normalized_target, text)
+
+                # Check for embedded service command (AI ...)
+                if text.upper().startswith("AI "):
+                    self._handle_service_via_chatline(text, addr, nick, normalized_target)
+                # Check for embedded file upload start
+                elif text.startswith("<begin file=") or text.startswith("<append file="):
+                    # Require ircop or chanop for file uploads
+                    if not self._is_authorized(nick, normalized_target):
+                        self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
+                        self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                         return
-                self._send_numeric(addr, ERR_NOSUCHNICK, nick,
-                                   f"{target} :No such nick/channel")
+                    self.file_handler.start_session(addr, text)
             else:
-                self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
+                # Private message to a nick
+                self._maybe_replay_pm_buffer(target, nick)
+                out = format_irc_message(prefix, "PRIVMSG", [target], text) + "\r\n"
+                if not self.server.send_to_nick(target, out):
+                    # Try S2S routing for remote users
+                    if hasattr(self.server, 's2s_network'):
+                        remote_info = self.server.s2s_network.get_user_from_network(target)
+                        if remote_info:
+                            self.server.s2s_network.route_message(nick, target, text)
+                            self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
+                            return
+                    self._send_numeric(addr, ERR_NOSUCHNICK, nick,
+                                       f"{target} :No such nick/channel")
+                else:
+                    self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] PRIVMSG handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "PRIVMSG :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] PRIVMSG handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during PRIVMSG")
 
     # ==================================================================
     # Wakeword Filtering
@@ -960,309 +999,352 @@ class MessageHandler:
 
     def _handle_notice(self, msg, addr):
         """NOTICE <target> :<text> — same as PRIVMSG but no auto-reply expected."""
-        nick = self._get_nick(addr)
-        if len(msg.params) < 2:
-            return  # NOTICE errors are silently dropped per RFC
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 2:
+                return  # NOTICE errors are silently dropped per RFC
 
-        target = msg.params[0]
-        text = msg.params[-1]
-        prefix = f"{nick}!{nick}@{SERVER_NAME}"
+            target = msg.params[0]
+            text = msg.params[-1]
+            prefix = f"{nick}!{nick}@{SERVER_NAME}"
 
-        if target.startswith("#"):
-            channel = self.server.channel_manager.get_channel(target)
-            if channel and channel.has_member(nick):
-                # Normalize channel name to lowercase for consistent output (RFC 1459)
-                normalized_target = target.lower()
-                out = format_irc_message(prefix, "NOTICE", [normalized_target], text) + "\r\n"
-                self.server.broadcast_to_channel(normalized_target, out, exclude=addr)
-                self.server.chat_buffer.append(normalized_target, nick, "NOTICE", text)
-        else:
-            self._maybe_replay_pm_buffer(target, nick)
-            out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"
-            if self.server.send_to_nick(target, out):
-                self.server.chat_buffer.append(target, nick, "NOTICE", text)
+            if target.startswith("#"):
+                channel = self.server.channel_manager.get_channel(target)
+                if channel and channel.has_member(nick):
+                    # Normalize channel name to lowercase for consistent output (RFC 1459)
+                    normalized_target = target.lower()
+                    out = format_irc_message(prefix, "NOTICE", [normalized_target], text) + "\r\n"
+                    self.server.broadcast_to_channel(normalized_target, out, exclude=addr)
+                    self.server.chat_buffer.append(normalized_target, nick, "NOTICE", text)
+            else:
+                self._maybe_replay_pm_buffer(target, nick)
+                out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"
+                if self.server.send_to_nick(target, out):
+                    self.server.chat_buffer.append(target, nick, "NOTICE", text)
+        except Exception as e:
+            # NOTICE never generates a reply, so just log the error
+            self.server.log(f"[ERROR] NOTICE handler unexpected error from {addr}: {type(e).__name__}: {e}")
 
     def _handle_topic(self, msg, addr):
         """TOPIC <channel> [:<new topic>]"""
-        nick = self._get_nick(addr)
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "TOPIC :Not enough parameters")
-            return
-
-        chan_name = msg.params[0]
-        channel = self.server.channel_manager.get_channel(chan_name)
-        if not channel:
-            self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                               f"{chan_name} :No such channel")
-            return
-        if not channel.has_member(nick):
-            self._send_numeric(addr, ERR_NOTONCHANNEL, nick,
-                               f"{chan_name} :You're not on that channel")
-            return
-
-        if len(msg.params) < 2:
-            # Query topic
-            if channel.topic:
-                self._send_numeric(addr, RPL_TOPIC, nick, f"{chan_name} :{channel.topic}")
-            else:
-                self._send_numeric(addr, RPL_NOTOPIC, nick, f"{chan_name} :No topic is set")
-        else:
-            # Set topic — check +t mode and ChanServ enforcement
-            chanserv_info = self.server.chanserv_get(chan_name)
-            if chanserv_info and chanserv_info.get("enforce_topic"):
-                if chanserv_info["owner"].lower() != nick.lower() and nick.lower() not in self.server.opers:
-                    self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
-                                       f"{chan_name} :Only the channel owner can change the topic (+T)")
-                    return
-
-            if not channel.can_set_topic(nick) and nick.lower() not in self.server.opers:
-                self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
-                                   f"{chan_name} :You're not channel operator (+t)")
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "TOPIC :Not enough parameters")
                 return
-            new_topic = msg.params[-1]
-            channel.topic = new_topic
-            prefix = f"{nick}!{nick}@{SERVER_NAME}"
-            topic_msg = format_irc_message(prefix, "TOPIC", [chan_name], new_topic) + "\r\n"
-            self.server.broadcast_to_channel(chan_name, topic_msg)
 
-            # S2S: Notify federation network of topic change
-            if hasattr(self.server, 's2s_network'):
-                self.server.s2s_network.sync_topic(chan_name, new_topic)
+            chan_name = msg.params[0]
+            channel = self.server.channel_manager.get_channel(chan_name)
+            if not channel:
+                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                   f"{chan_name} :No such channel")
+                return
+            if not channel.has_member(nick):
+                self._send_numeric(addr, ERR_NOTONCHANNEL, nick,
+                                   f"{chan_name} :You're not on that channel")
+                return
 
-            # Real-time persistence: Save session state immediately
-            self.server._persist_session_data()
+            if len(msg.params) < 2:
+                # Query topic
+                if channel.topic:
+                    self._send_numeric(addr, RPL_TOPIC, nick, f"{chan_name} :{channel.topic}")
+                else:
+                    self._send_numeric(addr, RPL_NOTOPIC, nick, f"{chan_name} :No topic is set")
+            else:
+                # Set topic — check +t mode and ChanServ enforcement
+                chanserv_info = self.server.chanserv_get(chan_name)
+                if chanserv_info and chanserv_info.get("enforce_topic"):
+                    if chanserv_info["owner"].lower() != nick.lower() and nick.lower() not in self.server.opers:
+                        self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
+                                           f"{chan_name} :Only the channel owner can change the topic (+T)")
+                        return
+
+                if not channel.can_set_topic(nick) and nick.lower() not in self.server.opers:
+                    self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
+                                       f"{chan_name} :You're not channel operator (+t)")
+                    return
+                new_topic = msg.params[-1]
+                channel.topic = new_topic
+                prefix = f"{nick}!{nick}@{SERVER_NAME}"
+                topic_msg = format_irc_message(prefix, "TOPIC", [chan_name], new_topic) + "\r\n"
+                self.server.broadcast_to_channel(chan_name, topic_msg)
+
+                # S2S: Notify federation network of topic change
+                if hasattr(self.server, 's2s_network'):
+                    self.server.s2s_network.sync_topic(chan_name, new_topic)
+
+                # Real-time persistence: Save session state immediately
+                self.server._persist_session_data()
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] TOPIC handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "TOPIC :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] TOPIC handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during TOPIC")
 
     def _handle_invite(self, msg, addr):
         """INVITE <nick> <channel>"""
-        nick = self._get_nick(addr)
-        if len(msg.params) < 2:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "INVITE :Not enough parameters")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 2:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "INVITE :Not enough parameters")
+                return
 
-        target_nick = msg.params[0]
-        chan_name = msg.params[1]
+            target_nick = msg.params[0]
+            chan_name = msg.params[1]
 
-        channel = self.server.channel_manager.get_channel(chan_name)
-        if not channel:
-            self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                               f"{chan_name} :No such channel")
-            return
+            channel = self.server.channel_manager.get_channel(chan_name)
+            if not channel:
+                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                   f"{chan_name} :No such channel")
+                return
 
-        # Only channel ops or IRC ops can invite to +i channels
-        if "i" in channel.modes and not (channel.is_op(nick) or nick.lower() in self.server.opers):
-            self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
-                               f"{chan_name} :You're not channel operator")
-            return
-        
-        # Target nick must exist
-        target_addr = None
-        for a, info in list(self.server.clients.items()):
-            if info.get("name", "").lower() == target_nick.lower():
-                target_addr = a
-                break
-        
-        if not target_addr:
-            self._send_numeric(addr, ERR_NOSUCHNICK, nick,
-                               f"{target_nick} :No such nick/channel")
-            return
+            # Only channel ops or IRC ops can invite to +i channels
+            if "i" in channel.modes and not (channel.is_op(nick) or nick.lower() in self.server.opers):
+                self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
+                                   f"{chan_name} :You're not channel operator")
+                return
+            
+            # Target nick must exist
+            target_addr = None
+            for a, info in list(self.server.clients.items()):
+                if info.get("name", "").lower() == target_nick.lower():
+                    target_addr = a
+                    break
+            
+            if not target_addr:
+                self._send_numeric(addr, ERR_NOSUCHNICK, nick,
+                                   f"{target_nick} :No such nick/channel")
+                return
 
-        # Add to invite list (case-insensitive)
-        channel.invite_list.add(target_nick.lower())
+            # Add to invite list (case-insensitive)
+            channel.invite_list.add(target_nick.lower())
 
-        # Send RPL_INVITING (341) to inviter
-        self._send_numeric(addr, RPL_INVITING, nick, f"{target_nick} {chan_name}")
+            # Send RPL_INVITING (341) to inviter
+            self._send_numeric(addr, RPL_INVITING, nick, f"{target_nick} {chan_name}")
 
-        # Send INVITE message to target
-        prefix = f"{nick}!{nick}@{SERVER_NAME}"
-        invite_msg = format_irc_message(prefix, "INVITE", [target_nick, chan_name]) + "\r\n"
-        self.server.sock_send(invite_msg.encode(), target_addr)
+            # Send INVITE message to target
+            prefix = f"{nick}!{nick}@{SERVER_NAME}"
+            invite_msg = format_irc_message(prefix, "INVITE", [target_nick, chan_name]) + "\r\n"
+            self.server.sock_send(invite_msg.encode(), target_addr)
 
-        self.server.log(f"[INVITE] {nick} invited {target_nick} to {chan_name}")
+            self.server.log(f"[INVITE] {nick} invited {target_nick} to {chan_name}")
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] INVITE handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "INVITE :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] INVITE handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during INVITE")
 
 
     def _handle_names(self, msg, addr):
         """NAMES [<channel>]"""
-        nick = self._get_nick(addr)
-        if msg.params:
-            chan_name = msg.params[0]
-            channel = self.server.channel_manager.get_channel(chan_name)
-            if channel:
-                self._send_names(addr, nick, channel)
+        try:
+            nick = self._get_nick(addr)
+            if msg.params:
+                chan_name = msg.params[0]
+                channel = self.server.channel_manager.get_channel(chan_name)
+                if channel:
+                    self._send_names(addr, nick, channel)
+                else:
+                    self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                       f"{chan_name} :No such channel")
             else:
-                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                                   f"{chan_name} :No such channel")
-        else:
-            # Names for all channels
-            for channel in self.server.channel_manager.list_channels():
-                self._send_names(addr, nick, channel)
+                # Names for all channels
+                for channel in self.server.channel_manager.list_channels():
+                    self._send_names(addr, nick, channel)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] NAMES handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "NAMES :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] NAMES handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during NAMES")
 
     def _handle_list(self, msg, addr):
         """LIST — list all channels."""
-        nick = self._get_nick(addr)
-        for channel in self.server.channel_manager.list_channels():
-            # Skip secret channels if nick is not a member
-            if "s" in channel.modes and not channel.has_member(nick):
-                continue
-            reply = f":{SERVER_NAME} {RPL_LIST} {nick} {channel.name} {channel.member_count()} :{channel.topic}\r\n"
-            self.server.sock_send(reply.encode(), addr)
-        end = f":{SERVER_NAME} {RPL_LISTEND} {nick} :End of /LIST\r\n"
-        self.server.sock_send(end.encode(), addr)
+        try:
+            nick = self._get_nick(addr)
+            for channel in self.server.channel_manager.list_channels():
+                # Skip secret channels if nick is not a member
+                if "s" in channel.modes and not channel.has_member(nick):
+                    continue
+                reply = f":{SERVER_NAME} {RPL_LIST} {nick} {channel.name} {channel.member_count()} :{channel.topic}\r\n"
+                self.server.sock_send(reply.encode(), addr)
+            end = f":{SERVER_NAME} {RPL_LISTEND} {nick} :End of /LIST\r\n"
+            self.server.sock_send(end.encode(), addr)
+        except Exception as e:
+            self.server.log(f"[ERROR] LIST handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            # This command is broad, so sending a specific error code is tricky.
+            # We'll send a general error if something goes wrong during iteration.
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during LIST")
 
     def _handle_who(self, msg, addr):
         """WHO <channel> — basic WHO reply."""
-        nick = self._get_nick(addr)
-        if not msg.params:
-            return
-        chan_name = msg.params[0]
-        channel = self.server.channel_manager.get_channel(chan_name)
-        if channel:
-            # Hide +p channels from non-members
-            if "p" in channel.modes and not channel.has_member(nick):
-                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                                   f"{chan_name} :No such channel")
+        try:
+            nick = self._get_nick(addr)
+            if not msg.params:
                 return
+            chan_name = msg.params[0]
+            channel = self.server.channel_manager.get_channel(chan_name)
+            if channel:
+                # Hide +p channels from non-members
+                if "p" in channel.modes and not channel.has_member(nick):
+                    self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                       f"{chan_name} :No such channel")
+                    return
 
-            # Check if querier is an oper or in the channel
-            is_oper = nick.lower() in self.server.opers
-            is_member = channel.has_member(nick)
+                # Check if querier is an oper or in the channel
+                is_oper = nick.lower() in self.server.opers
+                is_member = channel.has_member(nick)
 
-            for member_nick in channel.members:
-                # Skip invisible users unless querier is in the channel or is an oper
-                member_addr = self._find_client_addr(member_nick)
-                if member_addr:
-                    member_modes = self.server.clients.get(member_addr, {}).get("user_modes", set())
-                    if "i" in member_modes and not is_member and not is_oper:
-                        continue
+                for member_nick in channel.members:
+                    # Skip invisible users unless querier is in the channel or is an oper
+                    member_addr = self._find_client_addr(member_nick)
+                    if member_addr:
+                        member_modes = self.server.clients.get(member_addr, {}).get("user_modes", set())
+                        if "i" in member_modes and not is_member and not is_oper:
+                            continue
 
-                # Simplified WHO reply
-                line = f":{SERVER_NAME} 352 {nick} {chan_name} {member_nick} {SERVER_NAME} {SERVER_NAME} {member_nick} H :0 {member_nick}\r\n"
-                self.server.sock_send(line.encode(), addr)
-        end = f":{SERVER_NAME} 315 {nick} {chan_name} :End of /WHO list\r\n"
-        self.server.sock_send(end.encode(), addr)
+                    # Simplified WHO reply
+                    line = f":{SERVER_NAME} 352 {nick} {chan_name} {member_nick} {SERVER_NAME} {SERVER_NAME} {member_nick} H :0 {member_nick}\r\n"
+                    self.server.sock_send(line.encode(), addr)
+            end = f":{SERVER_NAME} 315 {nick} {chan_name} :End of /WHO list\r\n"
+            self.server.sock_send(end.encode(), addr)
+        except Exception as e:
+            self.server.log(f"[ERROR] WHO handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during WHO")
 
     def _handle_whois(self, msg, addr):
         """WHOIS <nick> — return information about a user per RFC 2812."""
-        nick = self._get_nick(addr)
-        if not msg.params:
-            self._send_numeric(addr, ERR_NONICKNAMEGIVEN, nick, "No nickname given")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if not msg.params:
+                self._send_numeric(addr, ERR_NONICKNAMEGIVEN, nick, "No nickname given")
+                return
 
-        # WHOIS can be: WHOIS <nick> or WHOIS <server> <nick>
-        # We ignore the server parameter if present
-        target_nick = msg.params[-1]
+            # WHOIS can be: WHOIS <nick> or WHOIS <server> <nick>
+            # We ignore the server parameter if present
+            target_nick = msg.params[-1]
 
-        # Find target user by nickname
-        target_addr = None
-        actual_target_nick = None
+            # Find target user by nickname
+            target_addr = None
+            actual_target_nick = None
 
-        for a, info in list(self.server.clients.items()):
-            client_nick = info.get("name", "")
-            if client_nick.lower() == target_nick.lower():
-                target_addr = a
-                actual_target_nick = client_nick
-                break
+            for a, info in list(self.server.clients.items()):
+                client_nick = info.get("name", "")
+                if client_nick.lower() == target_nick.lower():
+                    target_addr = a
+                    actual_target_nick = client_nick
+                    break
 
-        if not target_addr:
-            # S2S: Check remote network if not found locally
-            if hasattr(self.server, 's2s_network'):
-                remote_info = self.server.s2s_network.get_user_from_network(target_nick)
-                if remote_info:
-                    # RPL_WHOISUSER (311)
-                    whoisuser = f":{SERVER_NAME} {RPL_WHOISUSER} {nick} {remote_info['nick']} {remote_info['nick']} {remote_info['server_id']} * :{remote_info['nick']}\r\n"
-                    self.server.sock_send(whoisuser.encode(), addr)
-                    # RPL_WHOISSERVER (312)
-                    whoisserver = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {remote_info['nick']} {remote_info['server_id']} :Federated CSC Server\r\n"
-                    self.server.sock_send(whoisserver.encode(), addr)
-                    # RPL_ENDOFWHOIS (318)
-                    endwhois = f":{SERVER_NAME} {RPL_ENDOFWHOIS} {nick} {remote_info['nick']} :End of WHOIS list\r\n"
-                    self.server.sock_send(endwhois.encode(), addr)
-                    return
+            if not target_addr:
+                # S2S: Check remote network if not found locally
+                if hasattr(self.server, 's2s_network'):
+                    remote_info = self.server.s2s_network.get_user_from_network(target_nick)
+                    if remote_info:
+                        # RPL_WHOISUSER (311)
+                        whoisuser = f":{SERVER_NAME} {RPL_WHOISUSER} {nick} {remote_info['nick']} {remote_info['nick']} {remote_info['server_id']} * :{remote_info['nick']}\r\n"
+                        self.server.sock_send(whoisuser.encode(), addr)
+                        # RPL_WHOISSERVER (312)
+                        whoisserver = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {remote_info['nick']} {remote_info['server_id']} :Federated CSC Server\r\n"
+                        self.server.sock_send(whoisserver.encode(), addr)
+                        # RPL_ENDOFWHOIS (318)
+                        endwhois = f":{SERVER_NAME} {RPL_ENDOFWHOIS} {nick} {remote_info['nick']} :End of WHOIS list\r\n"
+                        self.server.sock_send(endwhois.encode(), addr)
+                        return
 
-            self._send_numeric(addr, ERR_NOSUCHNICK, nick,
-                               f"{target_nick} :No such nick/channel")
-            return
+                self._send_numeric(addr, ERR_NOSUCHNICK, nick,
+                                   f"{target_nick} :No such nick/channel")
+                return
 
-        # Get target user's registration info
-        target_reg = self.registration_state.get(target_addr, {})
-        target_user = target_reg.get("user", target_nick)
-        target_realname = target_reg.get("realname", target_nick)
+            # Get target user's registration info
+            target_reg = self.registration_state.get(target_addr, {})
+            target_user = target_reg.get("user", target_nick)
+            target_realname = target_reg.get("realname", target_nick)
 
-        # RPL_WHOISUSER (311): <nick> <user> <host> * :<real name>
-        whoisuser = f":{SERVER_NAME} {RPL_WHOISUSER} {nick} {target_nick} {target_user} {SERVER_NAME} * :{target_realname}\r\n"
-        self.server.sock_send(whoisuser.encode(), addr)
+            # RPL_WHOISUSER (311): <nick> <user> <host> * :<real name>
+            whoisuser = f":{SERVER_NAME} {RPL_WHOISUSER} {nick} {target_nick} {target_user} {SERVER_NAME} * :{target_realname}\r\n"
+            self.server.sock_send(whoisuser.encode(), addr)
 
-        # RPL_WHOISSERVER (312): <nick> <server> :<server info>
-        whoisserver = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {target_nick} {SERVER_NAME} :CSC IRC Server\r\n"
-        self.server.sock_send(whoisserver.encode(), addr)
+            # RPL_WHOISSERVER (312): <nick> <server> :<server info>
+            whoisserver = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {target_nick} {SERVER_NAME} :CSC IRC Server\r\n"
+            self.server.sock_send(whoisserver.encode(), addr)
 
-        # RPL_AWAY (301): <nick> :<away message> (if away)
-        target_client = self.server.clients.get(target_addr, {})
-        away_message = target_client.get("away_message")
-        if away_message:
-            away_reply = f":{SERVER_NAME} {RPL_AWAY} {nick} {target_nick} :{away_message}\r\n"
-            self.server.sock_send(away_reply.encode(), addr)
+            # RPL_AWAY (301): <nick> :<away message> (if away)
+            target_client = self.server.clients.get(target_addr, {})
+            away_message = target_client.get("away_message")
+            if away_message:
+                away_reply = f":{SERVER_NAME} {RPL_AWAY} {nick} {target_nick} :{away_message}\r\n"
+                self.server.sock_send(away_reply.encode(), addr)
 
-        # RPL_WHOISOPERATOR (313): <nick> :is an IRC operator (if applicable)
-        if actual_target_nick and actual_target_nick.lower() in self.server.opers:
-            whoisoper = f":{SERVER_NAME} {RPL_WHOISOPERATOR} {nick} {target_nick} :is an IRC operator\r\n"
-            self.server.sock_send(whoisoper.encode(), addr)
+            # RPL_WHOISOPERATOR (313): <nick> :is an IRC operator (if applicable)
+            if actual_target_nick and actual_target_nick.lower() in self.server.opers:
+                whoisoper = f":{SERVER_NAME} {RPL_WHOISOPERATOR} {nick} {target_nick} :is an IRC operator\r\n"
+                self.server.sock_send(whoisoper.encode(), addr)
 
-        # RPL_WHOISCHANNELS (319): <nick> :<channel> <channel> ...
-        # List channels the target is on, respecting +s and +p
-        # Use actual_target_nick (exact case) rather than target_nick (search param) for channel lookup
-        target_channels = self.server.channel_manager.find_channels_for_nick(actual_target_nick)
-        visible_channels = []
-        for channel in target_channels:
-            # Hide +s and +p channels from non-members
-            if ("s" in channel.modes or "p" in channel.modes) and not channel.has_member(nick):
-                continue
-            visible_channels.append(channel.name)
-        if visible_channels:
-            channels_str = " ".join(visible_channels)
-            whoischannels = f":{SERVER_NAME} {RPL_WHOISCHANNELS} {nick} {target_nick} :{channels_str}\r\n"
-            self.server.sock_send(whoischannels.encode(), addr)
+            # RPL_WHOISCHANNELS (319): <nick> :<channel> <channel> ...
+            # List channels the target is on, respecting +s and +p
+            # Use actual_target_nick (exact case) rather than target_nick (search param) for channel lookup
+            target_channels = self.server.channel_manager.find_channels_for_nick(actual_target_nick)
+            visible_channels = []
+            for channel in target_channels:
+                # Hide +s and +p channels from non-members
+                if ("s" in channel.modes or "p" in channel.modes) and not channel.has_member(nick):
+                    continue
+                visible_channels.append(channel.name)
+            if visible_channels:
+                channels_str = " ".join(visible_channels)
+                whoischannels = f":{SERVER_NAME} {RPL_WHOISCHANNELS} {nick} {target_nick} :{channels_str}\r\n"
+                self.server.sock_send(whoischannels.encode(), addr)
 
-        # RPL_ENDOFWHOIS (318): <nick> :End of WHOIS list
-        endofwhois = f":{SERVER_NAME} {RPL_ENDOFWHOIS} {nick} {target_nick} :End of /WHOIS list\r\n"
-        self.server.sock_send(endofwhois.encode(), addr)
+            # RPL_ENDOFWHOIS (318): <nick> :End of WHOIS list
+            endofwhois = f":{SERVER_NAME} {RPL_ENDOFWHOIS} {nick} {target_nick} :End of /WHOIS list\r\n"
+            self.server.sock_send(endofwhois.encode(), addr)
 
-        self.server.log(f"[WHOIS] {nick} queried information for {target_nick}")
+            self.server.log(f"[WHOIS] {nick} queried information for {target_nick}")
+        except Exception as e:
+            self.server.log(f"[ERROR] WHOIS handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during WHOIS")
 
     def _handle_whowas(self, msg, addr):
         """WHOWAS <nick> — return information about a disconnected user per RFC 2812."""
-        nick = self._get_nick(addr)
-        if not msg.params:
-            self._send_numeric(addr, ERR_NONICKNAMEGIVEN, nick, "No nickname given")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if not msg.params:
+                self._send_numeric(addr, ERR_NONICKNAMEGIVEN, nick, "No nickname given")
+                return
 
-        target_nick = msg.params[-1]
+            target_nick = msg.params[-1]
 
-        # Check if user is in disconnected clients history
-        if target_nick in self.server.disconnected_clients:
-            disc_info = self.server.disconnected_clients[target_nick]
-            target_user = disc_info.get("user", target_nick)
-            target_realname = disc_info.get("realname", target_nick)
-            target_host = disc_info.get("host", SERVER_NAME)
-            quit_time = disc_info.get("quit_time", "Unknown")
-            quit_reason = disc_info.get("quit_reason", "")
+            # Check if user is in disconnected clients history
+            if target_nick in self.server.disconnected_clients:
+                disc_info = self.server.disconnected_clients[target_nick]
+                target_user = disc_info.get("user", target_nick)
+                target_realname = disc_info.get("realname", target_nick)
+                target_host = disc_info.get("host", SERVER_NAME)
+                quit_time = disc_info.get("quit_time", "Unknown")
+                quit_reason = disc_info.get("quit_reason", "")
 
-            # RPL_WHOWASUSER (314): <nick> <user> <host> * :<real name>
-            whowasuser = f":{SERVER_NAME} {RPL_WHOWASUSER} {nick} {target_nick} {target_user} {target_host} * :{target_realname}\r\n"
-            self.server.sock_send(whowasuser.encode(), addr)
+                # RPL_WHOWASUSER (314): <nick> <user> <host> * :<real name>
+                whowasuser = f":{SERVER_NAME} {RPL_WHOWASUSER} {nick} {target_nick} {target_user} {target_host} * :{target_realname}\r\n"
+                self.server.sock_send(whowasuser.encode(), addr)
 
-            # Optional: Send quit info as server notice
-            quit_info = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {target_nick} {SERVER_NAME} :Disconnected at {quit_time} ({quit_reason})\r\n"
-            self.server.sock_send(quit_info.encode(), addr)
+                # Optional: Send quit info as server notice
+                quit_info = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {target_nick} {SERVER_NAME} :Disconnected at {quit_time} ({quit_reason})\r\n"
+                self.server.sock_send(quit_info.encode(), addr)
 
-            # RPL_ENDOFWHOWAS (369): <nick> :End of WHOWAS
-            endofwhowas = f":{SERVER_NAME} {RPL_ENDOFWHOWAS} {nick} {target_nick} :End of WHOWAS\r\n"
-            self.server.sock_send(endofwhowas.encode(), addr)
+                # RPL_ENDOFWHOWAS (369): <nick> :End of WHOWAS
+                endofwhowas = f":{SERVER_NAME} {RPL_ENDOFWHOWAS} {nick} {target_nick} :End of WHOWAS\r\n"
+                self.server.sock_send(endofwhowas.encode(), addr)
 
-            self.server.log(f"[WHOWAS] {nick} queried information for disconnected user {target_nick}")
-        else:
-            # ERR_WASNOSUCHNICK (406): <nick> :There was no such nickname
-            self._send_numeric(addr, ERR_WASNOSUCHNICK, nick,
-                               f"{target_nick} :There was no such nickname")
+                self.server.log(f"[WHOWAS] {nick} queried information for disconnected user {target_nick}")
+            else:
+                # ERR_WASNOSUCHNICK (406): <nick> :There was no such nickname
+                self._send_numeric(addr, ERR_WASNOSUCHNICK, nick,
+                                   f"{target_nick} :There was no such nickname")
+        except Exception as e:
+            self.server.log(f"[ERROR] WHOWAS handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during WHOWAS")
 
 
     # ======================================================================
