@@ -1039,7 +1039,8 @@ def _build_agent_cmd(agent_name, orders_path, clone_path):
             elif script.suffix == ".sh":
                 cmd = ["bash", str(script), str(orders_path)]
             elif script.suffix == ".bat":
-                cmd = [str(script), str(orders_path)]
+                # Use cmd.exe /c to run batch files hidden (without explicit command, subprocess spawns visible window)
+                cmd = ["cmd.exe", "/c", str(script), str(orders_path)]
             else:
                 cmd = ["bash", str(script), str(orders_path)]
             log(f"Using agent-specific script: {script}")
