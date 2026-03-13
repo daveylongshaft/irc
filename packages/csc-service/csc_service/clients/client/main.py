@@ -20,6 +20,10 @@ from csc_service.clients.client.client import Client
 
 
 def main():
+    # Patch subprocess to auto-hide windows on Windows (before any subprocess calls)
+    from ...shared.subprocess_wrapper import patch_subprocess
+    patch_subprocess()
+
     parser = argparse.ArgumentParser(description="CSC IRC Client")
     parser.add_argument("config", nargs="?", help="Path to config file")
     parser.add_argument("--infile", help="Read commands from file or FIFO instead of stdin")
