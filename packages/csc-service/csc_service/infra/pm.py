@@ -50,14 +50,24 @@ jules: Jules = None
 # Agent roster and assignment policy
 # ---------------------------------------------------------------------------
 AGENTS = [
+    {"name": "claude", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
+    {"name": "codex", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
+    {"name": "gemini", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
     {"name": "gemini-2.5-flash", "role": "docs-and-tests",
      "good_for": ["docs", "test-fix", "validation"]},
     {"name": "gemini-2.5-pro", "role": "code",
      "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "pr-reviewer", "audit"]},
-    {"name": "sonnet", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
+    {"name": "haiku", "role": "code",
+     "good_for": ["feature", "simple-fix", "test-fix", "validation"]},
+    {"name": "jules", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
     {"name": "opus", "role": "debug",
-     "good_for": ["debug", "push-fail"]},
+     "good_for": ["debug", "push-fail", "audit"]},
+    {"name": "sonnet", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
 ]
 
 # All agent names the PM is allowed to assign to
@@ -65,8 +75,13 @@ VALID_AGENTS = {a["name"] for a in AGENTS}
 
 # Escalation path: current_agent -> next_agent
 ESCALATION = {
+    "haiku": "claude",
+    "claude": "sonnet",
+    "codex": "sonnet",
+    "gemini": "gemini-2.5-pro",
     "gemini-2.5-flash": "gemini-2.5-pro",
     "gemini-2.5-pro": "sonnet",
+    "jules": "sonnet",
     "sonnet": "opus",
     "opus": None,  # flag for human review
 }
@@ -258,7 +273,8 @@ def detect_agent_prefix(filename: str):
 
 
 def _read_frontmatter(filename: str) -> dict:
-    """Parse YAML front-matter from a workorder. Returns dict of key→value (strings).
+    """Parse front-matter from a workorder. Returns dict of key→value (strings).
+    Supports both YAML format (---...---) and simple key: value format at file start.
     Returns {} if no front-matter or file not found. Front-matter is always optional."""
     for search_dir in [READY_DIR, WIP_DIR]:
         if not search_dir:
@@ -267,15 +283,28 @@ def _read_frontmatter(filename: str) -> dict:
         if path.exists():
             try:
                 text = path.read_text(encoding='utf-8', errors='replace')
+                result = {}
+
+                # Try YAML format first (---...---)
                 if text.startswith('---'):
                     end = text.find('---', 3)
                     if end > 0:
-                        result = {}
                         for line in text[3:end].splitlines():
                             if ':' in line:
                                 k, _, v = line.partition(':')
                                 result[k.strip().lower()] = v.strip()
-                        return result
+                        if result:
+                            return result
+
+                # Fall back to simple key: value format at file start
+                for line in text.splitlines():
+                    if not line.strip():
+                        break  # stop at first blank line
+                    if ':' in line and not line.startswith('#'):
+                        k, _, v = line.partition(':')
+                        result[k.strip().lower()] = v.strip()
+                return result
+
             except Exception:
                 pass
     return {}
