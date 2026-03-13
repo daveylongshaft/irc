@@ -169,3 +169,32 @@ Writing test for channel name case normalization
 Verifying the changes are correct
 Deleting stale test log to trigger retest
 COMPLETE
+Verification: All changes committed and complete
+
+## Verification Summary 2026-03-12 21:17:49
+
+Agent: sonnet (current session)
+Status: VERIFIED COMPLETE
+
+### Changes Confirmed:
+1. ✓ packages/csc-service/csc_service/server/server_message_handler.py
+   - Line 738-740: _handle_privmsg() normalizes channel names to lowercase
+   - Line 956-958: _handle_notice() normalizes channel names to lowercase
+   
+2. ✓ tests/test_channel_normalization.py
+   - test_privmsg_channel_name_normalization
+   - test_notice_channel_name_normalization
+   - test_privmsg_already_lowercase_unchanged
+   - test_privmsg_uppercase_channel_normalized
+
+3. ✓ Git Status: All changes committed (f05fb42)
+   - Working tree clean
+   - No uncommitted changes
+
+### Implementation Details:
+- Added `normalized_target = target.lower()` before formatting IRC messages
+- Applied to both PRIVMSG and NOTICE handlers
+- Consistent with RFC 1459 (case-insensitive channels)
+- All chat_buffer.append() calls use normalized names
+
+COMPLETE
