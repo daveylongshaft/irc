@@ -116,9 +116,10 @@ def main():
                 pki_main.start()
                 print(f"[{ts()}] [csc-service] Started PKI enrollment server")
 
-            # Daemon main loop for infra services
+            # Daemon main loop for infra services (smart backpressure)
             try:
                 from csc_service.shared.platform import Platform
+                idle_cycles = 0
                 while True:
                     # SHUTDOWN Kill Switch
                     if (Platform.PROJECT_ROOT / "SHUTDOWN").exists():
@@ -127,33 +128,51 @@ def main():
 
                     git_sync.pull()
 
+                    had_work = False
+
                     if enable_test_runner:
                         from csc_service.infra import test_runner
-                        test_runner.run_cycle(work_dir)
+                        if test_runner.run_cycle(work_dir):
+                            had_work = True
 
                     if enable_queue_worker:
                         from csc_service.infra import queue_worker
-                        queue_worker.run_cycle(work_dir)
+                        if queue_worker.run_cycle(work_dir):
+                            had_work = True
 
                     if enable_pm:
                         from csc_service.infra import pm
                         pm.setup(work_dir)
-                        pm.run_cycle()
-                        # If PM just assigned something, pick it up immediately
-                        # rather than waiting for the next poll tick
-                        if enable_queue_worker:
-                            queue_worker.run_cycle(work_dir)
+                        if pm.run_cycle():
+                            had_work = True
+                            # If PM just assigned something, pick it up immediately
+                            if enable_queue_worker:
+                                if queue_worker.run_cycle(work_dir):
+                                    had_work = True
 
                     if enable_pr_review:
                         from csc_service.infra import pr_review
-                        pr_review.run_cycle(work_dir)
+                        if pr_review.run_cycle(work_dir):
+                            had_work = True
 
                     if enable_jules:
                         from csc_service.infra import jules_monitor
-                        jules_monitor.run_cycle(work_dir)
+                        if jules_monitor.run_cycle(work_dir):
+                            had_work = True
 
                     git_sync.push_if_changed()
-                    time.sleep(poll_interval)
+
+                    # Smart backpressure: fast loop while work flows, slow when idle
+                    if had_work:
+                        idle_cycles = 0
+                        # Continue immediately to next cycle
+                    else:
+                        idle_cycles += 1
+                        if idle_cycles >= 3:
+                            # 3+ idle cycles -> fall back to slow polling
+                            time.sleep(poll_interval)
+                            idle_cycles = 0
+                        # else: keep cycling fast for a few attempts
 
             except KeyboardInterrupt:
                 print(f"\n[{ts()}] [csc-service] Stopped")

@@ -1,3 +1,6 @@
+# Logging policy: Use ASCII-only characters in log messages
+# Examples: [OK], [FAIL], [BLOCKED], [WARN], [INFO]
+
 """
 IRC-compliant message handler for csc-server.
 
@@ -259,7 +262,7 @@ class MessageHandler:
             # Require ircop or chanop for file uploads
             channel = self._get_client_channel(addr)
             if not self._is_authorized(nick, channel):
-                self.server.log(f"[SECURITY] 🚫 File upload blocked from unauthorized user {nick}@{addr}")
+                self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
                 self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                 return
 
@@ -768,7 +771,7 @@ class MessageHandler:
             elif text.startswith("<begin file=") or text.startswith("<append file="):
                 # Require ircop or chanop for file uploads
                 if not self._is_authorized(nick, normalized_target):
-                    self.server.log(f"[SECURITY] 🚫 File upload blocked from unauthorized user {nick}@{addr}")
+                    self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
                     self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                     return
                 self.file_handler.start_session(addr, text)
