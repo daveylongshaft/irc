@@ -206,11 +206,11 @@ class Data(Log, ServerData):
         else:
             path = self._get_run_dir() / filename
 
-        if not os.environ.get("CSC_QUIET"):
+        if os.environ.get("DEBUG"):
             print(f"[{self.name}] Connecting to data source: {path}")
         self._connected_source = str(path)
         self._storage = self._read_json_file(path)
-        if not os.environ.get("CSC_QUIET"):
+        if os.environ.get("DEBUG"):
             print(f"Connection successful. Loaded {len(self._storage)} items from '{path}'.")
         self.isDataConnected = True
         return True

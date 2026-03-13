@@ -247,6 +247,9 @@ WORKORDERS SUBMODULE MAP
 ── ops/wo/done/roles_setup.md ──
 # PID: 2275905 starting at Sun 08 Mar 2026 03:19:19 AM CDT
 
+── ops/wo/done/upgrade_server.md ──
+# ---
+
 ── ops/wo/ready/1773347847-system_bring-up_server_bridge_running_with_full_ir.md ──
 # ---
 
@@ -258,6 +261,9 @@ WORKORDERS SUBMODULE MAP
 
 ── ops/wo/ready/PROMPT_refactor_paths_with_platform.md ──
 # ---
+
+── ops/wo/ready/tmp-restructure.md ──
+# [run_agent] Agent: gemini-2.5-pro, Root: C:\csc\tmp\csc\clones\gemini-2.5-pro\tmp-restructure-1773367933\repo
 
 ── ops/wo/ready/windows-service-update.md ──
 # PLATFORM: windows

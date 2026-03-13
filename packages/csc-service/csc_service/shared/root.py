@@ -34,7 +34,7 @@ class Root:
 
         self.name = "root"
 
-        if not os.environ.get("CSC_QUIET"):
+        if os.environ.get("DEBUG"):
             print(f"system command keyword is: {self.command_keyword}")
 
         #self.log(f"{self.name}->")
