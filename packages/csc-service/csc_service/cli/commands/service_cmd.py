@@ -10,6 +10,12 @@ import time
 
 IS_WINDOWS = os.name == 'nt'
 
+def _run_hidden(cmd, **kwargs):
+    """Run subprocess with hidden window on Windows."""
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return subprocess.run(cmd, **kwargs)
+
 # Map service name -> (unit_name, scope)
 # scope "user"   -> systemctl --user  (no sudo needed)
 # scope "system" -> systemctl         (may need sudo)
@@ -35,8 +41,8 @@ def _systemctl(scope, *args):
 
 def _sc_run(svc_name, action):
     try:
-        r = subprocess.run(["net", action, svc_name],
-                           capture_output=True, text=True, timeout=30)
+        r = _run_hidden(["net", action, svc_name],
+                        capture_output=True, text=True, timeout=30)
         return r.returncode == 0, (r.stdout + r.stderr).strip()
     except Exception as e:
         return False, str(e)
