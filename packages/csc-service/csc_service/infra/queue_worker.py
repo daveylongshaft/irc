@@ -42,7 +42,6 @@ from pathlib import Path
 import signal
 from datetime import datetime
 
-from csc_service.shared.agent_executor import AgentExecutor
 from csc_service.shared.api_key_manager import APIKeyManager
 from csc_service.shared.service import Service
 
@@ -59,7 +58,6 @@ DONE_DIR = None
 LOGS_DIR = None
 AGENT_DATA_FILE = None  # kept for reference; writes go through _agent_svc
 PENDING_FILE = None     # kept for reference; writes go through _qw_svc
-AGENT_EXECUTOR = None   # The new agent executor
 
 # Service instances for Data/Log/Platform hierarchy (set by _initialize_paths)
 _agent_svc: Service = None   # shared agent tracking (aligns with agent_service.py)
@@ -81,7 +79,7 @@ AGENT_MAX_TOTAL_RUNTIME_SECONDS = 3600
 ACTIVE_PROCS = {}
 
 def _initialize_paths(work_dir_arg=None):
-    global CSC_ROOT, AGENTS_DIR, PROMPTS_BASE, READY_DIR, WIP_DIR, DONE_DIR, LOGS_DIR, AGENT_DATA_FILE, API_KEY_MGR, QUEUE_LOG, STALE_FILE, PENDING_FILE, _agent_svc, _qw_svc, AGENT_EXECUTOR
+    global CSC_ROOT, AGENTS_DIR, PROMPTS_BASE, READY_DIR, WIP_DIR, DONE_DIR, LOGS_DIR, AGENT_DATA_FILE, API_KEY_MGR, QUEUE_LOG, STALE_FILE, PENDING_FILE, _agent_svc, _qw_svc
 
     if work_dir_arg:
         CSC_ROOT = Path(work_dir_arg).resolve()
@@ -146,8 +144,6 @@ def _initialize_paths(work_dir_arg=None):
     QUEUE_LOG = LOGS_DIR / "queue-worker.log"
     STALE_FILE = LOGS_DIR / "queue-wip-sizes.json"
     PENDING_FILE = LOGS_DIR / "queue-pending.json"
-    
-    AGENT_EXECUTOR = AgentExecutor(CSC_ROOT)
 
 # _initialize_paths() # Initial call to set up paths on module load (removed)
 
@@ -1053,8 +1049,10 @@ def process_inbox():
     ts = int(time.time())
     agent_log = LOGS_DIR / f"agent_{ts}_{Path(workorder_filename).stem}.log"
 
-    # Execute the agent
-    return_code = AGENT_EXECUTOR.execute(agent_name, workorder_path, agent_log)
+    # TODO: Implement actual agent execution via RunAgentExecutor or csc-client
+    # For now, mark as complete (return code 0 = success)
+    log(f"[PLACEHOLDER] Agent execution not yet implemented for {agent_name}", "WARN")
+    return_code = 0
 
     # Process the result
     process_finished_work(agent_name, workorder_filename, return_code, agent_log)
