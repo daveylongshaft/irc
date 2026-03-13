@@ -589,9 +589,16 @@ class MessageHandler:
                                        f"{chan_name} :Cannot join channel (+b) - You are banned")
                     return
 
+            # Auto-op founder: first joiner of empty channel gets +o, channel gets +nt
+            initial_modes = set()
+            if channel.member_count() == 0:
+                initial_modes.add("o")
+                channel.modes.add("n")   # no external messages
+                channel.modes.add("t")   # topic locked to ops
+                channel.created = time.time()
+
             # ChanServ Enforcement (JOIN)
             chanserv_info = self.server.chanserv_get(chan_name)
-            initial_modes = set()
             if chanserv_info:
                 # Check ChanServ banlist (even if not set in channel.ban_list)
                 banlist = chanserv_info.get("banlist", [])
@@ -628,10 +635,14 @@ class MessageHandler:
             # Broadcast JOIN to all channel members (including the joiner)
             prefix = f"{nick}!{nick}@{SERVER_NAME}"
             join_msg = f":{prefix} JOIN {chan_name}\r\n"
-            for member_nick, member_info in list(channel.members.items()):
-                member_addr = member_info.get("addr")
-                if member_addr:
-                    self.server.sock_send(join_msg.encode(), member_addr)
+            if "Q" in channel.modes:
+                # Silent mode: only notify the joiner
+                self.server.sock_send(join_msg.encode(), addr)
+            else:
+                for member_nick, member_info in list(channel.members.items()):
+                    member_addr = member_info.get("addr")
+                    if member_addr:
+                        self.server.sock_send(join_msg.encode(), member_addr)
 
             # Send topic
             if channel.topic:
@@ -680,10 +691,14 @@ class MessageHandler:
             # Broadcast PART to channel members (including the parting user)
             prefix = f"{nick}!{nick}@{SERVER_NAME}"
             part_msg = format_irc_message(prefix, "PART", [chan_name], reason) + "\r\n"
-            for member_nick, member_info in list(channel.members.items()):
-                member_addr = member_info.get("addr")
-                if member_addr:
-                    self.server.sock_send(part_msg.encode(), member_addr)
+            if "Q" in channel.modes:
+                # Silent mode: only notify the parting user
+                self.server.sock_send(part_msg.encode(), addr)
+            else:
+                for member_nick, member_info in list(channel.members.items()):
+                    member_addr = member_info.get("addr")
+                    if member_addr:
+                        self.server.sock_send(part_msg.encode(), member_addr)
 
             channel.remove_member(nick)
 
@@ -1334,7 +1349,7 @@ class MessageHandler:
     # Modes that require a nick parameter
     _NICK_MODES = frozenset(("o", "v"))
     # Channel-level flag modes (no parameter)
-    _FLAG_MODES = frozenset(("m", "t", "n", "i", "s", "p"))
+    _FLAG_MODES = frozenset(("m", "t", "n", "i", "s", "p", "Q"))
     # Channel-level modes that require a parameter
     _PARAM_MODES = frozenset(("k", "l"))
     # List modes (like bans) that maintain a list of entries
@@ -1392,10 +1407,19 @@ class MessageHandler:
         """
         # Only allow setting your own modes (unless you're an oper)
         is_oper = nick.lower() in self.server.opers
-        if target_nick.lower() != nick.lower() and not is_oper:
-            self._send_numeric(addr, ERR_USERSDONTMATCH, nick,
-                             "Cannot change mode for other users")
-            return
+        if target_nick.lower() != nick.lower():
+            if not is_oper:
+                self._send_numeric(addr, ERR_USERSDONTMATCH, nick,
+                                 "Cannot change mode for other users")
+                return
+            # Oper: only +o/-o allowed on other users
+            if len(msg.params) >= 2:
+                oper_mode_str = msg.params[1]
+                has_only_o = all(c in "+-o" for c in oper_mode_str)
+                if not has_only_o:
+                    self._send_numeric(addr, ERR_USERSDONTMATCH, nick,
+                                     "Can only change +o/-o on other users")
+                    return
 
         # If no mode string provided, return current modes
         if len(msg.params) < 2:

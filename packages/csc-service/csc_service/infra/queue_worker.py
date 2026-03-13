@@ -221,7 +221,7 @@ def create_agent_temp_repo(agent_name, wo_stem):
     # Use Platform for the clones base — never hardcode /opt
     from csc_service.shared.platform import Platform as _Plat
     _plat = _Plat()
-    clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp" / "csc") / "clones"
+    clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp") / "clones"
     repo = clones_base / agent_name / f"{safe_stem}-{ts}" / "repo"
     repo.mkdir(parents=True, exist_ok=True)
 
@@ -962,9 +962,106 @@ def save_stale_state(state):
 # Core lifecycle
 # ======================================================================
 
-def process_finished_work(agent_name, prompt_filename, return_code, agent_log):
+def _inject_template_vars(orders_content, agent_name, clone_rel_path, wip_rel_path):
+    """Replace template placeholders in orders.md content.
+
+    Substitutes:
+        <clone_rel_path>        -> e.g. tmp/clones/haiku/my-task-1234/repo
+        <wip_file_rel_path>     -> e.g. ops/wo/wip/my-task.md
+        <wip_file_abs_path>     -> absolute path to WIP file
+        <agent_repo_rel_path>   -> same as <clone_rel_path> (legacy compat)
     """
-    Process a finished workorder. This is called after the agent executor finishes.
+    wip_abs = str(WIP_DIR / Path(wip_rel_path).name)
+    replacements = {
+        "<clone_rel_path>": clone_rel_path,
+        "<wip_file_rel_path>": wip_rel_path,
+        "<wip_file_abs_path>": wip_abs,
+        "<agent_repo_rel_path>": clone_rel_path,  # legacy compat
+    }
+    for placeholder, value in replacements.items():
+        orders_content = orders_content.replace(placeholder, value)
+    return orders_content
+
+
+def _build_agent_cmd(agent_name, orders_path, clone_path):
+    """Build the command to spawn an agent.
+
+    Checks for agent-specific bin/run_agent script first.
+    Falls back to cagent exec with cagent.yaml.
+    Falls back to claude CLI for Claude-family agents.
+
+    Args:
+        agent_name: Agent name (haiku, opus, gemini-2.5-pro, etc.)
+        orders_path: Path to orders.md in queue/work/
+        clone_path: Path to agent's temp repo clone
+
+    Returns:
+        (cmd_list, env_dict, cwd) or (None, None, None) on error
+    """
+    agents_dir = AGENTS_DIR
+    agent_dir = agents_dir / agent_name
+
+    env = os.environ.copy()
+    # Unset nesting detection vars
+    for var in ["CLAUDE_CODE_SESSION_ID", "CLAUDE_INVOCATION_ID", "CLAUDE_CODE_TASK_ID"]:
+        env.pop(var, None)
+
+    # Load .env
+    env_file = CSC_ROOT / ".env"
+    if env_file.exists():
+        try:
+            for line in env_file.read_text(encoding='utf-8').splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    k, v = k.strip(), v.strip().strip('"').strip("'")
+                    if k and k not in env:
+                        env[k] = v
+        except Exception:
+            pass
+
+    env["CSC_PROJECT_ROOT"] = str(CSC_ROOT)
+    env["CSC_AGENT"] = agent_name
+    if clone_path:
+        env["CSC_AGENT_REPO"] = str(clone_path)
+
+    cwd = str(CSC_ROOT)
+
+    # Set agent name in env for run_agent.py detection
+    env["CSC_AGENT_NAME"] = agent_name
+
+    # 1. Check for agent-specific run_agent script in agents/<name>/bin/
+    for script_name in ["run_agent.py", "run_agent.sh", "run_agent.bat", "run_agent"]:
+        script = agent_dir / "bin" / script_name
+        if script.exists():
+            if script.suffix == ".py":
+                cmd = [sys.executable, str(script), str(orders_path)]
+            elif script.suffix == ".sh":
+                cmd = ["bash", str(script), str(orders_path)]
+            elif script.suffix == ".bat":
+                cmd = [str(script), str(orders_path)]
+            else:
+                cmd = ["bash", str(script), str(orders_path)]
+            log(f"Using agent-specific script: {script}")
+            return cmd, env, cwd
+
+    # 2. Fallback: universal run_agent.py from agents/templates/
+    template_runner = agents_dir / "templates" / "run_agent.py"
+    if template_runner.exists():
+        cmd = [sys.executable, str(template_runner), str(orders_path)]
+        log(f"Using template runner: {template_runner}")
+        return cmd, env, cwd
+
+    log(f"ERROR: No execution method found for agent {agent_name} "
+        f"(no bin/run_agent.* and no templates/run_agent.py)", "ERROR")
+    return None, None, None
+
+
+def process_finished_work(agent_name, prompt_filename, return_code, agent_log, clone_path):
+    """Process a finished workorder.
+
+    Returns:
+        "done" if WO moved to done/, "ready" if moved back to ready/
     """
     log(f"Agent {agent_name} finished for {prompt_filename} with return code {return_code}")
     clear_agent_data()
@@ -979,6 +1076,7 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log):
         except Exception:
             pass
 
+    # Append agent log to WIP
     if agent_log and agent_log.exists():
         try:
             log_content = agent_log.read_text(encoding='utf-8', errors='ignore')
@@ -994,20 +1092,33 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log):
     if not is_complete and wip.exists():
         mark_incomplete(wip)
 
+    # Move WO to done or back to ready
     if is_complete:
         log(f"COMPLETE: {prompt_filename} -> done/")
         DONE_DIR.mkdir(parents=True, exist_ok=True)
         dst = DONE_DIR / prompt_filename
         if wip.exists():
             shutil.move(str(wip), str(dst))
+        result = "done"
     else:
         log(f"INCOMPLETE: {prompt_filename} -> ready/")
         dst = READY_DIR / prompt_filename
         if wip.exists():
             shutil.move(str(wip), str(dst))
+        result = "ready"
 
+    # Move orders.md from queue/work/ to queue/out/
     out_dir = agent_queue_dir(agent_name, "out")
     out_dir.mkdir(parents=True, exist_ok=True)
+    work_dir = agent_queue_dir(agent_name, "work")
+    work_orders = work_dir / "orders.md"
+    if work_orders.exists():
+        try:
+            shutil.move(str(work_orders), str(out_dir / "orders.md"))
+            log(f"Moved orders.md from queue/work/ to queue/out/")
+        except Exception as e:
+            log(f"WARNING: Could not move orders.md to out/: {e}", "WARN")
+
     if agent_log and agent_log.exists():
         try:
             shutil.copy2(str(agent_log), str(out_dir / agent_log.name))
@@ -1015,6 +1126,29 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log):
         except Exception as e:
             log(f"WARNING: Could not copy agent log: {e}", "WARN")
 
+    # Handle clone repo: commit/push if complete, archive either way
+    if clone_path and Path(clone_path).exists():
+        if is_complete and not defer_git_sync():
+            success, error, _ = git_commit_push_in_repo(
+                Path(clone_path),
+                f"feat: {prompt_filename} - agent {agent_name}",
+                label=f"{agent_name} clone"
+            )
+            if success:
+                handle_push_success(Path(clone_path))
+            else:
+                handle_push_failure(agent_name, Path(clone_path), error or "unknown")
+        else:
+            # Rename to mark as consumed (don't delete, may have useful work)
+            try:
+                ts = int(time.time())
+                consumed = Path(clone_path).parent / f"repo-consumed-{ts}"
+                shutil.move(str(clone_path), str(consumed))
+                log(f"Archived clone to {consumed.name}")
+            except Exception as e:
+                log(f"WARNING: Could not archive clone: {e}", "WARN")
+
+    # Refresh maps and commit/push main repo
     refresh_maps()
     summary = get_wip_summary(prompt_filename)
     commit_msg = (
@@ -1022,19 +1156,33 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log):
         f"Agent: {agent_name}\n\n"
         f"Work log tail:\n{summary}"
     )
-    git_commit_push(commit_msg)
+    if not defer_git_sync():
+        git_commit_push(commit_msg)
+
+    return result
 
 
 def process_inbox():
-    """
-    Process one workorder from the pending work list (FIFO by datestamp).
+    """Process one workorder from the pending work list (FIFO).
+
+    Lifecycle:
+        1. Pop next item from pending list
+        2. Move orders.md: queue/in/ -> queue/work/
+        3. Clone temp repo for agent
+        4. Inject clone path into orders.md (replace template vars)
+        5. Spawn agent with orders.md, save PID
+        6. Wait for agent to finish
+        7. Process result (done/ready)
+
+    Returns:
+        "done" if WO completed, "ready" if WO needs retry, None if no work.
     """
     # Load pending work list or rescan if empty
     pending = load_pending_list()
     if not pending:
         pending = scan_pending_work()
         if not pending:
-            return  # Nothing queued anywhere
+            return None  # Nothing queued anywhere
 
     item = pending.pop(0)
     save_pending_list(pending)
@@ -1047,17 +1195,112 @@ def process_inbox():
 
     if not workorder_path.exists():
         log(f"Workorder file not found: {workorder_path}", "ERROR")
-        return
+        return None
+
+    # Step 1: Move orders.md from queue/in/ to queue/work/
+    in_dir = agent_queue_dir(agent_name, "in")
+    work_dir_q = agent_queue_dir(agent_name, "work")
+    work_dir_q.mkdir(parents=True, exist_ok=True)
+
+    orders_in = in_dir / "orders.md"
+    orders_work = work_dir_q / "orders.md"
+
+    if orders_in.exists():
+        shutil.move(str(orders_in), str(orders_work))
+        log(f"Moved orders.md: queue/in/ -> queue/work/")
+    elif orders_work.exists():
+        log(f"orders.md already in queue/work/ (resuming)")
+    else:
+        log(f"ERROR: orders.md not found in queue/in/ or queue/work/", "ERROR")
+        return None
+
+    # Step 2: Clone temp repo
+    wo_stem = Path(workorder_filename).stem
+    clone_path = create_agent_temp_repo(agent_name, wo_stem)
+    clone_rel_path = ""
+    if clone_path:
+        # Compute relative path from CSC_ROOT (forward slashes for agent compatibility)
+        try:
+            clone_rel_path = str(clone_path.relative_to(CSC_ROOT)).replace("\\", "/")
+        except ValueError:
+            clone_rel_path = str(clone_path).replace("\\", "/")
+        log(f"Clone path (relative): {clone_rel_path}")
+    else:
+        log(f"WARNING: Could not create temp repo, agent will work without clone", "WARN")
+
+    # Step 3: Inject template vars into orders.md
+    wip_rel_path = f"ops/wo/wip/{workorder_filename}"
+    try:
+        orders_content = orders_work.read_text(encoding='utf-8')
+        orders_content = _inject_template_vars(orders_content, agent_name, clone_rel_path, wip_rel_path)
+        orders_work.write_text(orders_content, encoding='utf-8')
+        log(f"Injected template vars into orders.md")
+    except Exception as e:
+        log(f"ERROR: Failed to inject template vars: {e}", "ERROR")
+
+    # Step 4: Build command and spawn agent
+    cmd, env, cwd = _build_agent_cmd(agent_name, orders_work, clone_path)
+    if cmd is None:
+        log(f"ERROR: Cannot build command for agent {agent_name}", "ERROR")
+        return None
 
     # Log file for agent stdout/stderr
     ts = int(time.time())
     agent_log = LOGS_DIR / f"agent_{ts}_{Path(workorder_filename).stem}.log"
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Execute the agent (note: actual spawning is done by QueueWorkerService via run_agent scripts)
-    return_code = AGENT_EXECUTOR.execute(agent_name, workorder_path, agent_log)
+    log(f"Spawning agent {agent_name} (cwd={cwd})")
 
-    # Process the result
-    process_finished_work(agent_name, workorder_filename, return_code, agent_log)
+    try:
+        with open(agent_log, 'w', encoding='utf-8') as log_f:
+            if IS_WINDOWS:
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=cwd,
+                    env=env,
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+            else:
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=cwd,
+                    env=env,
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True
+                )
+
+            pid = proc.pid
+            ACTIVE_PROCS[pid] = proc
+            write_agent_data(agent_name, pid, workorder_filename, agent_log)
+            log(f"Agent spawned: PID={pid}")
+
+            # Wait for agent to finish (blocking)
+            return_code = proc.wait()
+            log(f"Agent exited: PID={pid}, return_code={return_code}")
+
+    except Exception as e:
+        log(f"ERROR: Failed to spawn agent: {e}", "ERROR")
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return_code = 1
+
+    # Step 5: Process the result
+    result = process_finished_work(agent_name, workorder_filename, return_code, agent_log, clone_path)
+    return result
+
+
+def _cycle_pm():
+    """Trigger a PM cycle to process completed workorders."""
+    try:
+        from csc_service.infra import pm
+        log("Cycling PM...")
+        pm.run_cycle()
+        log("PM cycle complete")
+    except Exception as e:
+        log(f"WARNING: PM cycle failed: {e}", "WARN")
 
 
 # ======================================================================
@@ -1065,7 +1308,15 @@ def process_inbox():
 # ======================================================================
 
 def run_cycle(work_dir_arg=None):
-    """Run one complete queue-worker cycle.
+    """Run one complete queue-worker cycle (event-driven).
+
+    After processing a workorder:
+        - If WO moved to done/ -> cycle PM, then self-cycle (check for more work)
+        - If WO moved to ready/ -> self-cycle immediately (retry or pick up next)
+        - If no work found -> return (caller decides whether to poll)
+
+    Returns:
+        True if work was processed, False if idle.
     """
     _initialize_paths(work_dir_arg)
 
@@ -1073,12 +1324,29 @@ def run_cycle(work_dir_arg=None):
     log("Cycle start")
 
     # Pull latest changes
-    git_pull()
+    if not defer_git_sync():
+        git_pull()
 
-    # If nothing running, pick up new work
-    process_inbox()
+    # Process inbox
+    result = process_inbox()
+
+    if result is None:
+        log("Cycle end (idle)")
+        return False
+
+    if result == "done":
+        # WO completed -> cycle PM for notification, then check for more work
+        _cycle_pm()
+        log("Cycle end (done -> cycling PM and self)")
+        return True
+
+    if result == "ready":
+        # WO incomplete -> back in ready, check for more work immediately
+        log("Cycle end (ready -> self-cycling)")
+        return True
 
     log("Cycle end")
+    return True
 
 
 def main():
@@ -1100,11 +1368,17 @@ def main():
     if len(sys.argv) > 1:
         arg = sys.argv[1]
         if arg == "--daemon":
-            log("Daemon mode (Ctrl+C to stop)")
+            log("Daemon mode - event-driven (Ctrl+C to stop)")
             try:
                 while True:
-                    run_cycle(work_dir_arg=work_dir)
-                    time.sleep(60)
+                    had_work = run_cycle(work_dir_arg=work_dir)
+                    if had_work:
+                        # Work was processed -> immediately cycle again
+                        log("Work completed, cycling immediately...")
+                        continue
+                    else:
+                        # Idle -> poll with delay
+                        time.sleep(60)
             except KeyboardInterrupt:
                 log("Stopped")
         elif arg == "--setup-scheduler":
