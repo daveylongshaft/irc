@@ -165,7 +165,8 @@ class Agent( Service ):
             if run_script.suffix == ".sh":
                 cmd = ["bash", str(run_script), full_prompt, str(self.WIP_DIR / wip_filename)]
             else: # .bat
-                cmd = [str(run_script), full_prompt, str(self.WIP_DIR / wip_filename)]
+                # Use cmd.exe /c to run batch files hidden
+                cmd = ["cmd.exe", "/c", str(run_script), full_prompt, str(self.WIP_DIR / wip_filename)]
             
             # For remote agents, working_dir should typically be the agent's root to find its resources
             working_dir = str(agents_dir / agent_name)
