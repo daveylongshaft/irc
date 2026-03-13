@@ -133,16 +133,17 @@ class ServerData:
         return ok
 
     def _atomic_read(self, filepath, schema_name):
-        """Read a JSON file safely via Data._read_json_file."""
+        """Read a JSON file safely."""
         from pathlib import Path as _Path
         p = _Path(filepath)
         if not p.exists():
             return None
-        data = load_config(p, schema_name)
-        if not data and p.exists() and p.stat().st_size > 10:
+        # The host class (Data) has the log method.
+        data = load_config(p, schema_name, self)
+        if data is None and p.exists() and p.stat().st_size > 10:
             self._quarantine(filepath)
             return None
-        return data if data else None
+        return data
 
     # ==================================================================
     # Oper / O-line persistence
