@@ -6,6 +6,7 @@ On Windows: uses 'net start/stop' for system services.
 import os
 import sys
 import subprocess
+import time
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -83,12 +84,21 @@ def _do_restart(service, force=False):
             from csc_service.shared.platform import Platform
             print("Starting csc-service daemon...")
             try:
+                log_dir = Platform.PROJECT_ROOT / "logs"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                log_file = log_dir / "csc-service.log"
+                
+                # Open log file for appending
+                f = open(log_file, "a", encoding="utf-8")
+                
                 cmd = [sys.executable, "bin/csc-service", "--daemon"]
                 print(f"Executing: {' '.join(cmd)}")
-                subprocess.Popen(cmd, 
+                subprocess.Popen(cmd,
                                  cwd=str(Platform.PROJECT_ROOT),
-                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS)
-                print("Process spawned.")
+                                 stdout=f,
+                                 stderr=f,
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+                print(f"Process spawned. Logging to {log_file}")
                 return True
             except Exception as e:
                 print(f"Failed to spawn process: {e}")
@@ -113,14 +123,17 @@ def restart(args, config_manager):
 
     if service == "all":
         seen = set()
+        all_ok = True
         for svc, (unit, scope) in UNIT_MAP.items():
             if unit not in seen:
                 seen.add(unit)
-                r = _systemctl(scope, "restart", unit)
-                state = "OK" if r.returncode == 0 else "FAIL"
-                print(f"[{state}] {unit} ({scope})")
+                if not _do_restart(svc, force=force):
+                    all_ok = False
+        if not all_ok:
+            sys.exit(1)
     else:
-        _do_restart(service, force=force)
+        if not _do_restart(service, force=force):
+            sys.exit(1)
 
 
 def install(args, config_manager):

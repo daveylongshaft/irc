@@ -37,16 +37,30 @@ def main():
     interactive = not args.detach
 
     if args.fifo:
-        if not hasattr(os, "mkfifo"):
-            print("[csc-client] --fifo is not supported on Windows. Use --detach --infile instead.", file=sys.stderr)
-            return 1
         fifo_dir = Platform.PROJECT_ROOT / "tmp" / "csc" / "run"
         fifo_dir.mkdir(parents=True, exist_ok=True)
-        fifo_path = fifo_dir / "client.in"
-        if not fifo_path.exists():
-            os.mkfifo(str(fifo_path))
-            print(f"[csc-client] Created FIFO at {fifo_path}")
-        input_file = str(fifo_path)
+
+        is_windows = os.name == 'nt'
+
+        if is_windows:
+            # Windows: use a regular file (since we can't reliably create named pipes cross-platform)
+            # Agents/scripts can write to this file, client will continuously read it
+            fifo_path = fifo_dir / "client.in"
+            print(f"[csc-client] Daemon mode: reading from file {fifo_path}")
+            print(f"[csc-client] Send commands (cmd.exe): echo COMMAND >> {fifo_path}")
+            print(f"[csc-client] Or PowerShell: Add-Content {fifo_path} -Value 'COMMAND'")
+            print(f"[csc-client] Note: clear the file periodically (del {fifo_path}) to reset")
+            fifo_path = str(fifo_path)
+        else:
+            # Linux/Mac: use POSIX FIFO (true named pipe)
+            fifo_path = fifo_dir / "client.in"
+            if not fifo_path.exists():
+                os.mkfifo(str(fifo_path))
+            print(f"[csc-client] Daemon mode: reading from FIFO {fifo_path}")
+            print(f"[csc-client] Send commands: echo COMMAND > {fifo_path}")
+            fifo_path = str(fifo_path)
+
+        input_file = fifo_path
         if not output_file:
             output_file = str(fifo_dir / "client.out")
         interactive = False

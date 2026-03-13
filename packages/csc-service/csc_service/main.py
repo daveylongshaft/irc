@@ -84,11 +84,32 @@ def main():
             bridge_thread = None
             if enable_bridge:
                 from csc_service.bridge.bridge import Bridge
-                bridge = Bridge()
-                bridge_thread = threading.Thread(target=bridge.run, daemon=True)
-                bridge_thread.start()
-                print(f"[{ts()}] [csc-service] Started IRC bridge")
+                from csc_service.bridge.transports.tcp_inbound import TCPInbound
+                from csc_service.bridge.transports.udp_inbound import UDPInbound
+                from csc_service.bridge.transports.udp_outbound import UDPOutbound
 
+                tcp_in = TCPInbound(
+                    host=config.get("tcp_listen_host", "0.0.0.0"),
+                    port=config.get("tcp_listen_port", 9667)
+                )
+                udp_in = UDPInbound(
+                    host=config.get("udp_listen_host", "127.0.0.1"),
+                    port=config.get("udp_listen_port", 9526)
+                )
+                outbound = UDPOutbound(
+                    server_host=config.get("server_host", "127.0.0.1"),
+                    server_port=config.get("server_port", 9525)
+                )
+
+                bridge = Bridge(
+                    inbound_transports=[tcp_in, udp_in],
+                    outbound_transport=outbound,
+                    session_timeout=config.get("session_timeout", 300),
+                    encrypt=config.get("bridge_encryption_enabled", True),
+                    normalize_mode=config.get("gateway_mode", None),
+                )
+                bridge.start()
+                print(f"[{ts()}] [csc-service] Started IRC bridge")
             # Start PKI enrollment server if enabled (CA server only)
             if enable_pki:
                 from csc_service.pki import main as pki_main

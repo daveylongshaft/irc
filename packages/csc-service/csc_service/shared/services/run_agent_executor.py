@@ -319,13 +319,13 @@ class RunAgentExecutor:
         # Step 5: Spawn agent via subprocess.Popen()
         try:
             if self.is_windows:
-                # Windows: Use CREATE_NEW_PROCESS_GROUP, no start_new_session
+                # Windows: Use CREATE_NO_WINDOW for silent background execution
                 proc = subprocess.Popen(
                     cmd,
                     cwd=str(self.project_root),
                     env=env,
                     shell=False,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                    creationflags=subprocess.CREATE_NO_WINDOW
                 )
             else:
                 # Unix/Linux/macOS: Use start_new_session for process groups

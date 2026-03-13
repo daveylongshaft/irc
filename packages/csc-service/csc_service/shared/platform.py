@@ -152,21 +152,24 @@ class Platform(Version):
 
     def _detect_all(self):
         """Run all detection routines and populate self.platform_data."""
+        # Use simple OS-level detection on Windows to avoid access violations
+        is_win = sys.platform == "win32"
+        
         self.platform_data = {
             "detected_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "working_dir": str(self.PROJECT_ROOT),
             "path_separator": os.sep,
-            "hardware": self._detect_hardware(),
+            "hardware": self._detect_hardware() if not is_win else {},
             "os": self._detect_os(),
-            "virtualization": self._detect_virtualization(),
+            "virtualization": self._detect_virtualization() if not is_win else {"type": "unknown"},
             "geography": self._detect_geography(),
             "time": self._detect_time(),
             "network": {}, # self._detect_network(),
-            "software": self._detect_software(),
+            "software": self._detect_software() if not is_win else {},
 
-            "docker": self._detect_docker(),
-            "ai_agents": self._detect_ai_agents(),
-            "resource_assessment": self._assess_resources(),
+            "docker": self._detect_docker() if not is_win else {"installed": False},
+            "ai_agents": self._detect_ai_agents() if not is_win else {},
+            "resource_assessment": self._assess_resources() if not is_win else {"resource_level": "low"},
             "runtime": self._detect_runtime(),
         }
 
@@ -703,7 +706,7 @@ class Platform(Version):
 
             # Store all paths
             runtime["temp_root"] = str(temp_root)
-            runtime["csc_agent_work"] = str(temp_root / "csc")
+            runtime["csc_agent_work"] = str(temp_root)
             runtime["project_tmp"] = str(temp_root)
             runtime["temp_dir_windows"] = temp_windows
             runtime["temp_dir_linux"] = temp_linux
@@ -793,19 +796,98 @@ class Platform(Version):
         return cls.PROJECT_ROOT / "ops" / "wo"
 
     @classmethod
+    def get_wip_dir(cls) -> Path:
+        """Return the work-in-progress directory (ops/wo/wip)."""
+        return cls.get_wo_dir() / "wip"
+
+    @classmethod
     def get_agents_dir(cls) -> Path:
         """Return the agents definition/queue directory (ops/agents)."""
         return cls.PROJECT_ROOT / "ops" / "agents"
 
     @classmethod
+    def get_agent_context_dir(cls, agent_name: str) -> Path:
+        """Return the context directory for an agent (ops/agents/<name>/context)."""
+        return cls.get_agents_dir() / agent_name / "context"
+
+    @classmethod
+    def get_agent_queue_dir(cls, agent_name: str, queue_type: str = "in") -> Path:
+        """Return the queue directory for an agent.
+
+        Args:
+            agent_name: Name of agent (haiku, opus, sonnet, etc.)
+            queue_type: "in", "work", or "out"
+
+        Returns:
+            Path to ops/agents/<name>/queue/<type>/
+
+        Raises:
+            ValueError: If queue_type is not in ("in", "work", "out")
+        """
+        valid_types = {"in", "work", "out"}
+        if queue_type not in valid_types:
+            raise ValueError(f"queue_type must be one of {valid_types}, got {queue_type}")
+        return cls.get_agents_dir() / agent_name / "queue" / queue_type
+
+    @classmethod
+    def get_roles_dir(cls, role_name: str = None) -> Path:
+        """Return the roles directory or a specific role's directory.
+
+        Args:
+            role_name: Optional specific role (e.g., "worker", "architect")
+
+        Returns:
+            Path to ops/roles/ or ops/roles/<role>/
+        """
+        base = cls.PROJECT_ROOT / "ops" / "roles"
+        if role_name:
+            return base / role_name
+        return base
+
+    @classmethod
+    def get_tools_lastrun_file(cls) -> Path:
+        """Return the path to tools/.lastrun timestamp file."""
+        return cls.get_tools_dir() / ".lastrun"
+
+    @classmethod
+    def get_agent_clone_base(cls) -> Path:
+        """Return the base directory for agent clones (tmp/clones).
+
+        Uses csc_agent_work from platform.json if available, otherwise
+        falls back to PROJECT_ROOT/tmp/clones.
+        """
+        try:
+            plat = cls()
+            runtime = plat.platform_data.get("runtime", {})
+            agent_work = runtime.get("csc_agent_work")
+            if agent_work:
+                return Path(agent_work) / "clones"
+        except Exception:
+            pass
+        # Fallback
+        return cls.PROJECT_ROOT / "tmp" / "clones"
+
+    @classmethod
+    def get_agent_clone_dir(cls, agent_name: str, wo_stem: str, ts: int) -> Path:
+        """Return the isolated clone directory for an agent+workorder.
+
+        Each workorder gets its own clone so multiple agents can run
+        concurrently without filesystem conflicts.
+
+        Args:
+            agent_name: Name of agent (haiku, opus, etc.)
+            wo_stem: Workorder stem, sanitized (e.g., "my-task")
+            ts: Unix timestamp (int)
+
+        Returns:
+            Path to tmp/clones/<agent>/<wo>-<ts>/repo/
+        """
+        return cls.get_agent_clone_base() / agent_name / f"{wo_stem}-{ts}" / "repo"
+
+    @classmethod
     def get_pki_dir(cls) -> Path:
         """Return the PKI/EasyRSA directory (etc/easy-rsa)."""
         return cls.get_etc_dir() / "easy-rsa"
-
-    @property
-    def run_dir(self) -> Path:
-        """Return the absolute path to the run/ directory."""
-        return Path(self.get_abs_tmp_path(["run"]))
 
     def get_abs_etc_path(self, components) -> str:
         """Return absolute path under etc/ (platform-native separators).
@@ -1191,6 +1273,21 @@ class Platform(Version):
         for comp in components:
             root = root / comp
         return str(root)
+
+    def get_abs_root_path_forward_slashes(self, components):
+        """Return absolute path from PROJECT_ROOT with forward slashes (agent-friendly).
+
+        Same as get_abs_root_path() but always uses forward slashes regardless
+        of OS. Used for agent-facing paths so they work identically on all platforms.
+
+        Args:
+            components: list of path components, e.g., ['ops', 'wo', 'wip', 'task.md']
+
+        Returns:
+            str: Absolute path with forward slashes (cross-platform consistent)
+        """
+        path = self.get_abs_root_path(components)
+        return path.replace("\\", "/")
 
     def get_abs_tmp_path(self, components):
         """Return absolute path from TMP directory (PROJECT_ROOT/tmp).

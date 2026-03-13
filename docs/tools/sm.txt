@@ -232,32 +232,6 @@ SM SUBMODULE MAP
     def multiply(self, x, y)  # Multiply two numbers.
     def default(self, *args)  # Fallback handler.
 
-── irc/packages/csc-service/csc_service/shared/services/pki_service.py ──
-# PKI service — IRC command handler for certificate lifecycle.
-  _SHORTNAME_RE = re.compile('^[a-z0-9][a-z0-9.\\-]{0,62}[a-z0-9]$')
-  EASYRSA_DIR = Path('/etc/openvpn/easy-rsa')
-  EASYRSA_BIN = EASYRSA_DIR / 'easyrsa'
-  PKI_DIR = EASYRSA_DIR / 'pki'
-  CA_CRT = PKI_DIR / 'ca.crt'
-  CRL_PEM = PKI_DIR / 'crl.pem'
-  ISSUED_DIR = PKI_DIR / 'issued'
-  TOKEN_FILE = Path('/opt/csc/tmp/csc/run/pki_tokens.json')
-  PKI_LOG = Path('/opt/csc/logs/pki.log')
-  TOKEN_TTL = 86400
-  class Pki(Service):  # PKI certificate management service for S2S TLS links.
-    def _require_flag(self, flag_list=('a', 'A'))  # Check if caller has required oper flags. Returns (ok, nick).
-    def token(self, shortname=None)  # Generate a one-time enrollment token for a server.
-    def list(self)  # Show all issued certificates.
-    def revoke(self, shortname=None)  # Revoke a certificate and regenerate CRL.
-    def status(self)  # Show CA health, CRL age, token count, issued cert count.
-    def pending(self)  # Show tokens issued but not yet used.
-    def default(self, *args)  # Default handler — show help.
-  def _load_tokens()  # Load token store from disk.
-  def _save_tokens(tokens)  # Atomically save token store.
-  def _write_pki_log(message)  # Append a timestamped entry to the PKI log.
-  def _prune_expired(tokens)  # Remove tokens older than TOKEN_TTL.
-  def _is_revoked(serial)  # Check if a certificate serial is in the CRL.
-
 ── irc/packages/csc-service/csc_service/shared/services/platform_service.py ──
 # Platform Service - System inventory and capability queries.
   class platform(Service):  # Service for querying platform capabilities from IRC.
