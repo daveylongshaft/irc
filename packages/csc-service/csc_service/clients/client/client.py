@@ -1126,7 +1126,11 @@ class Client(Network):
             elif command == "/ping":
                 self._handle_ping_command()
             else:
-                print(f"Unknown local command: {command}")
+                # Unknown command - pass to server as raw IRC (remove leading /)
+                irc_cmd = cmd[1:].strip() if cmd.startswith('/') else cmd
+                if irc_cmd:
+                    self._last_message_sent = f"{irc_cmd}\r\n"
+                    super().send(self._last_message_sent)
             return
 
         # Service commands (AI ...) — send as PRIVMSG to current channel

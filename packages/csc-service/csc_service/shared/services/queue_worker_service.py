@@ -335,7 +335,7 @@ class QueueWorkerService(Service):
                     cwd=str(self.PROJECT_ROOT),
                     stdout=log_fh,
                     stderr=subprocess.STDOUT,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                    creationflags=subprocess.CREATE_NO_WINDOW
                 )
             else:
                 proc = subprocess.Popen(

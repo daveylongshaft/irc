@@ -15,7 +15,6 @@ from csc_service.shared.channel import ChannelManager
 from csc_service.shared.chat_buffer import ChatBuffer
 from csc_service.shared.irc import SERVER_NAME
 from csc_service.shared.crypto import is_encrypted, decrypt, encrypt
-from .storage import PersistentStorageManager
 from .server_s2s import ServerNetwork
 
 
@@ -88,14 +87,6 @@ class Server(Service):
         # NickServ: identified clients (session-only, not persisted)
         self.nickserv_identified = {}  # addr -> identified_nick
 
-        # Initialize persistent storage manager
-        # Persistent server state (channels, users, opers, bans) lives in etc/
-        from csc_service.shared.platform import Platform
-        self.storage = PersistentStorageManager(
-            base_path=str(Platform.get_etc_dir()),
-            log_func=self.log,
-        )
-
         # Start cleanup loop
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self.cleanup_thread.start()
@@ -108,9 +99,8 @@ class Server(Service):
         self.syslog_thread = threading.Thread(target=self._syslog_monitor_loop, daemon=True)
         self.syslog_thread.start()
 
-        # Migrate from old snapshot system if needed, then restore
-        self.storage.migrate_from_snapshot(self)
-        self.storage.restore_all(self)
+        # Restore server state from disk
+        self.restore_all(self)
 
         # Record startup time for S2S federation
         self.startup_time = time.time()
@@ -134,17 +124,17 @@ class Server(Service):
     @property
     def client_registry(self):
         """Dynamic property that reads client registry from disk."""
-        return self.storage.load_users().get("users", {})
+        return self.load_users().get("users", {})
 
     @property
     def oper_credentials(self):
         """Dynamic property: returns olines dict (v2) for backward compat callers."""
-        return self.storage.load_opers().get("olines", {})
+        return self.load_opers().get("olines", {})
 
     @property
     def opers(self):
         """Set of lowercase nicks currently holding any oper status."""
-        active = self.storage.load_opers().get("active_opers", [])
+        active = self.load_opers().get("active_opers", [])
         result = set()
         for entry in active:
             if isinstance(entry, dict):
@@ -156,16 +146,16 @@ class Server(Service):
     @property
     def active_opers_info(self):
         """Dynamic property: returns {nick_lower: {nick, oper_name, flags, class}}."""
-        return self.storage.get_active_opers_info()
+        return self.get_active_opers_info()
 
     @property
     def protect_local_opers(self):
         """Whether remote opers without O flag can KILL local opers."""
-        return self.storage.load_opers().get("protect_local_opers", True)
+        return self.load_opers().get("protect_local_opers", True)
 
     def _oper_has_flag(self, nick, flag):
         """Return True if nick is an active oper with the given flag."""
-        return flag in self.storage.get_oper_flags(nick.lower())
+        return flag in self.get_oper_flags(nick.lower())
 
     def oper_has_flag(self, nick, flag):
         """Public alias for _oper_has_flag (used by message handler)."""
@@ -173,11 +163,11 @@ class Server(Service):
 
     def get_olines(self):
         """Return the olines configuration dict."""
-        return self.storage.get_olines()
+        return self.get_olines()
 
     def is_local_oper(self, nick):
         """Local oper: any oper flag (o, O, a, A)."""
-        return bool(self.storage.get_oper_flags(nick.lower()))
+        return bool(self.get_oper_flags(nick.lower()))
 
     def is_global_oper(self, nick):
         """Global oper: O flag."""
@@ -194,7 +184,7 @@ class Server(Service):
     @property
     def wakewords(self):
         """Dynamic property that reads wakewords from disk on every access."""
-        path = os.path.join(self.storage.base_path, "wakewords.json")
+        path = os.path.join(self.base_path, "wakewords.json")
         try:
             with open(path, "r") as f:
                 data = json.load(f)
@@ -205,15 +195,15 @@ class Server(Service):
     def sync_from_disk(self):
         """Reload state from disk ONLY if files have changed."""
         changed = False
-        for key in self.storage.FILES:
-            if self.storage._has_changed(key):
+        for key in self.FILES:
+            if self._has_changed(key):
                 changed = True
                 break
         
         if changed:
             with self.clients_lock:
                 self.log("[STORAGE] Disk change detected, syncing state...")
-                self.storage.restore_all(self)
+                self.restore_all(self)
 
     # ======================================================================
     # Network Loop
@@ -235,7 +225,7 @@ class Server(Service):
 
         while self._running:
             try:
-                botserv_data = self.storage.load_botserv()
+                botserv_data = self.load_botserv()
                 bots = botserv_data.get("bots", {})
                 
                 for key, bot in bots.items():
@@ -374,7 +364,7 @@ class Server(Service):
                         pruned = True
 
             if pruned:
-                self.storage.save_channels_from_manager(self.channel_manager)
+                self.save_channels_from_manager(self.channel_manager)
 
         except Exception as e:
             import traceback
@@ -596,11 +586,11 @@ class Server(Service):
 
         Called immediately after every state change (nick, join, part, topic,
         mode, oper, away, kick, kill) to ensure zero data loss on crashes.
-        Delegates to PersistentStorageManager.persist_all().
+        Delegates to ServerData.persist_all().
         """
         try:
             with self.clients_lock:
-                ok = self.storage.persist_all(self)
+                ok = self.persist_all(self)
             if ok:
                 user_count = len([a for a in self.clients.values() if a.get("name")])
                 chan_count = len(self.channel_manager.list_channels())
@@ -654,7 +644,7 @@ class Server(Service):
 
         network_thread.join(timeout=2)
         self._persist_session_data()
-        self.storage.save_history_from_server(self)
+        self.save_history_from_server(self)
         self.sync_persistent_clients()
         self.close()
         self.log("[SHUTDOWN] Server closed sockets and persisted data.")

@@ -64,6 +64,9 @@ WORKORDERS SUBMODULE MAP
 ── ops/wo/done/EVOLUTION_MD_write_origin_story.md ──
 # # Write EVOLUTION.md — The System's Origin Story
 
+── ops/wo/done/FIX_PATH_AND_ALL_SHELL_TOOLS.md ──
+# ---
+
 ── ops/wo/done/IMPLEMENT_JULES_MONITORING_AND_APPROVAL_SERVICE.md ──
 # ---
 
@@ -244,14 +247,20 @@ WORKORDERS SUBMODULE MAP
 ── ops/wo/done/roles_setup.md ──
 # PID: 2275905 starting at Sun 08 Mar 2026 03:19:19 AM CDT
 
-── ops/wo/ready/AUDIT_REORGANIZE_ALL_WORKORDERS.md ──
+── ops/wo/ready/1773347847-system_bring-up_server_bridge_running_with_full_ir.md ──
 # ---
 
-── ops/wo/ready/FIX_PATH_AND_ALL_SHELL_TOOLS.md ──
+── ops/wo/ready/AUDIT_REORGANIZE_ALL_WORKORDERS.md ──
 # ---
 
 ── ops/wo/ready/IMPLEMENT_JULES_INTEGRATION_FULL.md ──
 # ---
+
+── ops/wo/ready/PROMPT_refactor_paths_with_platform.md ──
+# ---
+
+── ops/wo/ready/windows-service-update.md ──
+# PLATFORM: windows
 
 ── ops/wo/wip/cleanup_wo_dirs_3572384 ──
 # PID: 3572384 starting at Wed 11 Mar 2026 04:19:36 AM CDT
@@ -261,6 +270,3 @@ WORKORDERS SUBMODULE MAP
 
 ── ops/wo/wip/recover_pki_3558517 ──
 # PID: 3558517 starting at Wed 11 Mar 2026 03:34:50 AM CDT
-
-── ops/wo/wip/windows-service-update.md ──
-# PLATFORM: windows

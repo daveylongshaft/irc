@@ -1,51 +1,31 @@
 """
-PersistentStorageManager - Atomic file-based persistence for the IRC server.
+ServerData — pure mixin for all IRC-specific domain persistence.
 
-Manages five JSON files with atomic writes (temp + fsync + rename) to ensure
-zero data loss on power failure or crash.
+This is a mixin class with NO parent.  It relies on the host class (Data)
+to provide:
+    self._read_json_file(path)
+    self._write_json_file(path, data)
+    self._get_etc_dir()  -> Path
+    self.log(message)
+    self.base_path       -> str   (set by Data.__init__)
+    self._mtimes         -> dict  (set by Data.__init__)
 
-Files managed:
-  - channels.json: channel state, members, modes, bans
-  - users.json: user sessions, credentials, modes
-  - opers.json: operator status and credentials (v2: olines + active list)
-  - bans.json: per-channel ban masks
-  - history.json: disconnection records for WHOWAS
+Inheritance after assembly:
+    Root -> Log -> Data(Log, ServerData) -> Version -> Platform -> ...
 
-opers.json v2 schema:
-  {
-    "version": 2,
-    "active_opers": [
-      {"nick": "alice", "oper_name": "admin", "flags": [...], "class": "admin"}
-    ],
-    "olines": {
-      "admin": {"password": "...", "host": "*", "class": "admin", "flags": [...]}
-    }
-  }
-
-olines.conf:
-  INI-style file defining operator blocks.  Loaded at startup and on REHASH.
-  See olines.conf for format documentation.
+opers.json is the sole authority for operator credentials.
+olines.conf is written as an export only (write_olines_conf).
+It is NEVER read back.  No reload_olines, no parse_olines_conf,
+no REHASH merge.
 """
 
-import configparser
 import fnmatch
-import json
 import os
 import time
-import logging
-
-from csc_service.shared.data import Data
-
-logger = logging.getLogger(__name__)
 
 
-class PersistentStorageManager(Data):
-    """Atomic file-based storage for IRC server state.
-
-    Inherits from Data so all I/O goes through Data._read_json_file /
-    _write_json_file (the encryption hook point), and all oper/o-line
-    methods are available via inheritance.
-    """
+class ServerData:
+    """All IRC-specific file-backed persistence.  Pure mixin, no parent."""
 
     FILES = {
         "channels": "channels.json",
@@ -74,7 +54,7 @@ class PersistentStorageManager(Data):
                         "servers": ["*"],
                         "host_masks": ["*!*@*"],
                         "flags": "aol",
-                        "comment": "default admin account - change password",
+                        "comment": "default admin account",
                     }
                 ]
             },
@@ -88,25 +68,16 @@ class PersistentStorageManager(Data):
             "version": 1,
             "nickserv": {
                 "enforce_timeout": 60,
-                "enforce_mode": "disconnect"
-            }
+                "enforce_mode": "disconnect",
+            },
         },
     }
 
     MAX_HISTORY = 100
 
-    def __init__(self, base_path, log_func=None):
-        """Initialize storage manager.
-
-        Args:
-            base_path: Directory where JSON files are stored (from Platform).
-            log_func:  Ignored — logging comes from inherited self.log().
-                       Kept for backward-compat call sites.
-        """
-        super().__init__()          # sets up Data / Log / Root infrastructure
-        self.base_path = base_path
-        self._mtimes = {}           # key -> last seen mtime
-        self._ensure_all_files()
+    # ------------------------------------------------------------------
+    # Path / mtime helpers
+    # ------------------------------------------------------------------
 
     def _file_path(self, key):
         """Get full path for a storage file."""
@@ -124,40 +95,13 @@ class PersistentStorageManager(Data):
             pass
         return False
 
-    # ==================================================================
-    # Atomic I/O
-    # ==================================================================
-
-    def _atomic_write(self, filepath, data):
-        """Write data to file atomically — routes through Data._write_json_file."""
-        ok = self._write_json_file(filepath, data)
-        if ok:
-            # Update mtime so we don't immediately reload our own write
-            key = next((k for k, v in self.FILES.items()
-                        if str(filepath).endswith(v)), None)
-            if key:
-                try:
-                    self._mtimes[key] = os.path.getmtime(filepath)
-                except OSError:
-                    pass
-        return ok
-
-    def _atomic_read(self, filepath):
-        """Read a JSON file safely — routes through Data._read_json_file.
-
-        Returns parsed data on success, None on missing/error.
-        """
-        from pathlib import Path as _Path
-        p = _Path(filepath)
-        if not p.exists():
-            return None
-        data = self._read_json_file(p)
-        # _read_json_file returns {} on corrupt; treat empty-dict-from-corrupt as None
-        # and quarantine the file if the original exists but parse failed
-        if not data and p.exists() and p.stat().st_size > 10:
-            self._quarantine(filepath)
-            return None
-        return data if data else None
+    def _ensure_all_files(self):
+        """Create any missing storage files with defaults."""
+        for key in self.FILES:
+            filepath = self._file_path(key)
+            if not os.path.exists(filepath):
+                self.log(f"[STORAGE] Creating {self.FILES[key]} with defaults")
+                self._atomic_write(filepath, self.DEFAULTS[key])
 
     def _quarantine(self, filepath):
         """Rename corrupt file to .corrupt.<timestamp> for investigation."""
@@ -169,41 +113,253 @@ class PersistentStorageManager(Data):
         except Exception as e:
             self.log(f"[STORAGE ERROR] Could not quarantine {filepath}: {e}")
 
-    def _ensure_all_files(self):
-        """Create any missing storage files with defaults."""
-        for key in self.FILES:
-            filepath = self._file_path(key)
-            if not os.path.exists(filepath):
-                self.log(f"[STORAGE] Creating {self.FILES[key]} with defaults")
-                self._atomic_write(filepath, self.DEFAULTS[key])
+    # ------------------------------------------------------------------
+    # Atomic I/O wrappers (delegate to Data._read/write_json_file)
+    # ------------------------------------------------------------------
+
+    def _atomic_write(self, filepath, data):
+        """Write data to file atomically via Data._write_json_file."""
+        ok = self._write_json_file(filepath, data)
+        if ok:
+            key = next((k for k, v in self.FILES.items()
+                        if str(filepath).endswith(v)), None)
+            if key:
+                try:
+                    self._mtimes[key] = os.path.getmtime(filepath)
+                except OSError:
+                    pass
+        return ok
+
+    def _atomic_read(self, filepath):
+        """Read a JSON file safely via Data._read_json_file."""
+        from pathlib import Path as _Path
+        p = _Path(filepath)
+        if not p.exists():
+            return None
+        data = self._read_json_file(p)
+        if not data and p.exists() and p.stat().st_size > 10:
+            self._quarantine(filepath)
+            return None
+        return data if data else None
+
+    # ==================================================================
+    # Oper / O-line persistence
+    # opers.json is the SOLE authority.  olines.conf is export-only.
+    # ==================================================================
+
+    def _opers_path(self):
+        return self._get_etc_dir() / "opers.json"
+
+    def _olines_conf_path(self):
+        return self._get_etc_dir() / "olines.conf"
+
+    @staticmethod
+    def _migrate_opers_v1_to_v2(data):
+        """Upgrade v1 {credentials: {name: pass}} to v2 olines format."""
+        creds = data.get("credentials", {})
+        olines = {}
+        for name, password in creds.items():
+            olines[name] = [{
+                "user": name, "password": password,
+                "servers": ["*"], "host_masks": ["*!*@*"],
+                "flags": "aol", "comment": "migrated from v1",
+            }]
+        old_active = data.get("active_opers", [])
+        new_active = []
+        for e in old_active:
+            if isinstance(e, str):
+                new_active.append({"nick": e, "account": e, "flags": "aol"})
+            else:
+                new_active.append(e)
+        return {
+            "version": 2,
+            "protect_local_opers": True,
+            "active_opers": new_active,
+            "olines": olines,
+        }
+
+    @staticmethod
+    def _match_hostmask(mask, client_mask):
+        """Return True if client_mask matches the wildcard mask pattern."""
+        try:
+            m_nick, rest = mask.split("!", 1)
+            m_user, m_host = rest.split("@", 1)
+            c_nick, c_rest = client_mask.split("!", 1)
+            c_user, c_host = c_rest.split("@", 1)
+            return (fnmatch.fnmatch(c_nick.lower(), m_nick.lower()) and
+                    fnmatch.fnmatch(c_user.lower(), m_user.lower()) and
+                    fnmatch.fnmatch(c_host.lower(), m_host.lower()))
+        except ValueError:
+            return fnmatch.fnmatch(client_mask.lower(), mask.lower())
+
+    def _load_opers(self):
+        """Load opers.json, migrating v1->v2 if needed."""
+        data = self._read_json_file(self._opers_path())
+        if not data:
+            return dict(self.DEFAULTS["opers"])
+        if data.get("version", 1) < 2:
+            data = self._migrate_opers_v1_to_v2(data)
+            self._write_json_file(self._opers_path(), data)
+        return data
+
+    def _save_opers(self, data):
+        """Atomically save opers.json."""
+        return self._write_json_file(self._opers_path(), data)
+
+    def load_opers(self):
+        """Public alias for backward compat."""
+        return self._load_opers()
+
+    def save_opers(self, data):
+        """Public alias for backward compat."""
+        return self._save_opers(data)
+
+    def get_olines(self):
+        """Return olines dict: {account: [entry, ...]}."""
+        return self._load_opers().get("olines", {})
+
+    def get_active_opers(self):
+        """Return list of active oper dicts: [{nick, account, flags}]."""
+        return list(self._load_opers().get("active_opers", []))
+
+    def get_active_opers_info(self):
+        """Return {nick_lower: entry_dict} for quick lookup."""
+        return {
+            e["nick"].lower(): e
+            for e in self.get_active_opers()
+            if isinstance(e, dict) and e.get("nick")
+        }
+
+    def get_oper_flags(self, nick):
+        """Return flags string for an active oper nick, '' if not active."""
+        nick_lower = nick.lower()
+        for e in self._load_opers().get("active_opers", []):
+            if isinstance(e, dict) and e.get("nick", "").lower() == nick_lower:
+                return e.get("flags", "o")
+        return ""
+
+    @property
+    def protect_local_opers(self):
+        """Whether remote opers without O flag can KILL local opers."""
+        return self._load_opers().get("protect_local_opers", True)
+
+    def add_active_oper(self, nick, account="", flags="o"):
+        """Add or update an active oper entry."""
+        data = self._load_opers()
+        active = data.setdefault("active_opers", [])
+        nick_lower = nick.lower()
+        active[:] = [e for e in active
+                     if not (isinstance(e, dict) and e.get("nick", "").lower() == nick_lower)]
+        active.append({"nick": nick_lower, "account": account or nick_lower, "flags": flags})
+        return self._save_opers(data)
+
+    def remove_active_oper(self, nick):
+        """Remove an active oper entry by nick."""
+        data = self._load_opers()
+        nick_lower = nick.lower()
+        data["active_opers"] = [
+            e for e in data.get("active_opers", [])
+            if not (isinstance(e, dict) and e.get("nick", "").lower() == nick_lower)
+        ]
+        return self._save_opers(data)
+
+    def check_oper_auth(self, account, password, server_name, client_mask):
+        """Verify OPER credentials against o-lines.
+
+        Returns flags string on success, None on failure.
+        """
+        data = self._load_opers()
+        entries = (data.get("olines", {}).get(account, []) +
+                   data.get("remote_olines", {}).get(account, []))
+        for entry in entries:
+            if entry.get("password") != password:
+                continue
+            servers = entry.get("servers", ["*"])
+            if not any(s == "*" or fnmatch.fnmatch(server_name.lower(), s.lower())
+                       for s in servers):
+                continue
+            masks = entry.get("host_masks", ["*!*@*"])
+            if any(self._match_hostmask(m, client_mask) for m in masks):
+                return entry.get("flags", "o")
+        return None
+
+    def write_olines_conf(self, olines, path=None, server_name="csc-server"):
+        """Write olines dict to olines.conf text format (EXPORT ONLY).
+
+        This file is never read back.  opers.json is the sole authority.
+        """
+        if path is None:
+            path = self._olines_conf_path()
+        from pathlib import Path as _Path
+        path = _Path(path)
+        lines = [
+            "# olines.conf -- CSC IRC Server operator configuration (EXPORT ONLY)",
+            "# This file is auto-generated from opers.json.  Do NOT edit.",
+            "# Format: name:flags:user:pass:servers:hostmasks:# comment",
+            f"# Server: {server_name}",
+            "",
+        ]
+        for name, entries in sorted(olines.items()):
+            for entry in entries:
+                servers = ",".join(entry.get("servers", ["*"]))
+                masks = ",".join(entry.get("host_masks", ["*!*@*"]))
+                flags = entry.get("flags", "o")
+                user = entry.get("user", name)
+                password = entry.get("password", "")
+                comment = entry.get("comment", "")
+                comment_str = f":# {comment}" if comment else ""
+                lines.append(
+                    f"{name}:{flags}:{user}:{password}:{servers}:{masks}{comment_str}"
+                )
+        lines.append("")
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+            return True
+        except Exception as e:
+            self.log(f"Error writing olines.conf: {e}")
+            return False
+
+    def save_opers_from_server(self, server):
+        """Sync active_opers from server memory to opers.json."""
+        data = self._load_opers()
+        if hasattr(server, "_active_opers_full"):
+            data["active_opers"] = list(server._active_opers_full)
+        else:
+            connected = {
+                info.get("name", "").lower()
+                for info in server.clients.values()
+                if info.get("name")
+            }
+            data["active_opers"] = [
+                e for e in data.get("active_opers", [])
+                if isinstance(e, dict) and e.get("nick", "").lower() in connected
+            ]
+        return self._save_opers(data)
 
     # ==================================================================
     # Channel Operations
     # ==================================================================
 
     def _load_channels_from_disk(self):
-        """Load all channel data from disk. Returns dict or defaults on error."""
         data = self._atomic_read(self._file_path("channels"))
         if data is None:
             return dict(self.DEFAULTS["channels"])
         return data
 
     def load_channels(self):
-        """Load all channel data. Returns dict or defaults on error."""
         return self._load_channels_from_disk()
 
     def save_channels(self, data):
-        """Save complete channel data. Returns True/False."""
         return self._atomic_write(self._file_path("channels"), data)
 
     def save_channels_from_manager(self, channel_manager):
-        """Build and save channel data from a ChannelManager instance.
-
-        Args:
-            channel_manager: The server's ChannelManager object.
-        Returns:
-            True on success, False on error.
-        """
+        """Build and save channel data from a ChannelManager instance."""
         channels = {}
         for ch in channel_manager.list_channels():
             channels[ch.name] = {
@@ -230,25 +386,21 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_users(self):
-        """Load all user data. Returns dict or defaults on error."""
         data = self._atomic_read(self._file_path("users"))
         if data is None:
             return dict(self.DEFAULTS["users"])
         return data
 
     def save_users(self, data):
-        """Save complete user data. Returns True/False."""
         return self._atomic_write(self._file_path("users"), data)
 
     def set_user(self, nick, user_data):
-        """Update or create a single user entry on disk."""
         data = self.load_users()
         users = data.setdefault("users", {})
         users[nick] = user_data
         return self.save_users(data)
 
     def remove_user(self, nick):
-        """Remove a user entry from disk."""
         data = self.load_users()
         users = data.get("users", {})
         if nick in users:
@@ -257,13 +409,7 @@ class PersistentStorageManager(Data):
         return True
 
     def save_users_from_server(self, server):
-        """Build and save user data from server state.
-
-        Args:
-            server: The Server instance.
-        Returns:
-            True on success, False on error.
-        """
+        """Build and save user data from server state."""
         users = {}
         for addr, info in list(server.clients.items()):
             nick = info.get("name")
@@ -295,24 +441,16 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_bans(self):
-        """Load ban data. Returns dict or defaults on error."""
         data = self._atomic_read(self._file_path("bans"))
         if data is None:
             return dict(self.DEFAULTS["bans"])
         return data
 
     def save_bans(self, data):
-        """Save complete ban data. Returns True/False."""
         return self._atomic_write(self._file_path("bans"), data)
 
     def save_bans_from_manager(self, channel_manager):
-        """Build and save ban data from ChannelManager.
-
-        Args:
-            channel_manager: The server's ChannelManager object.
-        Returns:
-            True on success, False on error.
-        """
+        """Build and save ban data from ChannelManager."""
         channel_bans = {}
         for ch in channel_manager.list_channels():
             if ch.ban_list:
@@ -325,53 +463,30 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_history(self):
-        """Load disconnection history. Returns dict or defaults on error."""
         data = self._atomic_read(self._file_path("history"))
         if data is None:
             return dict(self.DEFAULTS["history"])
         return data
 
     def save_history(self, data):
-        """Save complete history data. Returns True/False."""
         return self._atomic_write(self._file_path("history"), data)
 
     def add_disconnection(self, nick, user, realname, host, quit_reason=""):
-        """Record a user disconnection for WHOWAS.
-
-        Args:
-            nick: The user's nick.
-            user: The user's username.
-            realname: The user's real name.
-            host: The user's host/IP.
-            quit_reason: Reason for disconnect.
-        Returns:
-            True on success, False on error.
-        """
+        """Record a user disconnection for WHOWAS."""
         data = self.load_history()
         record = {
-            "nick": nick,
-            "user": user,
-            "realname": realname,
-            "host": host,
-            "quit_time": time.time(),
-            "quit_reason": quit_reason,
+            "nick": nick, "user": user, "realname": realname,
+            "host": host, "quit_time": time.time(), "quit_reason": quit_reason,
         }
         disconnections = data.get("disconnections", [])
         disconnections.append(record)
-        # Trim to max
         if len(disconnections) > self.MAX_HISTORY:
             disconnections = disconnections[-self.MAX_HISTORY:]
         data["disconnections"] = disconnections
         return self.save_history(data)
 
     def save_history_from_server(self, server):
-        """Save disconnection history from server's disconnected_clients dict.
-
-        Args:
-            server: The Server instance.
-        Returns:
-            True on success, False on error.
-        """
+        """Save disconnection history from server's disconnected_clients dict."""
         disconnections = []
         for nick, info in server.disconnected_clients.items():
             disconnections.append({
@@ -382,7 +497,6 @@ class PersistentStorageManager(Data):
                 "quit_time": info.get("quit_time", 0),
                 "quit_reason": info.get("quit_reason", ""),
             })
-        # Keep only last MAX_HISTORY
         if len(disconnections) > self.MAX_HISTORY:
             disconnections = disconnections[-self.MAX_HISTORY:]
         data = {"version": 1, "disconnections": disconnections}
@@ -393,33 +507,27 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_nickserv(self):
-        """Load NickServ nick registration database."""
         data = self._atomic_read(self._file_path("nickserv"))
         if data is None:
             return dict(self.DEFAULTS["nickserv"])
         return data
 
     def save_nickserv(self, data):
-        """Save NickServ database. Returns True/False."""
         return self._atomic_write(self._file_path("nickserv"), data)
 
     def nickserv_register(self, nick, password, registered_by=""):
-        """Register a nick with NickServ. Returns True/False."""
         data = self.load_nickserv()
         nicks = data.setdefault("nicks", {})
         key = nick.lower()
         if key in nicks:
             return False
         nicks[key] = {
-            "nick": nick,
-            "password": password,
-            "registered_by": registered_by,
-            "registered_at": time.time(),
+            "nick": nick, "password": password,
+            "registered_by": registered_by, "registered_at": time.time(),
         }
         return self.save_nickserv(data)
 
     def nickserv_drop(self, nick):
-        """Unregister a nick. Returns True if dropped, False if not found."""
         data = self.load_nickserv()
         nicks = data.get("nicks", {})
         key = nick.lower()
@@ -429,12 +537,10 @@ class PersistentStorageManager(Data):
         return self.save_nickserv(data)
 
     def nickserv_get(self, nick):
-        """Get registration info for a nick. Returns dict or None."""
         data = self.load_nickserv()
         return data.get("nicks", {}).get(nick.lower())
 
     def nickserv_check_password(self, nick, password):
-        """Validate a NickServ password. Returns True/False."""
         info = self.nickserv_get(nick)
         if not info:
             return False
@@ -445,53 +551,41 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_chanserv(self):
-        """Load ChanServ channel registration database."""
         data = self._atomic_read(self._file_path("chanserv"))
         if data is None:
             return dict(self.DEFAULTS["chanserv"])
         return data
 
     def save_chanserv(self, data):
-        """Save ChanServ database. Returns True/False."""
         return self._atomic_write(self._file_path("chanserv"), data)
 
     def chanserv_register(self, channel, owner, topic=""):
-        """Register a channel with ChanServ. Returns True/False."""
         data = self.load_chanserv()
         channels = data.setdefault("channels", {})
         key = channel.lower()
         if key in channels:
             return False
         channels[key] = {
-            "channel": channel,
-            "owner": owner,
-            "topic": topic,
-            "modes": ["t", "n"],  # default registered modes
-            "oplist": [owner.lower()],
-            "voicelist": [],
-            "banlist": [],
-            "enforce_mode": False,   # +E: require NickServ identify
-            "enforce_topic": False,  # +T: only owner/oper can change topic
-            "strict_ops": False,     # +S: only oplist can be op
-            "strict_voice": False,   # +V: only voicelist can be voice
+            "channel": channel, "owner": owner, "topic": topic,
+            "modes": ["t", "n"],
+            "oplist": [owner.lower()], "voicelist": [], "banlist": [],
+            "enforce_mode": False, "enforce_topic": False,
+            "strict_ops": False, "strict_voice": False,
             "created_at": time.time(),
         }
         return self.save_chanserv(data)
 
     def chanserv_get(self, channel):
-        """Get registration info for a channel. Returns dict or None."""
         data = self.load_chanserv()
         return data.get("channels", {}).get(channel.lower())
 
     def chanserv_update(self, channel, info):
-        """Update registration info for a channel."""
         data = self.load_chanserv()
         channels = data.setdefault("channels", {})
         channels[channel.lower()] = info
         return self.save_chanserv(data)
 
     def chanserv_drop(self, channel):
-        """Unregister a channel. Returns True/False."""
         data = self.load_chanserv()
         channels = data.get("channels", {})
         key = channel.lower()
@@ -505,50 +599,40 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_botserv(self):
-        """Load BotServ bot registration database."""
         data = self._atomic_read(self._file_path("botserv"))
         if data is None:
             return dict(self.DEFAULTS["botserv"])
         return data
 
     def save_botserv(self, data):
-        """Save BotServ database. Returns True/False."""
         return self._atomic_write(self._file_path("botserv"), data)
 
     def botserv_register(self, channel, botnick, owner, password):
-        """Register a bot for a channel. Returns True/False."""
         data = self.load_botserv()
         bots = data.setdefault("bots", {})
-        # Key is channel:botnick
         key = f"{channel.lower()}:{botnick.lower()}"
         if key in bots:
             return False
         bots[key] = {
-            "channel": channel,
-            "botnick": botnick,
-            "owner": owner,
-            "password": password,
+            "channel": channel, "botnick": botnick,
+            "owner": owner, "password": password,
             "registered_at": time.time(),
-            "logs": [], # For PROMPT 100
-            "logs_enabled": False,
+            "logs": [], "logs_enabled": False,
         }
         return self.save_botserv(data)
 
     def botserv_get_for_channel(self, channel):
-        """Get all bots for a channel."""
         data = self.load_botserv()
         bots = data.get("bots", {})
         chan_lower = channel.lower()
         return [b for k, b in bots.items() if k.startswith(f"{chan_lower}:")]
 
     def botserv_get(self, channel, botnick):
-        """Get specific bot info."""
         data = self.load_botserv()
         key = f"{channel.lower()}:{botnick.lower()}"
         return data.get("bots", {}).get(key)
 
     def botserv_drop(self, channel, botnick):
-        """Unregister a bot."""
         data = self.load_botserv()
         key = f"{channel.lower()}:{botnick.lower()}"
         if key not in data.get("bots", {}):
@@ -561,30 +645,20 @@ class PersistentStorageManager(Data):
     # ==================================================================
 
     def load_settings(self):
-        """Load server settings."""
         data = self._atomic_read(self._file_path("settings"))
         if data is None:
             return dict(self.DEFAULTS["settings"])
         return data
 
     def save_settings(self, data):
-        """Save server settings."""
         return self._atomic_write(self._file_path("settings"), data)
 
     # ==================================================================
-    # Bulk Persist (called by server._persist_session_data)
+    # Bulk Persist / Restore
     # ==================================================================
 
     def persist_all(self, server):
-        """Persist all server state to disk atomically.
-
-        This is the main entry point called after every state change.
-
-        Args:
-            server: The Server instance.
-        Returns:
-            True if all writes succeeded, False if any failed.
-        """
+        """Persist all server state to disk atomically."""
         ok = True
         if not self.save_channels_from_manager(server.channel_manager):
             ok = False
@@ -594,25 +668,13 @@ class PersistentStorageManager(Data):
             ok = False
         if not self.save_bans_from_manager(server.channel_manager):
             ok = False
-        # History is saved individually via add_disconnection, not in bulk
         return ok
 
-    # ==================================================================
-    # State Restoration (called on server startup)
-    # ==================================================================
-
     def restore_channels(self, channel_manager):
-        """Restore channel state from disk into a ChannelManager.
-
-        Args:
-            channel_manager: The server's ChannelManager instance.
-        Returns:
-            Number of channels restored.
-        """
+        """Restore channel state from disk into a ChannelManager."""
         data = self._load_channels_from_disk()
         channels = data.get("channels", {})
-        
-        # Clear existing channels that are not on disk (except default)
+
         on_disk_keys = {name.lower() for name in channels.keys()}
         for name in list(channel_manager.channels.keys()):
             if name not in on_disk_keys and name != channel_manager.DEFAULT_CHANNEL.lower():
@@ -628,8 +690,6 @@ class PersistentStorageManager(Data):
             channel.ban_list = set(ch_data.get("ban_list", []))
             channel.invite_list = set(ch_data.get("invite_list", []))
             channel.created = ch_data.get("created", time.time())
-            
-            # Clear existing members and restore from disk
             channel.members.clear()
             for nick, member_data in ch_data.get("members", {}).items():
                 addr = tuple(member_data.get("addr", ()))
@@ -638,20 +698,16 @@ class PersistentStorageManager(Data):
                     channel.add_member(nick, addr, modes)
             count += 1
 
-        # Apply ChanServ registration state
         chanserv_data = self.load_chanserv()
         chanserv_channels = chanserv_data.get("channels", {})
         for name, info in chanserv_channels.items():
             key = name.lower()
             if key in channel_manager.channels:
                 channel = channel_manager.channels[key]
-                # Override topic if ChanServ has one
                 if info.get("topic"):
                     channel.topic = info["topic"]
-                # Merge bans
                 for mask in info.get("banlist", []):
                     channel.ban_list.add(mask)
-                # Apply oplist/voicelist to restored members
                 oplist = [n.lower() for n in info.get("oplist", [])]
                 voicelist = [n.lower() for n in info.get("voicelist", [])]
                 for m_nick, m_info in channel.members.items():
@@ -659,22 +715,14 @@ class PersistentStorageManager(Data):
                         m_info["modes"].add("o")
                     elif m_nick.lower() in voicelist:
                         m_info["modes"].add("v")
-
         return count
 
     def restore_users(self, server):
-        """Restore user sessions from disk into server state.
-
-        Args:
-            server: The Server instance.
-        Returns:
-            Number of users restored.
-        """
+        """Restore user sessions from disk into server state."""
         data = self.load_users()
         users = data.get("users", {})
         now = time.time()
 
-        # Build index of nicks that are already live in memory
         live_nicks = {
             info.get("name", "").lower(): (addr, info.get("last_seen", 0))
             for addr, info in server.clients.items()
@@ -684,13 +732,11 @@ class PersistentStorageManager(Data):
         count = 0
         for nick, user_data in users.items():
             last_seen = user_data.get("last_seen", 0)
-            # Handle old format where last_seen was a dict of {addr: timestamp}
             if isinstance(last_seen, dict):
                 last_seen = max(last_seen.values()) if last_seen else 0
             if now - last_seen > server.timeout:
                 self.log(f"[STORAGE] Skipping expired session: {nick} "
-                          f"(last seen {now - last_seen:.0f}s ago)")
-                # Clean stale nick from channels and persistent user store
+                         f"(last seen {now - last_seen:.0f}s ago)")
                 server.channel_manager.remove_nick_from_all(nick)
                 self.remove_user(nick)
                 continue
@@ -699,18 +745,13 @@ class PersistentStorageManager(Data):
             if not addr or len(addr) != 2:
                 continue
 
-            # If this nick is already live in memory (recently seen), skip restore.
-            # This prevents disk-change syncs from overwriting or duplicating
-            # an active connection that hasn't been evicted yet.
             existing = live_nicks.get(nick.lower())
             if existing:
                 existing_addr, existing_last_seen = existing
                 if now - existing_last_seen <= server.timeout:
-                    # Already live — skip; don't disturb the active session
                     count += 1
                     continue
 
-            # Restore to server.clients
             client_data = {
                 "name": nick,
                 "last_seen": last_seen,
@@ -720,7 +761,6 @@ class PersistentStorageManager(Data):
                 client_data["away_message"] = user_data["away_message"]
             server.clients[addr] = client_data
 
-            # Restore registration state
             server.message_handler._ensure_reg_state(addr)
             reg = server.message_handler.registration_state[addr]
             reg["state"] = "registered"
@@ -729,7 +769,6 @@ class PersistentStorageManager(Data):
             reg["realname"] = user_data.get("realname", nick)
             reg["password"] = user_data.get("password", "")
 
-            # Restore channel memberships
             for chan_name, chan_info in user_data.get("channels", {}).items():
                 channel = server.channel_manager.ensure_channel(chan_name)
                 member_modes = set(chan_info.get("modes", []))
@@ -743,17 +782,9 @@ class PersistentStorageManager(Data):
         """Restore operator state from disk (v2 format).
 
         Only restores active opers that still have a live connection.
+        opers.json is the sole authority -- no olines.conf merge.
         """
         data = self._load_opers()
-
-        # Load olines from olines.conf (authoritative) then merge with stored olines
-        conf_olines = self.parse_olines_conf()
-        stored_olines = data.get("olines", {})
-        if conf_olines:
-            merged_olines = dict(stored_olines)
-            merged_olines.update(conf_olines)
-            data["olines"] = merged_olines
-            self._save_opers(data)
 
         active = data.get("active_opers", [])
         connected_nicks = {info.get("name", "").lower()
@@ -771,7 +802,9 @@ class PersistentStorageManager(Data):
                 continue
             if nick in connected_nicks:
                 server._active_opers_full.append(
-                    {"nick": nick, "account": entry.get("account", nick) if isinstance(entry, dict) else nick, "flags": flags}
+                    {"nick": nick,
+                     "account": entry.get("account", nick) if isinstance(entry, dict) else nick,
+                     "flags": flags}
                 )
                 for addr, info in server.clients.items():
                     if info.get("name", "").lower() == nick:
@@ -784,13 +817,7 @@ class PersistentStorageManager(Data):
         return count
 
     def restore_bans(self, server):
-        """Restore per-channel bans from disk.
-
-        Args:
-            server: The Server instance.
-        Returns:
-            Number of channels with bans restored.
-        """
+        """Restore per-channel bans from disk."""
         data = self.load_bans()
         channel_bans = data.get("channel_bans", {})
         count = 0
@@ -802,13 +829,7 @@ class PersistentStorageManager(Data):
         return count
 
     def restore_history(self, server):
-        """Restore disconnection history from disk.
-
-        Args:
-            server: The Server instance.
-        Returns:
-            Number of records restored.
-        """
+        """Restore disconnection history from disk."""
         data = self.load_history()
         disconnections = data.get("disconnections", [])
         for record in disconnections:
@@ -824,15 +845,7 @@ class PersistentStorageManager(Data):
         return len(disconnections)
 
     def restore_all(self, server):
-        """Restore complete server state from disk.
-
-        Call order matters: channels first, then users (so they can join channels).
-
-        Args:
-            server: The Server instance.
-        Returns:
-            Dict with counts of restored items.
-        """
+        """Restore complete server state from disk."""
         ch_count = self.restore_channels(server.channel_manager)
         user_count = self.restore_users(server)
         oper_count = self.restore_opers(server)
@@ -840,8 +853,8 @@ class PersistentStorageManager(Data):
         hist_count = self.restore_history(server)
 
         self.log(f"[STORAGE] Restore complete: {ch_count} channels, "
-                  f"{user_count} users, {oper_count} opers, "
-                  f"{ban_count} channels with bans, {hist_count} history records")
+                 f"{user_count} users, {oper_count} opers, "
+                 f"{ban_count} channels with bans, {hist_count} history records")
 
         return {
             "channels": ch_count,
@@ -850,79 +863,3 @@ class PersistentStorageManager(Data):
             "bans": ban_count,
             "history": hist_count,
         }
-
-    # ==================================================================
-    # Migration from old snapshot system
-    # ==================================================================
-
-    def migrate_from_snapshot(self, server):
-        """Migrate data from old Server_data.json session_snapshot format.
-
-        Checks if old snapshot data exists and migrates it to new files.
-        Only runs once - removes snapshot key after migration.
-
-        Args:
-            server: The Server instance (for get_data/put_data).
-        Returns:
-            True if migration happened, False if not needed.
-        """
-        snapshot = server.get_data("session_snapshot")
-        if not snapshot:
-            return False
-
-        self.log("[STORAGE] Migrating from old snapshot format...")
-
-        # Migrate channels
-        channels_snapshot = snapshot.get("channels", {})
-        if channels_snapshot:
-            channels_data = {"version": 1, "channels": {}}
-            for name, ch_info in channels_snapshot.items():
-                channels_data["channels"][name] = {
-                    "name": name,
-                    "topic": ch_info.get("topic", ""),
-                    "modes": ch_info.get("modes", []),
-                    "mode_params": {},
-                    "ban_list": ch_info.get("ban_list", []),
-                    "invite_list": [],
-                    "created": ch_info.get("created", time.time()),
-                    "members": {},
-                }
-            self.save_channels(channels_data)
-
-        # Migrate users
-        sessions = snapshot.get("sessions", {})
-        if sessions:
-            users_data = {"version": 1, "users": {}}
-            for nick, sess in sessions.items():
-                users_data["users"][nick] = {
-                    "nick": nick,
-                    "user": sess.get("user", nick),
-                    "realname": sess.get("realname", nick),
-                    "password": sess.get("password", ""),
-                    "user_modes": sess.get("user_modes", []),
-                    "away_message": sess.get("away_message"),
-                    "last_addr": sess.get("last_addr", []),
-                    "last_seen": sess.get("last_seen", 0),
-                    "channels": sess.get("channels", {}),
-                }
-            self.save_users(users_data)
-
-        # Migrate opers
-        active_opers = snapshot.get("active_opers", [])
-        oper_creds = server.get_data("oper_credentials") or {}
-        self._save_opers({
-            "version": 1,
-            "active_opers": active_opers,
-            "credentials": oper_creds,
-        })
-
-        # Initialize empty bans and history
-        self.save_bans(self.DEFAULTS["bans"])
-        self.save_history(self.DEFAULTS["history"])
-
-        self.log(f"[STORAGE] Migration complete: "
-                  f"{len(channels_snapshot)} channels, "
-                  f"{len(sessions)} users, "
-                  f"{len(active_opers)} opers")
-
-        return True

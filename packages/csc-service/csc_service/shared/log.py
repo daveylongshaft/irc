@@ -60,20 +60,22 @@ class Log(Root):
         resolves its own path via _get_logs_dir() on every write."""
         pass
 
-    def log(self, message: str):
+    def log(self, message: str, level: str = "INFO"):
         """
         Logs a message to the central project log file and prints to console.
 
-        - What it does: Formats a log entry with a timestamp and the calling class's
-          name, prints it to the console, and then appends it to the log file.
+        - What it does: Formats a log entry with a timestamp, level, and the 
+          calling class's name, prints it to the console, and then appends it 
+          to the log file.
         - Arguments:
             - `message` (str): The message to be logged.
+            - `level` (str): Severity level (default: INFO).
         - What calls it: Called by various methods throughout the system.
         - What it calls: `time.strftime()`, `open()`.
         """
         timestamp = time.strftime( "%Y-%m-%d %H:%M:%S" )
         class_name = self.__class__.__name__
-        log_entry = f"[{timestamp}] [{class_name}] {message}\n"
+        log_entry = f"[{timestamp}] [{class_name}] [{level}] {message}\n"
 
         # Print to the local console for immediate feedback
         if not os.environ.get("CSC_QUIET"):

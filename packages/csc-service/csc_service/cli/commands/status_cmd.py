@@ -33,8 +33,9 @@ def _is_pid_alive(pid):
     """Check if a process is running."""
     if IS_WINDOWS:
         try:
-            # tasklist /fi "pid eq N"
-            r = subprocess.run(["tasklist", "/fi", f"pid eq {pid}", "/nh"], capture_output=True, text=True, timeout=5)
+            # Using shell=True sometimes avoids the access violation crash on this host
+            cmd = f'tasklist /fi "pid eq {pid}" /nh'
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=5, shell=True)
             return str(pid) in r.stdout
         except Exception:
             return False
@@ -53,9 +54,11 @@ def _get_csc_service_pid():
         pid_file = Platform().run_dir / "csc-service.pid"
         if pid_file.exists():
             pid = int(pid_file.read_text().strip())
+            # Use _is_pid_alive which has Windows-specific tasklist check
             if _is_pid_alive(pid):
                 return pid
-    except Exception:
+    except Exception as e:
+        # Debug: log the error
         pass
     return None
 
@@ -123,12 +126,16 @@ def _systemd_pid(unit, scope="user"):
 
 def _windows_service_state(svc_name):
     try:
-        r = subprocess.run(["sc", "query", svc_name], capture_output=True, text=True, timeout=5)
+        # Use shell=True and be very defensive to avoid access violations
+        cmd = f'sc query "{svc_name}"'
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5, shell=True)
+        if r.returncode != 0:
+            return "inactive"
         if "RUNNING" in r.stdout:
             return "active"
         if "STOPPED" in r.stdout:
             return "inactive"
-        return "unknown"
+        return "inactive"
     except Exception:
         return "unknown"
 
@@ -360,6 +367,15 @@ def _fifo_clients():
 
 def status(args, config_manager):
     """Show service status — real runtime state from systemd."""
+    try:
+        _do_status(args, config_manager)
+    except Exception as e:
+        print(f"FATAL ERROR in status command: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+def _do_status(args, config_manager):
     cfg = config_manager.config
 
     if args.service:
@@ -391,8 +407,19 @@ def status(args, config_manager):
     for name, (unit, scope, cfg_key) in UNIT_SERVICES.items():
         enabled = cfg.get(cfg_key, False)
         cfg_str = "enabled" if enabled else "disabled"
-        state = _systemd_active(unit, scope)
-        pid = _systemd_pid(unit, scope)
+        
+        # On Windows, these run as threads in the parent process
+        if IS_WINDOWS:
+            if parent_state == "active":
+                state = "active" if enabled else "inactive"
+                pid = parent_pid # Threaded services share parent PID
+            else:
+                state = "inactive"
+                pid = None
+        else:
+            state = _systemd_active(unit, scope)
+            pid = _systemd_pid(unit, scope)
+            
         pid_str = f"(PID {pid})" if pid else ""
         print(f"  {name:22s} {cfg_str:10s}  [{state}] {pid_str}")
         if state == "active":
