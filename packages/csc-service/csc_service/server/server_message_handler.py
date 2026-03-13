@@ -366,14 +366,14 @@ class MessageHandler:
 
             # Update oper status
             if old_nick.lower() in self.server.opers:
-                self.server.storage.remove_active_oper(old_nick.lower())
-                self.server.storage.add_active_oper(new_nick.lower())
+                self.server.remove_active_oper(old_nick.lower())
+                self.server.add_active_oper(new_nick.lower())
 
             # Update persistent registry
             if old_nick in self.client_registry:
                 entry = self.client_registry.copy().pop(old_nick)
-                self.server.storage.remove_user(old_nick)
-                self.server.storage.set_user(new_nick, entry)
+                self.server.remove_user(old_nick)
+                self.server.set_user(new_nick, entry)
 
             # Broadcast nick change to all channels the user is in
             nick_msg = f":{old_prefix} NICK {new_nick}\r\n"
@@ -398,9 +398,9 @@ class MessageHandler:
             self.server.nickserv_identified.pop(addr, None)
 
             # NickServ enforcement for new nick
-            ns_info = self.server.storage.nickserv_get(new_nick)
+            ns_info = self.server.nickserv_get(new_nick)
             if ns_info:
-                settings = self.server.storage.load_settings().get("nickserv", {})
+                settings = self.server.load_settings().get("nickserv", {})
                 timeout = settings.get("enforce_timeout", 60)
                 self._nickserv_notice(addr,
                     f"This nickname is registered. You have {timeout} seconds to identify via: /msg NickServ IDENTIFY <password>")
@@ -471,7 +471,7 @@ class MessageHandler:
             entry.setdefault("last_seen", {})[f"{addr[0]}:{addr[1]}"] = now
         
         # Save to disk immediately
-        self.server.storage.set_user(nick, entry)
+        self.server.set_user(nick, entry)
 
         # Restore saved user modes (ircop, etc.) if this nick was seen before
         saved_modes = set()
@@ -485,7 +485,7 @@ class MessageHandler:
         self.server.clients[addr] = {"name": nick, "last_seen": now, "user_modes": saved_modes}
         # Restore ircop status if they had +o
         if "o" in saved_modes:
-            self.server.storage.add_active_oper(nick.lower())
+            self.server.add_active_oper(nick.lower())
             self.server.log(f"[REG] Restored ircop status for {nick}")
 
         # Send welcome burst (001-005)
@@ -515,9 +515,9 @@ class MessageHandler:
         self.server.log(f"[REG] {nick} completed registration from {addr}")
 
         # NickServ enforcement: if nick is registered, require IDENTIFY
-        ns_info = self.server.storage.nickserv_get(nick)
+        ns_info = self.server.nickserv_get(nick)
         if ns_info and self.server.nickserv_identified.get(addr) != nick:
-            settings = self.server.storage.load_settings().get("nickserv", {})
+            settings = self.server.load_settings().get("nickserv", {})
             timeout = settings.get("enforce_timeout", 60)
             self._nickserv_notice(addr,
                 f"This nickname is registered. You have {timeout} seconds to identify via: /msg NickServ IDENTIFY <password>")
@@ -590,7 +590,7 @@ class MessageHandler:
                     return
 
             # ChanServ Enforcement (JOIN)
-            chanserv_info = self.server.storage.chanserv_get(chan_name)
+            chanserv_info = self.server.chanserv_get(chan_name)
             initial_modes = set()
             if chanserv_info:
                 # Check ChanServ banlist (even if not set in channel.ban_list)
@@ -990,7 +990,7 @@ class MessageHandler:
                 self._send_numeric(addr, RPL_NOTOPIC, nick, f"{chan_name} :No topic is set")
         else:
             # Set topic — check +t mode and ChanServ enforcement
-            chanserv_info = self.server.storage.chanserv_get(chan_name)
+            chanserv_info = self.server.chanserv_get(chan_name)
             if chanserv_info and chanserv_info.get("enforce_topic"):
                 if chanserv_info["owner"].lower() != nick.lower() and nick.lower() not in self.server.opers:
                     self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
@@ -1274,10 +1274,7 @@ class MessageHandler:
 
         server_name = SERVER_NAME
 
-        # DEBUG: Log the OPER parameters
-        self.server.log(f"[OPER DEBUG] account={account!r} password={password!r} server_name={server_name!r} client_mask={client_mask!r}")
-
-        flags = self.server.storage.check_oper_auth(account, password, server_name, client_mask)
+        flags = self.server.check_oper_auth(account, password, server_name, client_mask)
         if flags is not None:
             if addr not in self.server.clients:
                 self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
@@ -1285,7 +1282,7 @@ class MessageHandler:
             for flag in flags:
                 if flag in "oOaA":
                     modes.add(flag)
-            self.server.storage.add_active_oper(nick.lower(), account, flags)
+            self.server.add_active_oper(nick.lower(), account, flags)
             if not hasattr(self.server, "_active_opers_full"):
                 self.server._active_opers_full = []
             self.server._active_opers_full = [
@@ -1472,7 +1469,7 @@ class MessageHandler:
                             return
                         # Grant operator status
                         if target_nick.lower() not in self.server.opers:
-                            self.server.storage.add_active_oper(target_nick.lower())
+                            self.server.add_active_oper(target_nick.lower())
                             current_modes.add("o")
                             changes_made = True
                     else:
@@ -1482,7 +1479,7 @@ class MessageHandler:
                                              ":Permission Denied- You're not an IRC operator")
                             return
                         if target_nick.lower() in self.server.opers:
-                            self.server.storage.remove_active_oper(target_nick.lower())
+                            self.server.remove_active_oper(target_nick.lower())
                             current_modes.discard("o")
                             changes_made = True
 
@@ -1621,7 +1618,7 @@ class MessageHandler:
                 member = channel.get_member(target_nick)
                 if direction == "+":
                     # ChanServ Enforcement for modes
-                    chanserv_info = self.server.storage.chanserv_get(chan_name)
+                    chanserv_info = self.server.chanserv_get(chan_name)
                     if chanserv_info:
                         # Enforce Mode (+E): require identification
                         if chanserv_info.get("enforce_mode"):
@@ -1894,7 +1891,7 @@ class MessageHandler:
         subcmd = msg.params[0].upper()
 
         if subcmd == "LIST":
-            trust_list = self.server.storage.load_settings().get("trusted_nicks", [])
+            trust_list = self.server.load_settings().get("trusted_nicks", [])
             if not trust_list:
                 self._send_notice(addr, "No trusted nicks configured.")
             else:
@@ -1910,21 +1907,21 @@ class MessageHandler:
         target = msg.params[1]
 
         if subcmd == "ADD":
-            settings = self.server.storage.load_settings()
+            settings = self.server.load_settings()
             trusted = set(settings.get("trusted_nicks", []))
             trusted.add(target.lower())
             settings["trusted_nicks"] = sorted(trusted)
-            self.server.storage.save_settings(settings)
+            self.server.save_settings(settings)
             self._send_notice(addr, f"Added {target} to trusted list.")
             self.server.log(f"[TRUST] {nick} added {target} to trusted nicks")
             self.server.send_wallops(f"{nick} added {target} to trusted nicks")
 
         elif subcmd == "REMOVE":
-            settings = self.server.storage.load_settings()
+            settings = self.server.load_settings()
             trusted = set(settings.get("trusted_nicks", []))
             trusted.discard(target.lower())
             settings["trusted_nicks"] = sorted(trusted)
-            self.server.storage.save_settings(settings)
+            self.server.save_settings(settings)
             self._send_notice(addr, f"Removed {target} from trusted list.")
             self.server.log(f"[TRUST] {nick} removed {target} from trusted nicks")
         else:
@@ -2016,22 +2013,11 @@ class MessageHandler:
                 f"m (opers), c (clients)")
 
     def _handle_rehash(self, msg, addr):
-        """REHASH — Reload olines.conf and server config. Requires 'rehash' flag."""
+        """REHASH — no longer supported. opers.json is the sole authority."""
         nick = self._get_nick(addr)
-        if not self.server.oper_has_flag(nick, "rehash"):
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                               "REHASH :Permission Denied- You do not have the rehash flag")
+        if not nick:
             return
-
-        self.server.log(f"[REHASH] {nick} initiated REHASH")
-        self._send_notice(addr, "Reloading configuration...")
-
-        # Reload olines.conf
-        new_olines = self.server.storage.reload_olines()
-        count = len(new_olines)
-        self._send_notice(addr, f"REHASH complete: loaded {count} O-line block(s).")
-        self.server.log(f"[REHASH] Loaded {count} oper block(s)")
-        self.server.send_wallops(f"{nick} performed REHASH ({count} O-line(s) loaded)")
+        self._send_notice(addr, "REHASH is no longer supported. Edit opers.json directly.")
 
     def _handle_shutdown(self, msg, addr):
         """SHUTDOWN [:<reason>] — Gracefully shut down the server. Requires 'shutdown' flag."""
@@ -2077,7 +2063,7 @@ class MessageHandler:
         key = msg.params[0]
 
         if key.upper() == "LIST":
-            settings = self.server.storage.load_settings()
+            settings = self.server.load_settings()
             local_cfg = settings.get("local_config", {})
             if not local_cfg:
                 self._send_notice(addr, "LOCALCONFIG: No local config entries.")
@@ -2087,7 +2073,7 @@ class MessageHandler:
             self._send_notice(addr, "End of LOCALCONFIG list.")
             return
 
-        settings = self.server.storage.load_settings()
+        settings = self.server.load_settings()
         local_cfg = settings.setdefault("local_config", {})
 
         if len(msg.params) == 1:
@@ -2101,7 +2087,7 @@ class MessageHandler:
             # Set
             value = msg.params[1]
             local_cfg[key] = value
-            self.server.storage.save_settings(settings)
+            self.server.save_settings(settings)
             self._send_notice(addr, f"LOCALCONFIG: {key} set to {value!r}")
             self.server.log(f"[LOCALCONFIG] {nick} set {key}={value!r}")
 
@@ -2157,7 +2143,7 @@ class MessageHandler:
 
         # Remove from active opers on disk if they were an oper
         if nick.lower() in self.server.opers:
-            self.server.storage.remove_active_oper(nick.lower())
+            self.server.remove_active_oper(nick.lower())
 
         # Remove from all server state
         self.server.clients.pop(target_addr, None)
@@ -2167,7 +2153,7 @@ class MessageHandler:
 
         # Persist disconnection to history.json for WHOWAS
         try:
-            self.server.storage.add_disconnection(
+            self.server.add_disconnection(
                 nick=nick, user=target_user, realname=target_realname,
                 host=SERVER_NAME, quit_reason=reason,
             )
@@ -2235,7 +2221,7 @@ class MessageHandler:
             return
 
         # Check if already registered
-        existing = self.server.storage.nickserv_get(nick)
+        existing = self.server.nickserv_get(nick)
         if existing:
             self._nickserv_notice(addr, f"Nick {nick} is already registered.")
             return
@@ -2243,7 +2229,7 @@ class MessageHandler:
         reg_info = self.registration_state.get(addr, {})
         registered_by = f"{reg_info.get('user', nick)}@{SERVER_NAME}"
 
-        if self.server.storage.nickserv_register(nick, password, registered_by):
+        if self.server.nickserv_register(nick, password, registered_by):
             # Auto-identify on register
             self.server.nickserv_identified[addr] = nick
             self._nickserv_notice(addr, f"Nick {nick} has been registered. You are now identified.")
@@ -2264,7 +2250,7 @@ class MessageHandler:
 
         password = args[0]
 
-        if self.server.storage.nickserv_check_password(nick, password):
+        if self.server.nickserv_check_password(nick, password):
             self.server.nickserv_identified[addr] = nick
             self._nickserv_notice(addr, f"You are now identified for {nick}.")
             self.server.log(f"[NICKSERV] {nick} identified from {addr}")
@@ -2289,7 +2275,7 @@ class MessageHandler:
         password = args[1]
 
         # Validate against NickServ password
-        if not self.server.storage.nickserv_check_password(target_nick, password):
+        if not self.server.nickserv_check_password(target_nick, password):
             self._nickserv_notice(addr, "Authentication failed. Nick is not registered or wrong password.")
             self.server.log(f"[NICKSERV] GHOST failed for {target_nick} from {addr}: bad credentials")
             return
@@ -2310,7 +2296,7 @@ class MessageHandler:
             return
 
         target = args[0]
-        info = self.server.storage.nickserv_get(target)
+        info = self.server.nickserv_get(target)
         if not info:
             self._nickserv_notice(addr, f"{target} is not registered.")
             return
@@ -2343,11 +2329,11 @@ class MessageHandler:
 
         password = args[0]
 
-        if not self.server.storage.nickserv_check_password(nick, password):
+        if not self.server.nickserv_check_password(nick, password):
             self._nickserv_notice(addr, "Invalid password.")
             return
 
-        if self.server.storage.nickserv_drop(nick):
+        if self.server.nickserv_drop(nick):
             self.server.nickserv_identified.pop(addr, None)
             self._nickserv_notice(addr, f"Nick {nick} has been dropped.")
             self.server.log(f"[NICKSERV] {nick} dropped their registration")
@@ -2405,7 +2391,7 @@ class MessageHandler:
             return
 
         chan_name, option, value = args[0], args[1].upper(), args[2].lower()
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2428,7 +2414,7 @@ class MessageHandler:
             return
 
         info[option_map[option]] = bool_value
-        self.server.storage.chanserv_update(chan_name, info)
+        self.server.chanserv_update(chan_name, info)
         self._chanserv_notice(addr, f"Option {option} for {chan_name} set to {'on' if bool_value else 'off'}.")
         
         # Sync with channel modes if applicable
@@ -2479,7 +2465,7 @@ class MessageHandler:
             self._chanserv_notice(addr, f"You must be a channel operator of {chan_name} to register it.")
             return
 
-        if self.server.storage.chanserv_register(chan_name, nick, topic):
+        if self.server.chanserv_register(chan_name, nick, topic):
             self._chanserv_notice(addr, f"Channel {chan_name} is now registered to {nick}.")
             self.server.log(f"[CHANSERV] {nick} registered channel {chan_name}")
             # Apply state
@@ -2500,7 +2486,7 @@ class MessageHandler:
             return
 
         chan_name, target_nick = args[0], args[1]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2513,7 +2499,7 @@ class MessageHandler:
         oplist = info.setdefault("oplist", [])
         if target_nick.lower() not in [n.lower() for n in oplist]:
             oplist.append(target_nick)
-            self.server.storage.chanserv_update(chan_name, info)
+            self.server.chanserv_update(chan_name, info)
             self._chanserv_notice(addr, f"{target_nick} added to {chan_name} oplist.")
         
         # Grant mode if in channel
@@ -2535,7 +2521,7 @@ class MessageHandler:
             return
 
         chan_name, target_nick = args[0], args[1]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2548,7 +2534,7 @@ class MessageHandler:
         new_oplist = [n for n in oplist if n.lower() != target_nick.lower()]
         if len(new_oplist) < len(oplist):
             info["oplist"] = new_oplist
-            self.server.storage.chanserv_update(chan_name, info)
+            self.server.chanserv_update(chan_name, info)
             self._chanserv_notice(addr, f"{target_nick} removed from {chan_name} oplist.")
         
         # Revoke mode
@@ -2569,7 +2555,7 @@ class MessageHandler:
             return
 
         chan_name, target_nick = args[0], args[1]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2581,7 +2567,7 @@ class MessageHandler:
         voicelist = info.setdefault("voicelist", [])
         if target_nick.lower() not in [n.lower() for n in voicelist]:
             voicelist.append(target_nick)
-            self.server.storage.chanserv_update(chan_name, info)
+            self.server.chanserv_update(chan_name, info)
             self._chanserv_notice(addr, f"{target_nick} added to {chan_name} voicelist.")
         
         # Grant mode
@@ -2602,7 +2588,7 @@ class MessageHandler:
             return
 
         chan_name, target_nick = args[0], args[1]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2615,7 +2601,7 @@ class MessageHandler:
         new_voicelist = [n for n in voicelist if n.lower() != target_nick.lower()]
         if len(new_voicelist) < len(voicelist):
             info["voicelist"] = new_voicelist
-            self.server.storage.chanserv_update(chan_name, info)
+            self.server.chanserv_update(chan_name, info)
             self._chanserv_notice(addr, f"{target_nick} removed from {chan_name} voicelist.")
         
         # Revoke mode
@@ -2636,7 +2622,7 @@ class MessageHandler:
             return
 
         chan_name = args[0]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2660,7 +2646,7 @@ class MessageHandler:
         banlist = info.setdefault("banlist", [])
         if mask.lower() not in [b.lower() for b in banlist]:
             banlist.append(mask)
-            self.server.storage.chanserv_update(chan_name, info)
+            self.server.chanserv_update(chan_name, info)
             self._chanserv_notice(addr, f"Mask {mask} added to {chan_name} banlist.")
             
             # Apply ban immediately if possible
@@ -2684,7 +2670,7 @@ class MessageHandler:
             return
 
         chan_name, mask = args[0], args[1]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2697,7 +2683,7 @@ class MessageHandler:
         new_banlist = [b for b in banlist if b.lower() != mask.lower()]
         if len(new_banlist) < len(banlist):
             info["banlist"] = new_banlist
-            self.server.storage.chanserv_update(chan_name, info)
+            self.server.chanserv_update(chan_name, info)
             self._chanserv_notice(addr, f"Mask {mask} removed from {chan_name} banlist.")
             
             channel = self.server.channel_manager.get_channel(chan_name)
@@ -2710,7 +2696,7 @@ class MessageHandler:
             self._chanserv_notice(addr, "Syntax: INFO <#chan>")
             return
         chan_name = args[0]
-        info = self.server.storage.chanserv_get(chan_name)
+        info = self.server.chanserv_get(chan_name)
         if not info:
             self._chanserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2723,7 +2709,7 @@ class MessageHandler:
 
     def _chanserv_list(self, args, addr):
         """LIST"""
-        data = self.server.storage.load_chanserv()
+        data = self.server.load_chanserv()
         channels = data.get("channels", {})
         if not channels:
             self._chanserv_notice(addr, "No channels registered.")
@@ -2781,7 +2767,7 @@ class MessageHandler:
         enabled = enabled_str in ("enable", "on", "true", "1", "yes")
 
         # Check ChanServ ownership
-        chanserv_info = self.server.storage.chanserv_get(chan_name)
+        chanserv_info = self.server.chanserv_get(chan_name)
         if not chanserv_info:
             self._botserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2791,7 +2777,7 @@ class MessageHandler:
             return
 
         # Check if bot registered for this channel
-        bot_info = self.server.storage.botserv_get(chan_name, botnick)
+        bot_info = self.server.botserv_get(chan_name, botnick)
         if not bot_info:
             self._botserv_notice(addr, f"Bot {botnick} is not registered for {chan_name}.")
             return
@@ -2810,10 +2796,10 @@ class MessageHandler:
 
         # Use a new storage method or update manually
         # I'll use save_botserv directly for now
-        data = self.server.storage.load_botserv()
+        data = self.server.load_botserv()
         key = f"{chan_name.lower()}:{botnick.lower()}"
         data["bots"][key] = bot_info
-        self.server.storage.save_botserv(data)
+        self.server.save_botserv(data)
 
         self._botserv_notice(addr, f"Log {log_file} {enabled_str}d for {botnick} on {chan_name}.")
         self.server.log(f"[BOTSERV] {nick} {enabled_str}d log {log_file} for {botnick}")
@@ -2836,7 +2822,7 @@ class MessageHandler:
             return
 
         # Check ChanServ registration and ownership
-        chanserv_info = self.server.storage.chanserv_get(chan_name)
+        chanserv_info = self.server.chanserv_get(chan_name)
         if not chanserv_info:
             self._botserv_notice(addr, f"Channel {chan_name} is not registered with ChanServ.")
             return
@@ -2856,7 +2842,7 @@ class MessageHandler:
                 self._botserv_notice(addr, f"Nickname {botnick} is already in use.")
                 return
 
-        if self.server.storage.botserv_register(chan_name, botnick, nick, password):
+        if self.server.botserv_register(chan_name, botnick, nick, password):
             self._botserv_notice(addr, f"Bot {botnick} is now registered for {chan_name}.")
             self.server.log(f"[BOTSERV] {nick} registered bot {botnick} for {chan_name}")
         else:
@@ -2872,7 +2858,7 @@ class MessageHandler:
         botnick, chan_name = args[0], args[1]
         
         # Check ChanServ ownership
-        chanserv_info = self.server.storage.chanserv_get(chan_name)
+        chanserv_info = self.server.chanserv_get(chan_name)
         if not chanserv_info:
             self._botserv_notice(addr, f"Channel {chan_name} is not registered.")
             return
@@ -2881,7 +2867,7 @@ class MessageHandler:
             self._botserv_notice(addr, f"Permission denied. You are not the owner of {chan_name}.")
             return
 
-        if self.server.storage.botserv_drop(chan_name, botnick):
+        if self.server.botserv_drop(chan_name, botnick):
             self._botserv_notice(addr, f"Bot {botnick} has been unregistered from {chan_name}.")
             self.server.log(f"[BOTSERV] {nick} deleted bot {botnick} for {chan_name}")
         else:
@@ -2889,7 +2875,7 @@ class MessageHandler:
 
     def _botserv_list(self, args, addr):
         """LIST [#chan]"""
-        data = self.server.storage.load_botserv()
+        data = self.server.load_botserv()
         bots = data.get("bots", {})
         if not bots:
             self._botserv_notice(addr, "No bots registered.")
@@ -2933,7 +2919,7 @@ class MessageHandler:
         if addr not in self.server.clients:
             return
 
-        settings = self.server.storage.load_settings().get("nickserv", {})
+        settings = self.server.load_settings().get("nickserv", {})
         mode = settings.get("enforce_mode", "disconnect")
 
         if mode == "warn":
@@ -3549,7 +3535,7 @@ class MessageHandler:
             self._oper_notice(addr, line)
 
     def _trust_list(self, addr):
-        data = self.server.storage.load_opers()
+        data = self.server.load_opers()
         olines = data.get("olines", {})
         remote = data.get("remote_olines", {})
         active_nicks = {e.get("nick", "").lower() for e in data.get("active_opers", [])
@@ -3579,7 +3565,7 @@ class MessageHandler:
         flags = args[4] if len(args) > 4 else "ol"
         servers = [s.strip() for s in servers_str.split(",") if s.strip()]
         masks = [m.strip() for m in masks_str.split(",") if m.strip()]
-        data = self.server.storage.load_opers()
+        data = self.server.load_opers()
         olines = data.setdefault("olines", {})
         olines.setdefault(acct, []).append({
             "user": acct,
@@ -3589,7 +3575,7 @@ class MessageHandler:
             "flags": flags,
             "comment": "",
         })
-        self.server.storage.save_opers(data)
+        self.server.save_opers(data)
         self._write_olines_conf(data)
         self._oper_notice(addr, f"O-line added for account '{acct}' (flags: {flags})")
         nick = self._get_nick(addr)
@@ -3600,7 +3586,7 @@ class MessageHandler:
             self._oper_notice(addr, "Usage: TRUST del <account>")
             return
         acct = args[0]
-        data = self.server.storage.load_opers()
+        data = self.server.load_opers()
         olines = data.get("olines", {})
         if acct not in olines:
             self._oper_notice(addr, f"No o-line found for '{acct}'")
@@ -3622,7 +3608,7 @@ class MessageHandler:
             else:
                 updated_active.append(entry)
         data["active_opers"] = updated_active
-        self.server.storage.save_opers(data)
+        self.server.save_opers(data)
         self._write_olines_conf(data)
         self._oper_notice(addr, f"O-line removed for account '{acct}'")
         nick = self._get_nick(addr)
@@ -3634,7 +3620,7 @@ class MessageHandler:
             self._oper_notice(addr, "  Fields: password, flags, servers")
             return
         acct, field, value = args[0], args[1].lower(), " ".join(args[2:])
-        data = self.server.storage.load_opers()
+        data = self.server.load_opers()
         entries = data.get("olines", {}).get(acct)
         if not entries:
             self._oper_notice(addr, f"No o-line found for '{acct}'")
@@ -3649,7 +3635,7 @@ class MessageHandler:
             else:
                 self._oper_notice(addr, f"Unknown field '{field}'. Use: password, flags, servers")
                 return
-        self.server.storage.save_opers(data)
+        self.server.save_opers(data)
         self._write_olines_conf(data)
         self._oper_notice(addr, f"Updated '{field}' for account '{acct}'")
 
@@ -3658,13 +3644,13 @@ class MessageHandler:
             self._oper_notice(addr, "Usage: TRUST addhost <account> <nick!user@host>")
             return
         acct, mask = args[0], args[1]
-        data = self.server.storage.load_opers()
+        data = self.server.load_opers()
         entries = data.get("olines", {}).get(acct)
         if not entries:
             self._oper_notice(addr, f"No o-line found for '{acct}'")
             return
         entries[0].setdefault("host_masks", []).append(mask)
-        self.server.storage.save_opers(data)
+        self.server.save_opers(data)
         self._write_olines_conf(data)
         self._oper_notice(addr, f"Added host mask '{mask}' to '{acct}'")
 
@@ -3673,7 +3659,7 @@ class MessageHandler:
             self._oper_notice(addr, "Usage: TRUST delhost <account> <nick!user@host>")
             return
         acct, mask = args[0], args[1]
-        data = self.server.storage.load_opers()
+        data = self.server.load_opers()
         entries = data.get("olines", {}).get(acct)
         if not entries:
             self._oper_notice(addr, f"No o-line found for '{acct}'")
@@ -3682,15 +3668,14 @@ class MessageHandler:
             masks = entry.get("host_masks", [])
             if mask in masks:
                 masks.remove(mask)
-        self.server.storage.save_opers(data)
+        self.server.save_opers(data)
         self._write_olines_conf(data)
         self._oper_notice(addr, f"Removed host mask '{mask}' from '{acct}'")
 
     def _write_olines_conf(self, data):
-        """Rewrite olines.conf from current opers.json data."""
-        conf_path = os.path.join(self.server.storage.base_path, "olines.conf")
-        self.server.storage.write_olines_conf(
-            conf_path, data.get("olines", {}), SERVER_NAME)
+        """Rewrite olines.conf from current opers.json data (export only)."""
+        self.server.write_olines_conf(
+            data.get("olines", {}), server_name=self.server.server_name)
 
     def _handle_stats(self, msg, addr):
         """STATS <letter> — server statistics (oper only)."""
@@ -3718,7 +3703,7 @@ class MessageHandler:
                     continue
                 channels = self.server.channel_manager.find_channels_for_nick(n)
                 chans = ",".join(ch.name for ch in channels) or "(none)"
-                flags = self.server.storage.get_oper_flags(n)
+                flags = self.server.get_oper_flags(n)
                 oper_tag = f" [OPER:{flags}]" if flags else ""
                 self._oper_notice(addr, f"  {n}{oper_tag} @ {a[0]}:{a[1]}  chans: {chans}")
             self._oper_notice(addr, "--- End Clients ---")
@@ -3739,23 +3724,11 @@ class MessageHandler:
         self.server.sock_send(end.encode(), addr)
 
     def _handle_rehash(self, msg, addr):
-        """REHASH — reload olines.conf into memory (requires server admin)."""
+        """REHASH — no longer supported. opers.json is the sole authority."""
         nick = self._require_admin(addr)
         if not nick:
             return
-        conf_path = os.path.join(self.server.storage.base_path, "olines.conf")
-        new_olines = self.server.storage.parse_olines_conf(conf_path)
-        if new_olines:
-            data = self.server.storage.load_opers()
-            data["olines"] = new_olines
-            self.server.storage.save_opers(data)
-            self._oper_notice(addr, f"Rehash complete: loaded {sum(len(v) for v in new_olines.values())} o-line entries.")
-        else:
-            self._oper_notice(addr, "Rehash: olines.conf not found or empty. Config unchanged.")
-        RPL_REHASHING = "382"
-        reply = f":{SERVER_NAME} {RPL_REHASHING} {nick} olines.conf :Rehashing\r\n"
-        self.server.sock_send(reply.encode(), addr)
-        self.server.send_wallops(f"Server rehashed by {nick}")
+        self._oper_notice(addr, "REHASH is no longer supported. Edit opers.json directly.")
 
     def _handle_shutdown(self, msg, addr):
         """SHUTDOWN [reason] — graceful server shutdown (requires server admin)."""
@@ -3838,7 +3811,7 @@ class MessageHandler:
     def _handle_help(self, msg, addr):
         """HELP — show available commands based on caller's oper flags."""
         nick = self._get_nick(addr)
-        flags = self.server.storage.get_oper_flags(nick) if nick else ""
+        flags = self.server.get_oper_flags(nick) if nick else ""
         is_oper  = bool(flags)
         is_admin = "a" in flags or "A" in flags
         is_netadmin = "A" in flags

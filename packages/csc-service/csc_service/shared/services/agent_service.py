@@ -519,9 +519,10 @@ class agent( Service ):
             # Write ONLY the metadata to the agent's queue/in/ (for tracking)
             # The actual workorder content is already in WIP_DIR and referenced by orders.md
             metadata_filename = f"{Path(wip_filename).stem}.json"
-            queue_in_path = agent_dir / "queue" / "in"
+            queue_in_path = Platform.get_agent_queue_dir(selected, "in")
             queue_in_path.mkdir(parents=True, exist_ok=True)
-            (queue_in_path / metadata_filename).write_text(json.dumps(metadata, indent=4), encoding='utf-8')
+            metadata_content = json.dumps(metadata, indent=4)
+            self._write_text_file(queue_in_path / metadata_filename, metadata_content)
 
             # Generate orders.md from template via script
             # This script creates queue/in/orders.md which points to the WIP file
@@ -549,8 +550,7 @@ class agent( Service ):
             agent_name: The name of the agent assigned to the workorder.
             workorder_filename: The unique filename for the workorder (e.g., Q01_analysis_timestamp.md).
         """
-        agent_dir = self.PROJECT_ROOT / "ops" / "agents" / agent_name
-        queue_in_path = agent_dir / "queue" / "in"
+        queue_in_path = Platform.get_agent_queue_dir(agent_name, "in")
 
         # Ensure queue directories exist (already handled by _ensure_agent_dirs earlier, but good to be explicit)
         if not queue_in_path.exists():
@@ -559,60 +559,128 @@ class agent( Service ):
         # Read content from the WIP file
         workorder_content = self._read_text_safe(wip_path)
 
-        # Write the workorder content to the agent's queue/in/
-        (queue_in_path / workorder_filename).write_text(workorder_content, encoding='utf-8')
+        # Write the workorder content to the agent's queue/in/ via Data() I/O
+        self._write_text_file(queue_in_path / workorder_filename, workorder_content)
         self.log(f"Wrote queued workorder file: {queue_in_path / workorder_filename}")
 
-        # Write the metadata to the agent's queue/in/
+        # Write the metadata to the agent's queue/in/ via Data() I/O
         metadata_filename = f"{Path(workorder_filename).stem}.json"
-        (queue_in_path / metadata_filename).write_text(json.dumps(metadata, indent=4), encoding='utf-8')
+        metadata_content = json.dumps(metadata, indent=4)
+        self._write_text_file(queue_in_path / metadata_filename, metadata_content)
         self.log(f"Wrote queued workorder metadata: {queue_in_path / metadata_filename}")
 
     def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str):
-        """Run the generate_orders_md script to create orders.md in agent's queue/in/.
+        """Generate orders.md in agent's queue/in/ with cached context.
 
-        Calls generate_orders_md.bat (Windows) or generate_orders_md.sh (Unix)
-        which uses sed to replace <wip_file_relative_pathspec> in the template.
+        Generates stable context files from tools/ (based on .lastrun), then
+        concatenates them with pathspecs and the workorder for prompt caching.
 
-        Args:
-            agent_name: The name of the agent (e.g., "haiku")
-            workorder_filename: The workorder filename (e.g., "TASK_fix_foo.md")
+        Strategy:
+        - Context files (standards, role, p-files, tree, tools/*) are stable
+          and generated once (regenerated only when tools change)
+        - Subsequent workorders reuse cached context, saving 90% on input tokens
+        - No journaling instructions (agents run non-interactively)
+
+        Files included (in volatility order — least changing first):
+            00-standards.md        (STATIC)
+            01-role.md             (STATIC)
+            02-p-files.md          (SEMI-STABLE)
+            03-tree.md             (SEMI-STABLE)
+            04-tools-shared.md     (VOLATILE)
+            05-tools-service.md    (VOLATILE)
+            06-tools-server.md     (VOLATILE)
+            07-tools-index.md      (MOST VOLATILE)
+
+        Then:
+            WORKORDER CONTENT
         """
         try:
-            agents_dir = Platform.get_agents_dir()
-            agent_dir = agents_dir / agent_name
-            scripts_dir = agents_dir / "templates"
+            agent_dir = Platform.get_agents_dir() / agent_name
+            context_dir = Platform.get_agent_context_dir(agent_name)
+            queue_in_dir = Platform.get_agent_queue_dir(agent_name, "in")
 
-            if os.name == 'nt':
-                script = scripts_dir / "generate_orders_md.bat"
+            # Step 1: Refresh context files if tools changed
+            lastrun_file = Platform.get_tools_lastrun_file()
+            should_regenerate = True
+
+            if context_dir.exists():
+                # Check if any context file is older than tools/.lastrun
+                context_files = list(context_dir.glob("*.md"))
+                if context_files and lastrun_file.exists():
+                    oldest_ctx = min(f.stat().st_mtime for f in context_files)
+                    lastrun_time = lastrun_file.stat().st_mtime
+                    should_regenerate = oldest_ctx < lastrun_time
+
+            if should_regenerate:
+                context_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copy/generate context files from tools/ (ordered by volatility)
+                context_mappings = [
+                    ("00-standards.md", Platform.PROJECT_ROOT / "ops" / "standards.md"),
+                    ("01-role.md", Platform.get_roles_dir("_shared") / "README.md"),
+                    ("02-p-files.md", Platform.PROJECT_ROOT / "p-files.list"),
+                    ("03-tree.md", Platform.PROJECT_ROOT / "tree.txt"),
+                    ("04-tools-shared.md", Platform.get_tools_dir() / "csc-shared.txt"),
+                    ("05-tools-service.md", Platform.get_tools_dir() / "csc-service.txt"),
+                    ("06-tools-server.md", Platform.get_tools_dir() / "server.txt"),
+                    ("07-tools-index.md", Platform.get_tools_dir() / "INDEX.txt"),
+                ]
+
+                for ctx_name, src_path in context_mappings:
+                    if src_path.exists():
+                        content = self._read_text_file(src_path)
+                        if content.strip():
+                            self._write_text_file(context_dir / ctx_name, content)
+                            self.log(f"Updated context: {ctx_name}")
+
+            # Step 2: Concatenate context files + pathspecs + workorder
+            orders_content = ""
+
+            # Add all context files in order (cached on subsequent WOs)
+            for ctx_file in sorted(context_dir.glob("*.md")):
+                content = self._read_text_file(ctx_file)
+                if content.strip():
+                    orders_content += content + "\n\n"
+
+            # Add pathspecs (NOT full contents — let agent read if needed)
+            # Use Platform methods for cross-platform path handling
+            plat = Platform()
+            wip_path_rel = "ops/wo/wip/" + workorder_filename  # Already forward-slash safe
+            wip_path_abs = plat.get_abs_root_path_forward_slashes(["ops", "wo", "wip", workorder_filename])
+
+            orders_content += f"""
+## YOUR ASSIGNMENT
+
+- **Workorder file** (relative): {wip_path_rel}
+- **Workorder file** (absolute): {wip_path_abs}
+- **Work directory**: CSC_ROOT (project root)
+- **Code clone**: tmp/clones/<agent>/<wo>-<ts>/repo/
+
+Read your task from the workorder file. Journal progress using the API.
+When complete, write "COMPLETE" to the workorder and exit.
+
+---
+
+"""
+
+            # Add the actual workorder content
+            wip_content = self._read_text_file(self.WIP_DIR / workorder_filename)
+            if wip_content.strip():
+                orders_content += f"## TASK\n\n{wip_content}"
             else:
-                script = scripts_dir / "generate_orders_md.sh"
+                self.log(f"WARNING: WIP file is empty: {self.WIP_DIR / workorder_filename}")
+                orders_content += "## TASK\n\n(workorder content not found)\n"
 
-            if not script.exists():
-                self.log(f"WARNING: {script.name} not found at {script}")
-                return
+            # Step 3: Write orders.md to queue/in
+            queue_in_dir.mkdir(parents=True, exist_ok=True)
+            orders_path = queue_in_dir / "orders.md"
+            self._write_text_file(orders_path, orders_content)
+            self.log(f"Generated orders.md for {agent_name} ({len(orders_content)} chars, {len(orders_content.split())} words)")
 
-            # Compute absolute WIP file path for correct path in orders.md
-            # Agents run in a temp clone of irc.git so they need the absolute path
-            wip_abs = str(self.WIP_DIR / workorder_filename)
-            cmd = [str(script), str(agent_dir), workorder_filename, wip_abs]
-            if script.suffix == ".sh":
-                cmd = ["bash"] + cmd
-
-            result = subprocess.run(
-                cmd,
-                cwd=str(self.PROJECT_ROOT),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                self.log(f"Generated orders.md for {agent_name} via {script.name}")
-            else:
-                self.log(f"WARNING: {script.name} failed: {result.stderr.strip()}")
         except Exception as e:
-            self.log(f"WARNING: Failed to run generate_orders_md script: {e}")
+            self.log(f"ERROR: Failed to generate orders.md: {e}", "ERROR")
+            import traceback
+            self.log(traceback.format_exc(), "ERROR")
 
     def _format_elapsed(self, started):
         """Format elapsed time from a start timestamp."""

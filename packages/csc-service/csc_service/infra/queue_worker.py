@@ -42,6 +42,7 @@ from pathlib import Path
 import signal
 from datetime import datetime
 
+from csc_service.shared.agent_executor import AgentExecutor
 from csc_service.shared.api_key_manager import APIKeyManager
 from csc_service.shared.service import Service
 
@@ -58,6 +59,7 @@ DONE_DIR = None
 LOGS_DIR = None
 AGENT_DATA_FILE = None  # kept for reference; writes go through _agent_svc
 PENDING_FILE = None     # kept for reference; writes go through _qw_svc
+AGENT_EXECUTOR = None   # The new agent executor
 
 # Service instances for Data/Log/Platform hierarchy (set by _initialize_paths)
 _agent_svc: Service = None   # shared agent tracking (aligns with agent_service.py)
@@ -79,7 +81,7 @@ AGENT_MAX_TOTAL_RUNTIME_SECONDS = 3600
 ACTIVE_PROCS = {}
 
 def _initialize_paths(work_dir_arg=None):
-    global CSC_ROOT, AGENTS_DIR, PROMPTS_BASE, READY_DIR, WIP_DIR, DONE_DIR, LOGS_DIR, AGENT_DATA_FILE, API_KEY_MGR, QUEUE_LOG, STALE_FILE, PENDING_FILE, _agent_svc, _qw_svc
+    global CSC_ROOT, AGENTS_DIR, PROMPTS_BASE, READY_DIR, WIP_DIR, DONE_DIR, LOGS_DIR, AGENT_DATA_FILE, API_KEY_MGR, QUEUE_LOG, STALE_FILE, PENDING_FILE, _agent_svc, _qw_svc, AGENT_EXECUTOR
 
     if work_dir_arg:
         CSC_ROOT = Path(work_dir_arg).resolve()
@@ -144,6 +146,8 @@ def _initialize_paths(work_dir_arg=None):
     QUEUE_LOG = LOGS_DIR / "queue-worker.log"
     STALE_FILE = LOGS_DIR / "queue-wip-sizes.json"
     PENDING_FILE = LOGS_DIR / "queue-pending.json"
+    
+    AGENT_EXECUTOR = AgentExecutor(CSC_ROOT)
 
 # _initialize_paths() # Initial call to set up paths on module load (removed)
 
@@ -214,7 +218,11 @@ def create_agent_temp_repo(agent_name, wo_stem):
     ts = int(time.time())
     # Sanitize wo_stem for filesystem use
     safe_stem = re.sub(r'[^\w-]', '_', wo_stem)[:40]
-    repo = Path("/opt/clones") / agent_name / f"{safe_stem}-{ts}" / "repo"
+    # Use Platform for the clones base — never hardcode /opt
+    from csc_service.shared.platform import Platform as _Plat
+    _plat = _Plat()
+    clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp" / "csc") / "clones"
+    repo = clones_base / agent_name / f"{safe_stem}-{ts}" / "repo"
     repo.mkdir(parents=True, exist_ok=True)
 
     irc_remote = _get_irc_remote()
@@ -875,94 +883,7 @@ def build_full_prompt(agent_name, prompt_filename):
 # Agent spawning
 # ======================================================================
 
-def spawn_agent(agent_name, prompt_filename, agent_repo=None):
-    """Spawn AI agent in agent's temp repo. Returns (PID, log_path) or (None, None).
 
-    Args:
-        agent_name: Name of the agent (e.g., "haiku")
-        prompt_filename: The workorder filename
-        agent_repo: Path to agent's temp repo (if None, falls back to CSC_ROOT)
-    """
-    if agent_name not in KNOWN_AGENTS:
-        log(f"Unknown agent: {agent_name}", "ERROR")
-        return None, None
-
-    # Find the run_agent script: agent-specific first, then template fallback
-    agent_dir = AGENTS_DIR / agent_name
-    if IS_WINDOWS:
-        run_agent_script = agent_dir / "bin" / "run_agent.bat"
-        if not run_agent_script.exists():
-            # Fallback to template
-            run_agent_script = AGENTS_DIR / "templates" / "run_agent.bat"
-    else:
-        run_agent_script = agent_dir / "bin" / "run_agent.sh"
-        if not run_agent_script.exists():
-            run_agent_script = AGENTS_DIR / "templates" / "run_agent.sh"
-
-    if not run_agent_script.exists():
-        log(f"run_agent script not found for {agent_name} (checked agent dir and templates)", "ERROR")
-        return None, None
-
-    # Agent runs from /opt — parent of both /opt/clones (temp repos) and /opt/csc (WO files).
-    # Gemini's sandbox will cover both locations. Claude reads WO at abs path directly.
-    spawn_cwd = "/opt"
-
-    work_orders_relative = str(Path("ops") / "agents" / agent_name / "queue" / "work" / "orders.md")
-
-    # Use ABSOLUTE path to run_agent script to avoid path resolution issues
-    # The script may be in templates/, and relative paths don't resolve correctly when
-    # cwd is set to a different directory (the temp repo)
-    cmd = [str(run_agent_script.absolute()), work_orders_relative]
-
-    # Log file for agent stdout/stderr
-    ts = int(time.time())
-    agent_log = LOGS_DIR / f"agent_{ts}_{Path(prompt_filename).stem}.log"
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Diagnostic logging for spawn debugging
-    orders_abs = Path(spawn_cwd) / work_orders_relative
-    log(f"Spawn: agent={agent_name}, script={run_agent_script.absolute()}")
-    log(f"  cwd={spawn_cwd}")
-    log(f"  orders_relative={work_orders_relative}")
-    log(f"  orders_exists={orders_abs.exists()}")
-    if agent_repo:
-        log(f"  agent_repo={agent_repo}, is_csc_root={agent_repo.resolve() == CSC_ROOT.resolve()}")
-
-    try:
-        log_fh = open(agent_log, 'w', encoding='utf-8')
-        child_env = os.environ.copy()
-        child_env["CSC_AGENT_NAME"] = agent_name
-        child_env["CSC_ROOT"] = str(CSC_ROOT)  # pass correct CSC_ROOT to run_agent.sh
-        child_env["CSC_AGENTS_DIR"] = str(AGENTS_DIR)
-        child_env["CSC_WIP_DIR"] = str(WIP_DIR)
-        if agent_repo:
-            child_env["CSC_AGENT_REPO"] = str(agent_repo)
-
-        if IS_WINDOWS:
-            proc = subprocess.Popen(
-                cmd, cwd=spawn_cwd,
-                stdin=None, stdout=log_fh, stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                env=child_env
-            )
-        else:
-            proc = subprocess.Popen(
-                cmd, cwd=spawn_cwd,
-                stdin=None, stdout=log_fh, stderr=subprocess.STDOUT,
-                start_new_session=True,
-                env=child_env
-            )
-
-        log(f"Agent PID: {proc.pid}, log: {agent_log.name}")
-
-        # Store Popen object for reliable exit detection
-        ACTIVE_PROCS[proc.pid] = proc
-
-        return proc.pid, agent_log
-
-    except Exception as e:
-        log(f"Failed to spawn agent: {e}", "ERROR")
-        return None, None
 
 
 # ======================================================================
@@ -1041,376 +962,73 @@ def save_stale_state(state):
 # Core lifecycle
 # ======================================================================
 
-def process_work():
-    """Check queue/work/ for running or finished tasks.
-
-    Returns True if a task is currently in-progress (don't pick up new work).
+def process_finished_work(agent_name, prompt_filename, return_code, agent_log):
     """
-    has_active_work = False
-    stale_state = load_stale_state()
+    Process a finished workorder. This is called after the agent executor finishes.
+    """
+    log(f"Agent {agent_name} finished for {prompt_filename} with return code {return_code}")
+    clear_agent_data()
 
-    for agent_dir in sorted(AGENTS_DIR.iterdir()):
-        if not agent_dir.is_dir():
-            continue
+    wip = WIP_DIR / prompt_filename
 
-        agent_name = agent_dir.name
-        if agent_name not in KNOWN_AGENTS:
-            continue
+    is_complete = False
+    if wip.exists():
+        try:
+            content = wip.read_text(encoding='utf-8', errors='ignore')
+            is_complete = is_complete_marker(content)
+        except Exception:
+            pass
 
-        work_dir = agent_queue_dir(agent_name, "work")
-        if not work_dir.exists():
-            continue
-
-        for pid_file in sorted(work_dir.glob("*.pid")):
-            prompt_filename = pid_file.name[:-4]  # strip .pid
-
-            try:
-                pid = int(pid_file.read_text(encoding='utf-8').strip())
-            except Exception:
-                log(f"Bad PID file: {pid_file}, removing", "WARN")
-                pid_file.unlink(missing_ok=True)
-                continue
-
-            if is_pid_alive(pid):
-                # ---- STILL RUNNING ----
-                has_active_work = True
-                wip_size = get_wip_size(prompt_filename)
-                log(f"Agent {agent_name} PID {pid} running | WIP size: {wip_size}b")
-
-                # Check total runtime
-                started_at = get_agent_started_at()
-                elapsed_time = 0
-                if started_at:
-                    elapsed_time = time.time() - started_at
-                
-                # Assume agent is terminated by default
-                agent_terminated = False 
-
-                if elapsed_time > AGENT_MAX_TOTAL_RUNTIME_SECONDS:
-                    log(f"ERROR: Agent {agent_name} PID {pid} exceeded max total runtime ({AGENT_MAX_TOTAL_RUNTIME_SECONDS}s). Terminating process.", "ERROR")
-                    try:
-                        if IS_WINDOWS:
-                            subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, text=True, timeout=10)
-                        else:
-                            os.kill(pid, signal.SIGTERM)
-                        log(f"Successfully terminated PID {pid}")
-                        agent_terminated = True
-                    except Exception as e:
-                        log(f"ERROR: Failed to terminate PID {pid}: {e}", "ERROR")
-                
-                if not agent_terminated:
-                    # Stale detection (only if not terminated by max runtime)
-                    key = f"{agent_name}/{prompt_filename}"
-                    prev = stale_state.get(key, {})
-                    stale_count = prev.get("stale_count", 0)
-
-                    # Get current agent log file size
-                    current_agent_log_path = get_agent_current_log_path()
-                    current_agent_log_size = current_agent_log_path.stat().st_size if current_agent_log_path and current_agent_log_path.exists() else -1
-
-                    prev_wip_size = prev.get("wip_size", -1)
-                    prev_log_size = prev.get("log_size", -1)
-
-                    # Check for growth in either WIP or agent log
-                    wip_grown = (wip_size > prev_wip_size)
-                    log_grown = (current_agent_log_size > prev_log_size)
-                    
-                    if not (wip_grown or log_grown):
-                        stale_count += 1
-                        if stale_count >= STALE_THRESHOLD:
-                            log(f"STALE WARNING: WIP and agent log unchanged for {stale_count} checks", "WARN")
-                            # If agent is stale, we also treat it as a finished (failed) task
-                            # and let the PM handle escalation.
-                            log(f"Agent {agent_name} PID {pid} considered stalled, moving workorder to ready/ for PM escalation.")
-                            # Set agent_terminated to True so it falls through to the "AGENT FINISHED" logic
-                            agent_terminated = True
-                    else:
-                        stale_count = 0 # Reset stale count if there's any growth
-
-                    stale_state[key] = {
-                        "wip_size": wip_size,
-                        "log_size": current_agent_log_size,
-                        "stale_count": stale_count
-                    }
-                    # If not terminated and not stale, continue to next iteration
-                    if not agent_terminated:
-                        continue
-            
-            # ---- AGENT FINISHED (or terminated due to timeout/staleness) ----
-            # If agent_terminated is True, we forced it to stop, so it's effectively "finished" from our perspective.
-            # If is_pid_alive(pid) was False, it means the process ended naturally.
-            # The code below handles both scenarios.
-            log(f"Agent {agent_name} PID {pid} finished for {prompt_filename}")
-            clear_agent_data()
-
-            # Track git success - if git ops fail and aren't deferred, don't move WIP
-            git_sync_success = True
-
-            # Commit + push from agent's TEMP REPO (where agent was working).
-            # Read the per-WO repo path written at spawn time; fall back to legacy path.
-            repo_file = work_dir / f"{prompt_filename}.repo"
-            if repo_file.exists():
-                try:
-                    agent_repo = Path(repo_file.read_text(encoding='utf-8').strip())
-                    repo_file.unlink(missing_ok=True)
-                except Exception:
-                    agent_repo = get_agent_temp_repo(agent_name)
-            else:
-                agent_repo = get_agent_temp_repo(agent_name)
-            if (agent_repo / ".git").exists():
-                agent_summary = get_wip_summary(prompt_filename)
-                commit_msg_agent = (
-                    f"chore: Agent work on '{prompt_filename}'\n\n"
-                    f"Agent: {agent_name}\n\n"
-                    f"Work log tail:\n{agent_summary}"
-                )
-                if defer_git_sync():
-                    log("Deferring temp repo commit/push until batch completion")
-                else:
-                    push_success, push_error, _ = git_commit_push_in_repo(agent_repo, commit_msg_agent, label=f"agent {agent_name} temp repo")
-                    git_sync_success = push_success  # Track failure
-                    if push_success:
-                        # Push succeeded - move repo to .trash
-                        handle_push_success(agent_repo)
-                    else:
-                        # Push failed - create push-fail workorder (PRIORITY: 1)
-                        log(f"ERROR: Git push failed for {prompt_filename} - WIP will NOT be moved", "ERROR")
-                        handle_push_failure(agent_name, agent_repo, push_error)
-            else:
-                log(f"WARNING: Agent temp repo not found at {agent_repo}, skipping commit+push", "WARN")
-
-            # Check agent log for credit exhaustion errors
-            agent_log_file = None
-            for log_file in LOGS_DIR.glob(f"agent_*_{Path(prompt_filename).stem}.log"):
-                agent_log_file = log_file
-                break
-
-            if agent_log_file and agent_log_file.exists():
-                try:
-                    log_content = agent_log_file.read_text(encoding='utf-8', errors='ignore')
-                    if API_KEY_MGR.is_credit_exhaustion_error(log_content):
-                        log("Credit exhaustion detected - rotating API key", "WARN")
-                        new_key = API_KEY_MGR.rotate_key()
-                        if new_key:
-                            log(f"Rotated to key #{API_KEY_MGR.current_index + 1}/{API_KEY_MGR.get_key_count()}")
-                            # Re-queue the prompt for retry with new key
-                            log(f"Re-queuing {prompt_filename} with new API key")
-                            queue_in = agent_dir / "queue" / "in"
-                            queue_in.mkdir(parents=True, exist_ok=True)
-                            retry_ticket = queue_in / prompt_filename
-                            retry_ticket.write_text(
-                                f"retry_after_credit_exhaustion: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                                f"agent: {agent_name}\n"
-                                f"previous_key_index: {(API_KEY_MGR.current_index - 1) % API_KEY_MGR.get_key_count()}\n",
-                                encoding='utf-8'
-                            )
-                            # Clean up work dir and skip normal completion flow
-                            work_file = work_dir / prompt_filename
-                            if work_file.exists():
-                                work_file.unlink()
-                            pid_file.unlink(missing_ok=True)
-                            continue  # Skip to next iteration, don't do normal completion
-                except Exception as e:
-                    log(f"Failed to check for credit exhaustion: {e}", "WARN")
-
-            wip = WIP_DIR / prompt_filename
-
-            # Check WIP for COMPLETE marker BEFORE appending agent log
-            is_complete = False
-            summary = ""
-            if wip.exists():
-                try:
-                    content = wip.read_text(encoding='utf-8', errors='ignore')
-                    lines = content.rstrip().split('\n')
-                    is_complete = len(lines) > 0 and lines[-1].strip() == "COMPLETE"
-                except Exception:
-                    pass
-                summary = get_wip_summary(prompt_filename)
-
-            # Append agent log to WIP for full audit trail
-            for log_file in LOGS_DIR.glob(f"agent_*_{Path(prompt_filename).stem}.log"):
-                if log_file.exists():
-                    try:
-                        log_content = log_file.read_text(encoding='utf-8', errors='ignore')
-                        if log_content.strip():
-                            if wip.exists():
-                                with open(wip, 'a', encoding='utf-8') as f:
-                                    f.write(f"\n\n--- Agent Log ---\n{log_content}")
-                            else:
-                                wip.write_text(log_content, encoding='utf-8')
-                    except Exception as e:
-                        log(f"WARNING: Could not append agent log to WIP: {e}")
-                break
-
-            # If not complete, append verification message
-            if not is_complete and wip.exists():
-                try:
+    if agent_log and agent_log.exists():
+        try:
+            log_content = agent_log.read_text(encoding='utf-8', errors='ignore')
+            if log_content.strip():
+                if wip.exists():
                     with open(wip, 'a', encoding='utf-8') as f:
-                        f.write(f"\n\n--- Verify/Complete or Finish ---\nPlease verify this workorder is complete or finish the work and add COMPLETE as the last line.\n")
-                except Exception as e:
-                    log(f"WARNING: Could not append verification message: {e}")
+                        f.write(f"\n\n--- Agent Log ---\n{log_content}")
+                else:
+                    wip.write_text(log_content, encoding='utf-8')
+        except Exception as e:
+            log(f"WARNING: Could not append agent log to WIP: {e}")
 
-            # ONLY move prompt to done/ or back to ready/ if git sync completed (or was deferred for batch)
-            # If git operations failed and weren't deferred, DON'T move the WIP file
-            allow_wip_move = git_sync_success if not defer_git_sync() else True
+    if not is_complete and wip.exists():
+        mark_incomplete(wip)
 
-            if is_complete and allow_wip_move:
-                log(f"COMPLETE: {prompt_filename} -> done/")
-                DONE_DIR.mkdir(parents=True, exist_ok=True)
-                dst = DONE_DIR / prompt_filename
-                if wip.exists():
-                    shutil.move(str(wip), str(dst))
-                commit_msg = (
-                    f"feat: Complete prompt '{prompt_filename}'\n\n"
-                    f"Agent: {agent_name}\n\n"
-                    f"Work log tail:\n{summary}"
-                )
-                # Notify PM of completion
-                try:
-                    from csc_service.infra import pm
-                    pm.setup(CSC_ROOT)
-                    pm.mark_completed(prompt_filename)
-                except Exception:
-                    pass
-            elif allow_wip_move:  # Only move to ready if git sync succeeded (or was deferred)
-                log(f"INCOMPLETE: {prompt_filename} -> ready/")
-                # Add INCOMPLETE note to the WIP file before moving back
-                if wip.exists():
-                    try:
-                        current_content = wip.read_text(encoding='utf-8', errors='ignore')
-                        # Add INCOMPLETE marker if not already present
-                        if not current_content.rstrip().endswith("INCOMPLETE"):
-                            wip.write_text(
-                                current_content.rstrip() + "\n\nINCOMPLETE: Agent task did not finish properly (missing COMPLETE marker)\n",
-                                encoding='utf-8'
-                            )
-                    except Exception as e:
-                        log(f"WARNING: Could not add INCOMPLETE marker to {prompt_filename}: {e}")
+    if is_complete:
+        log(f"COMPLETE: {prompt_filename} -> done/")
+        DONE_DIR.mkdir(parents=True, exist_ok=True)
+        dst = DONE_DIR / prompt_filename
+        if wip.exists():
+            shutil.move(str(wip), str(dst))
+    else:
+        log(f"INCOMPLETE: {prompt_filename} -> ready/")
+        dst = READY_DIR / prompt_filename
+        if wip.exists():
+            shutil.move(str(wip), str(dst))
 
-                dst = READY_DIR / prompt_filename
-                if wip.exists():
-                    shutil.move(str(wip), str(dst))
-                commit_msg = (
-                    f"chore: Agent work on '{prompt_filename}' (incomplete)\n\n"
-                    f"Agent: {agent_name}\n\n"
-                    f"Work log tail:\n{summary}"
-                )
-            else:
-                # Git sync failed - keep WIP file in place for next cycle to retry
-                log(f"WARNING: Git sync failed - keeping {prompt_filename} in WIP for retry", "WARN")
-                commit_msg = (
-                    f"chore: Agent work on '{prompt_filename}' (incomplete)\n\n"
-                    f"Agent: {agent_name}\n\n"
-                    f"Work log tail:\n{summary}"
-                )
-                # Notify PM of failure (tracks attempts, escalation)
-                try:
-                    from csc_service.infra import pm
-                    pm.setup(CSC_ROOT)
-                    pm.mark_failed(prompt_filename)
-                except Exception:
-                    pass
+    out_dir = agent_queue_dir(agent_name, "out")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if agent_log and agent_log.exists():
+        try:
+            shutil.copy2(str(agent_log), str(out_dir / agent_log.name))
+            log(f"Copied agent log to queue/out/{agent_log.name}")
+        except Exception as e:
+            log(f"WARNING: Could not copy agent log: {e}", "WARN")
 
-            # Move queue file: work/ -> out/
-            out_dir = agent_queue_dir(agent_name, "out")
-            out_dir.mkdir(parents=True, exist_ok=True)
-            # Try both the workorder name and orders.md (queue-worker renames to orders.md)
-            work_file = work_dir / prompt_filename
-            if work_file.exists():
-                shutil.move(str(work_file), str(out_dir / prompt_filename))
-            orders_file = work_dir / "orders.md"
-            if orders_file.exists():
-                # Append unixtime to orders.md to avoid collision (all orders.md have same name)
-                ts = int(time.time())
-                orders_out_name = f"orders-{ts}.md"
-                shutil.move(str(orders_file), str(out_dir / orders_out_name))
-            pid_file.unlink(missing_ok=True)
-            # Clean up the per-WO repo path file if it still exists
-            repo_file_cleanup = work_dir / f"{prompt_filename}.repo"
-            repo_file_cleanup.unlink(missing_ok=True)
-
-            # Copy agent log to queue/out/ for debugging
-            for log_file in LOGS_DIR.glob(f"agent_*_{Path(prompt_filename).stem}.log"):
-                if log_file.exists():
-                    try:
-                        shutil.copy2(str(log_file), str(out_dir / log_file.name))
-                        log(f"Copied agent log to queue/out/{log_file.name}")
-                    except Exception as e:
-                        log(f"WARNING: Could not copy agent log: {e}", "WARN")
-                    break
-
-            # Clean stale state
-            key = f"{agent_name}/{prompt_filename}"
-            stale_state.pop(key, None)
-
-            # Refresh maps, commit, push
-            if defer_git_sync():
-                log("Deferring refresh_maps + commit/push until batch completion")
-            else:
-                refresh_maps()
-                git_commit_push(commit_msg)
-
-    save_stale_state(stale_state)
-    return has_active_work
+    refresh_maps()
+    summary = get_wip_summary(prompt_filename)
+    commit_msg = (
+        f"feat: Complete prompt '{prompt_filename}'\n\n"
+        f"Agent: {agent_name}\n\n"
+        f"Work log tail:\n{summary}"
+    )
+    git_commit_push(commit_msg)
 
 
 def process_inbox():
     """
     Process one workorder from the pending work list (FIFO by datestamp).
-
-    Flow:
-    1. Check if any queue/work/ has an active agent (has non-empty work/)
-    2. If queue/work/ is EMPTY, load or scan the pending work list
-    3. Take the first (oldest) item from the list
-    4. Verify workorder still exists (if not, dump list and rescan)
-    5. Move orders.md: queue/in/ → queue/work/
-    6. git add agents/ && git commit -m "assigning task X to agent_Y" && git push
-    7. git pull in agent's temp repo (to get orders.md and WIP file)
-    8. Spawn agent to work non-interactively
-    9. Pop the processed item from the list
     """
-    # Build set of agents that are currently busy (have live PID files).
-    # Also clean up orphaned work files (orders.md without .pid) along the way.
-    busy_agents = set()
-    for agent_dir in sorted(AGENTS_DIR.iterdir()):
-        if not agent_dir.is_dir():
-            continue
-        agent_name = agent_dir.name
-        if agent_name not in KNOWN_AGENTS:
-            continue
-
-        work_dir = agent_queue_dir(agent_name, "work")
-        if not work_dir.exists():
-            continue
-
-        live_pids = []
-        other_files = []
-        for f in work_dir.iterdir():
-            if f.is_file() and f.suffix == '.pid':
-                try:
-                    pid = int(f.read_text().strip())
-                    if is_pid_alive(pid):
-                        live_pids.append(f)
-                    else:
-                        f.unlink(missing_ok=True)  # dead PID, clean up
-                except Exception:
-                    f.unlink(missing_ok=True)
-            elif f.is_file():
-                other_files.append(f)
-
-        if live_pids:
-            busy_agents.add(agent_name)
-            log(f"Agent {agent_name} is busy ({len(live_pids)} live PID files), skipping for now")
-        elif other_files:
-            # Orphaned files (e.g. orders.md without a .pid) — clean up
-            out_dir = agent_queue_dir(agent_name, "out")
-            out_dir.mkdir(parents=True, exist_ok=True)
-            for orphan in other_files:
-                ts = int(time.time())
-                dest_name = f"{orphan.stem}-orphan-{ts}{orphan.suffix}"
-                shutil.move(str(orphan), str(out_dir / dest_name))
-                log(f"Cleaned up orphaned {orphan.name} from {agent_name}/queue/work/ -> out/{dest_name}", "WARN")
-
     # Load pending work list or rescan if empty
     pending = load_pending_list()
     if not pending:
@@ -1418,232 +1036,28 @@ def process_inbox():
         if not pending:
             return  # Nothing queued anywhere
 
-    # Find the first pending item whose agent is NOT currently busy
-    item = None
-    for candidate in pending:
-        if candidate["agent"] not in busy_agents:
-            item = candidate
-            break
-
-    if item is None:
-        log(f"All pending agents are busy ({busy_agents}), waiting")
-        return
-
-    # Remove item from pending list now that it will be processed
-    pending.remove(item)
+    item = pending.pop(0)
     save_pending_list(pending)
 
     agent_name = item["agent"]
     workorder_filename = item["workorder"]
-
-    log(f"Processing pending workorder: {workorder_filename} (agent: {agent_name}, ts: {item['ts']})")
-
-    # Verify workorder still exists in workorders/wip/
     workorder_path = WIP_DIR / workorder_filename
+
+    log(f"Processing workorder: {workorder_filename} for agent {agent_name}")
+
     if not workorder_path.exists():
-        log(f"Workorder not found: {workorder_filename} — dumping list, rescanning", "WARN")
-        save_pending_list([])  # Dump the list
-        pending = scan_pending_work()  # Rescan all agents
-        if not pending:
-            return
-        # Retry with the newly scanned list
-        item = pending[0]
-        agent_name = item["agent"]
-        workorder_filename = item["workorder"]
-        workorder_path = WIP_DIR / workorder_filename
-        if not workorder_path.exists():
-            log(f"Still not found after rescan: {workorder_filename}", "ERROR")
-            # Remove this item from the list and continue
-            save_pending_list(pending[1:])
-            return
-
-    # Find the agent's queue/in/ and orders.md file
-    in_dir = agent_queue_dir(agent_name, "in")
-    orders_md_path = in_dir / "orders.md"
-
-    if not orders_md_path.exists():
-        log(f"orders.md not found for {agent_name}: {orders_md_path}", "ERROR")
-        # Remove this item from list and rescan
-        save_pending_list(pending[1:])
+        log(f"Workorder file not found: {workorder_path}", "ERROR")
         return
 
-    # Move orders.md from queue/in/ -> queue/work/
-    work_dir = agent_queue_dir(agent_name, "work")
-    work_dir.mkdir(parents=True, exist_ok=True)
-    work_file = work_dir / "orders.md"
+    # Log file for agent stdout/stderr
+    ts = int(time.time())
+    agent_log = LOGS_DIR / f"agent_{ts}_{Path(workorder_filename).stem}.log"
 
-    try:
-        shutil.move(str(orders_md_path), str(work_file))
-        log(f"Moved orders.md: queue/in/ → queue/work/")
-    except Exception as e:
-        log(f"ERROR: Failed to move orders.md: {e}", "ERROR")
-        return
+    # Execute the agent
+    return_code = AGENT_EXECUTOR.execute(agent_name, workorder_path, agent_log)
 
-    if not defer_git_sync():
-        # Determine the git repo that contains AGENTS_DIR (may be a submodule)
-        # Walk up from AGENTS_DIR to find the nearest .git dir/file
-        def _find_git_root(path):
-            p = Path(path)
-            for _ in range(10):
-                if (p / ".git").exists():
-                    return p
-                if p == p.parent:
-                    break
-                p = p.parent
-            return None
-
-        ops_git_root = _find_git_root(AGENTS_DIR)
-        if ops_git_root is None:
-            ops_git_root = CSC_ROOT
-
-        # Paths relative to the ops git root
-        try:
-            agents_rel = str(AGENTS_DIR.relative_to(ops_git_root))
-        except ValueError:
-            agents_rel = "agents"
-        try:
-            prompts_rel = str(PROMPTS_BASE.relative_to(ops_git_root))
-        except ValueError:
-            prompts_rel = PROMPTS_BASE.name
-
-        # Stage and commit inside the ops git root
-        try:
-            result = subprocess.run(
-                ["git", "add", f"{agents_rel}/", f"{prompts_rel}/"],
-                cwd=str(ops_git_root),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            log(f"git add {agents_rel}/ {prompts_rel}/ completed")
-        except Exception as e:
-            log(f"ERROR: Failed to git add: {e}", "ERROR")
-            return
-
-        try:
-            result = subprocess.run(
-                ["git", "commit", "-m", "chore: Assigning workorder to agent"],
-                cwd=str(ops_git_root),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            log(f"git commit completed: {result.stdout.strip()}")
-            committed = result.returncode == 0
-        except Exception as e:
-            log(f"ERROR: Failed to git commit workorder assignment: {e}", "ERROR")
-            return
-
-        try:
-            result = subprocess.run(
-                ["git", "push"],
-                cwd=str(ops_git_root),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            log(f"git push completed: {result.stdout.strip()}")
-        except Exception as e:
-            log(f"ERROR: Failed to git push workorder assignment: {e}", "ERROR")
-            return
-
-        # If ops_git_root is a submodule of CSC_ROOT, update the parent submodule pointer
-        if ops_git_root != CSC_ROOT and committed:
-            try:
-                ops_rel = str(ops_git_root.relative_to(CSC_ROOT))
-                subprocess.run(
-                    ["git", "add", ops_rel],
-                    cwd=str(CSC_ROOT),
-                    capture_output=True, text=True, timeout=30
-                )
-                subprocess.run(
-                    ["git", "commit", "-m", "chore: update ops submodule pointer"],
-                    cwd=str(CSC_ROOT),
-                    capture_output=True, text=True, timeout=30
-                )
-                subprocess.run(
-                    ["git", "push"],
-                    cwd=str(CSC_ROOT),
-                    capture_output=True, text=True, timeout=30
-                )
-                log(f"Updated parent submodule pointer for {ops_rel}")
-            except Exception as e:
-                log(f"WARN: Failed to update parent submodule pointer: {e}", "WARN")
-    else:
-        log("Deferring assignment commit/push until batch completion")
-        shutil.move(str(work_file), str(orders_md_path))
-        return
-
-    # Create a unique per-WO temp repo clone of irc.git for this agent run
-    wo_stem = Path(workorder_filename).stem
-    agent_repo = create_agent_temp_repo(agent_name, wo_stem)
-    if agent_repo is None:
-        log(f"ERROR: Could not create temp repo for {agent_name}, reverting orders.md", "ERROR")
-        in_dir = agent_queue_dir(agent_name, "in")
-        in_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            shutil.move(str(work_file), str(in_dir / "orders.md"))
-        except Exception:
-            pass
-        return
-
-    # Verify orders.md exists in the WORKING TREE (agents run from CSC_ROOT, not temp repo)
-    # orders.md is in ops submodule, not irc.git clone — check CSC_ROOT directly
-    main_orders = AGENTS_DIR / agent_name / "queue" / "work" / "orders.md"
-    if not main_orders.exists():
-        log(f"ERROR: orders.md not found in working tree ({main_orders})", "ERROR")
-        in_dir = agent_queue_dir(agent_name, "in")
-        in_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            shutil.move(str(work_file), str(in_dir / "orders.md"))
-            log(f"Reverted orders.md back to queue/in/ for retry")
-        except Exception as e:
-            log(f"ERROR: Failed to revert orders.md: {e}", "ERROR")
-        return
-
-    # Spawn agent in temp repo (not main repo)
-    pid, agent_log = spawn_agent(agent_name, workorder_filename, agent_repo=agent_repo)
-    if pid:
-        # Brief wait to catch immediate startup failures (bad path, missing CLI, etc.)
-        time.sleep(3)
-        if pid in ACTIVE_PROCS and ACTIVE_PROCS[pid].poll() is not None:
-            exit_code = ACTIVE_PROCS[pid].returncode
-            log(f"ERROR: Agent {agent_name} (PID {pid}) exited immediately with code {exit_code}", "ERROR")
-            # Log the first few lines of the agent log for diagnosis
-            if agent_log and agent_log.exists():
-                try:
-                    log_content = agent_log.read_text(encoding='utf-8', errors='ignore')[:500]
-                    log(f"Agent log: {log_content}", "ERROR")
-                except Exception:
-                    pass
-            del ACTIVE_PROCS[pid]
-            clear_agent_data()
-            # Move orders.md back to queue/in/ for retry
-            in_dir = agent_queue_dir(agent_name, "in")
-            in_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                shutil.move(str(work_file), str(in_dir / "orders.md"))
-                log(f"Reverted orders.md back to queue/in/ for retry after early exit")
-            except Exception as e:
-                log(f"ERROR: Failed to revert orders.md: {e}", "ERROR")
-            return
-
-        # Write PID file and repo path file (so process_work can find the unique repo)
-        pid_file = work_dir / f"{workorder_filename}.pid"
-        pid_file.write_text(str(pid), encoding='utf-8')
-        repo_file = work_dir / f"{workorder_filename}.repo"
-        repo_file.write_text(str(agent_repo), encoding='utf-8')
-
-        write_agent_data(agent_name, pid, workorder_filename, agent_log)
-        log(f"Started {agent_name} (PID {pid}) for {workorder_filename}")
-    else:
-        log(f"ERROR: Failed to spawn agent, reverting", "ERROR")
-        # Move orders.md back to queue/in/
-        shutil.move(str(work_file), str(orders_md_path))
-        return
-
-    # Only process ONE task per cycle
-    return
+    # Process the result
+    process_finished_work(agent_name, workorder_filename, return_code, agent_log)
 
 
 # ======================================================================
@@ -1652,11 +1066,6 @@ def process_inbox():
 
 def run_cycle(work_dir_arg=None):
     """Run one complete queue-worker cycle.
-
-    1. Initialize paths (using work_dir_arg if provided)
-    2. git pull to get latest from remote
-    3. Check queue/work/ for running or finished agents
-    4. If no active work, pick up new task from queue/in/
     """
     _initialize_paths(work_dir_arg)
 
@@ -1666,12 +1075,8 @@ def run_cycle(work_dir_arg=None):
     # Pull latest changes
     git_pull()
 
-    # Check work in progress first
-    has_active_work = process_work()
-
     # If nothing running, pick up new work
-    if not has_active_work:
-        process_inbox()
+    process_inbox()
 
     log("Cycle end")
 
