@@ -966,13 +966,13 @@ class MessageHandler:
 
         token = parts[0]
 
-        if len(parts) < 3:
-            self._send_notice(addr, f"{token} AI : Usage: AI <token> <service> <method> [args...]")
+        if len(parts) < 2:
+            self._send_notice(addr, f"{token} AI : Usage: AI <token> <service> [<method>] [args...]")
             return
 
         class_name = parts[1]
-        method_name = parts[2]
-        method_args = parts[3:]
+        method_name = parts[2] if len(parts) > 2 else "help"  # Default to "help" if no method specified
+        method_args = parts[3:] if len(parts) > 3 else []
 
         # Execute via server.handle_command (Service.handle_command signature)
         result = self.server.handle_command(class_name, method_name, method_args, nick, addr)
@@ -1358,44 +1358,51 @@ class MessageHandler:
         On success grants oper user modes per flags, stores oper info in
         active_opers, and broadcasts a WALLOPS notice.
         """
-        nick = self._get_nick(addr)
-        if len(msg.params) < 2:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "OPER :Not enough parameters")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 2:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "OPER :Not enough parameters")
+                return
 
-        account = msg.params[0]
-        password = msg.params[1]
+            account = msg.params[0]
+            password = msg.params[1]
 
-        # Build client mask for host check
-        reg = self.registration_state.get(addr, {})
-        client_user = reg.get("user", nick)
-        client_host = addr[0] if addr else "unknown"
-        client_mask = f"{nick}!{client_user}@{client_host}"
+            # Build client mask for host check
+            reg = self.registration_state.get(addr, {})
+            client_user = reg.get("user", nick)
+            client_host = addr[0] if addr else "unknown"
+            client_mask = f"{nick}!{client_user}@{client_host}"
 
-        server_name = SERVER_NAME
+            server_name = SERVER_NAME
 
-        flags = self.server.check_oper_auth(account, password, server_name, client_mask)
-        if flags is not None:
-            if addr not in self.server.clients:
-                self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
-            modes = self.server.clients[addr].setdefault("user_modes", set())
-            for flag in flags:
-                if flag in "oOaA":
-                    modes.add(flag)
-            self.server.add_active_oper(nick.lower(), account, flags)
-            if not hasattr(self.server, "_active_opers_full"):
-                self.server._active_opers_full = []
-            self.server._active_opers_full = [
-                e for e in self.server._active_opers_full
-                if e.get("nick", "").lower() != nick.lower()
-            ]
-            self.server._active_opers_full.append({"nick": nick.lower(), "account": account, "flags": flags})
-            self._send_numeric(addr, RPL_YOUREOPER, nick, "You are now an IRC operator")
-            self.server.log(f"[OPER] {nick} authenticated as oper '{account}' flags={flags}")
-            self.server.send_wallops(f"{nick} is now an IRC operator (account: {account}, flags: {flags})")
-            self.server._persist_session_data()
-        else:
-            self._send_numeric(addr, ERR_PASSWDMISMATCH, nick, "Password incorrect")
+            flags = self.server.check_oper_auth(account, password, server_name, client_mask)
+            if flags is not None:
+                if addr not in self.server.clients:
+                    self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
+                modes = self.server.clients[addr].setdefault("user_modes", set())
+                for flag in flags:
+                    if flag in "oOaA":
+                        modes.add(flag)
+                self.server.add_active_oper(nick.lower(), account, flags)
+                if not hasattr(self.server, "_active_opers_full"):
+                    self.server._active_opers_full = []
+                self.server._active_opers_full = [
+                    e for e in self.server._active_opers_full
+                    if e.get("nick", "").lower() != nick.lower()
+                ]
+                self.server._active_opers_full.append({"nick": nick.lower(), "account": account, "flags": flags})
+                self._send_numeric(addr, RPL_YOUREOPER, nick, "You are now an IRC operator")
+                self.server.log(f"[OPER] {nick} authenticated as oper '{account}' flags={flags}")
+                self.server.send_wallops(f"{nick} is now an IRC operator (account: {account}, flags: {flags})")
+                self.server._persist_session_data()
+            else:
+                self._send_numeric(addr, ERR_PASSWDMISMATCH, nick, "Password incorrect")
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] OPER handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "OPER :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] OPER handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during OPER")
 
     def _handle_away(self, msg, addr):
         """
@@ -1404,32 +1411,36 @@ class MessageHandler:
         Set or unset away status. With a message, sets away and stores message.
         Without a message, clears away status.
         """
-        nick = self._get_nick(addr)
+        try:
+            nick = self._get_nick(addr)
 
-        # Ensure client record exists
-        if addr not in self.server.clients:
-            self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
+            # Ensure client record exists
+            if addr not in self.server.clients:
+                self.server.clients[addr] = {"name": nick, "last_seen": time.time(), "user_modes": set()}
 
-        # Get or initialize user_modes
-        user_modes = self.server.clients[addr].setdefault("user_modes", set())
+            # Get or initialize user_modes
+            user_modes = self.server.clients[addr].setdefault("user_modes", set())
 
-        if msg.params and msg.params[0]:
-            # Set away with message
-            away_message = msg.params[0]
-            self.server.clients[addr]["away_message"] = away_message
-            user_modes.add("a")
-            self._send_numeric(addr, RPL_NOWAWAY, nick, "You have been marked as being away")
-            self.server.log(f"[AWAY] {nick} set away: {away_message}")
-        else:
-            # Unset away
-            if "away_message" in self.server.clients[addr]:
-                del self.server.clients[addr]["away_message"]
-            user_modes.discard("a")
-            self._send_numeric(addr, RPL_UNAWAY, nick, "You are no longer marked as being away")
-            self.server.log(f"[AWAY] {nick} removed away status")
+            if msg.params and msg.params[0]:
+                # Set away with message
+                away_message = msg.params[0]
+                self.server.clients[addr]["away_message"] = away_message
+                user_modes.add("a")
+                self._send_numeric(addr, RPL_NOWAWAY, nick, "You have been marked as being away")
+                self.server.log(f"[AWAY] {nick} set away: {away_message}")
+            else:
+                # Unset away
+                if "away_message" in self.server.clients[addr]:
+                    del self.server.clients[addr]["away_message"]
+                user_modes.discard("a")
+                self._send_numeric(addr, RPL_UNAWAY, nick, "You are no longer marked as being away")
+                self.server.log(f"[AWAY] {nick} removed away status")
 
-        # Persist session data
-        self.server._persist_session_data()
+            # Persist session data
+            self.server._persist_session_data()
+        except Exception as e:
+            self.server.log(f"[ERROR] AWAY handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during AWAY")
 
     # Modes that require a nick parameter
     _NICK_MODES = frozenset(("o", "v"))
@@ -1458,22 +1469,29 @@ class MessageHandler:
           MODE +o <nick> <pass>                   (oper auth, like OPER)
           MODE <nick>                             (query user modes)
         """
-        nick = self._get_nick(addr)
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "MODE :Not enough parameters")
-            return
-
-        target = msg.params[0]
-
-        if target.startswith("#"):
-            # Channel modes require at least 2 params (channel + modestring)
-            if len(msg.params) < 2:
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 1:
                 self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "MODE :Not enough parameters")
                 return
-            self._handle_channel_mode(msg, addr, nick, target)
-        else:
-            # User mode handling (allows 1 param for query, 2+ for setting)
-            self._handle_user_mode(msg, addr, nick, target)
+
+            target = msg.params[0]
+
+            if target.startswith("#"):
+                # Channel modes require at least 2 params (channel + modestring)
+                if len(msg.params) < 2:
+                    self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "MODE :Not enough parameters")
+                    return
+                self._handle_channel_mode(msg, addr, nick, target)
+            else:
+                # User mode handling (allows 1 param for query, 2+ for setting)
+                self._handle_user_mode(msg, addr, nick, target)
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] MODE handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "MODE :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] MODE handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during MODE")
 
     def _handle_user_mode(self, msg, addr, nick, target_nick):
         """
@@ -1832,147 +1850,175 @@ class MessageHandler:
 
     def _handle_kick(self, msg, addr):
         """KICK <channel> <nick> [:<reason>]"""
-        nick = self._get_nick(addr)
-        if len(msg.params) < 2:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "KICK :Not enough parameters")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if len(msg.params) < 2:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "KICK :Not enough parameters")
+                return
 
-        chan_name = msg.params[0]
-        target_nick = msg.params[1]
-        reason = msg.params[2] if len(msg.params) > 2 else nick
+            chan_name = msg.params[0]
+            target_nick = msg.params[1]
+            reason = msg.params[2] if len(msg.params) > 2 else nick
 
-        channel = self.server.channel_manager.get_channel(chan_name)
-        if not channel:
-            self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
-                               f"{chan_name} :No such channel")
-            return
+            channel = self.server.channel_manager.get_channel(chan_name)
+            if not channel:
+                self._send_numeric(addr, ERR_NOSUCHCHANNEL, nick,
+                                   f"{chan_name} :No such channel")
+                return
 
-        # Require oper or chanop
-        if nick.lower() not in self.server.opers and not channel.is_op(nick):
-            self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
-                               f"{chan_name} :You're not channel operator")
-            return
+            # Require oper or chanop
+            if nick.lower() not in self.server.opers and not channel.is_op(nick):
+                self._send_numeric(addr, ERR_CHANOPRIVSNEEDED, nick,
+                                   f"{chan_name} :You're not channel operator")
+                return
 
-        if not channel.has_member(target_nick):
-            self._send_numeric(addr, ERR_USERNOTINCHANNEL, nick,
-                               f"{target_nick} {chan_name} :They aren't on that channel")
-            return
+            if not channel.has_member(target_nick):
+                self._send_numeric(addr, ERR_USERNOTINCHANNEL, nick,
+                                   f"{target_nick} {chan_name} :They aren't on that channel")
+                return
 
-        # Broadcast KICK
-        prefix = f"{nick}!{nick}@{SERVER_NAME}"
-        kick_msg = format_irc_message(prefix, "KICK", [chan_name, target_nick], reason) + "\r\n"
-        for m_nick, m_info in list(channel.members.items()):
-            m_addr = m_info.get("addr")
-            if m_addr:
-                self.server.sock_send(kick_msg.encode(), m_addr)
+            # Broadcast KICK
+            prefix = f"{nick}!{nick}@{SERVER_NAME}"
+            kick_msg = format_irc_message(prefix, "KICK", [chan_name, target_nick], reason) + "\r\n"
+            for m_nick, m_info in list(channel.members.items()):
+                m_addr = m_info.get("addr")
+                if m_addr:
+                    self.server.sock_send(kick_msg.encode(), m_addr)
 
-        channel.remove_member(target_nick)
-        self.server.send_wallops(f"{nick} kicked {target_nick} from {chan_name}: {reason}")
+            channel.remove_member(target_nick)
+            self.server.send_wallops(f"{nick} kicked {target_nick} from {chan_name}: {reason}")
 
-        # S2S: Notify federation network of membership change
-        if hasattr(self.server, 's2s_network'):
-            self.server.s2s_network.sync_channel_state(chan_name)
+            # S2S: Notify federation network of membership change
+            if hasattr(self.server, 's2s_network'):
+                self.server.s2s_network.sync_channel_state(chan_name)
 
-        # Real-time persistence: Save session state immediately
-        self.server._persist_session_data()
+            # Real-time persistence: Save session state immediately
+            self.server._persist_session_data()
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] KICK handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "KICK :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] KICK handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during KICK")
 
     def _handle_kill(self, msg, addr):
         """KILL <nick> [:<reason>] — requires oper 'kill' flag."""
-        nick = self._get_nick(addr)
-        if not self.server.oper_has_flag(nick, "kill"):
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                               "KILL :Permission Denied- You do not have the kill flag")
-            return
-
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "KILL :Not enough parameters")
-            return
-
-        target_nick = msg.params[0]
-        reason = msg.params[1] if len(msg.params) > 1 else "Killed by operator"
-
-        # protect_local_opers: local opers cannot kill other opers unless they have O flag
-        if target_nick.lower() in self.server.opers:
-            if not self.server.is_global_oper(nick):
+        try:
+            nick = self._get_nick(addr)
+            if not self.server.oper_has_flag(nick, "kill"):
                 self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                                   "Permission Denied- Cannot KILL an IRC operator (need global oper flag O)")
+                                   "KILL :Permission Denied- You do not have the kill flag")
                 return
 
-        kill_reason = f"Killed by {nick}: {reason}"
-        if not self._server_kill(target_nick, kill_reason):
-            self._send_numeric(addr, ERR_NOSUCHNICK, nick,
-                               f"{target_nick} :No such nick/channel")
-            return
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "KILL :Not enough parameters")
+                return
 
-        self.server.log(f"[KILL] {nick} killed {target_nick}: {reason}")
-        self.server.send_wallops(f"{nick} killed {target_nick}: {reason}")
+            target_nick = msg.params[0]
+            reason = msg.params[1] if len(msg.params) > 1 else "Killed by operator"
+
+            # protect_local_opers: local opers cannot kill other opers unless they have O flag
+            if target_nick.lower() in self.server.opers:
+                if not self.server.is_global_oper(nick):
+                    self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                       "Permission Denied- Cannot KILL an IRC operator (need global oper flag O)")
+                    return
+
+            kill_reason = f"Killed by {nick}: {reason}"
+            if not self._server_kill(target_nick, kill_reason):
+                self._send_numeric(addr, ERR_NOSUCHNICK, nick,
+                                   f"{target_nick} :No such nick/channel")
+                return
+
+            self.server.log(f"[KILL] {nick} killed {target_nick}: {reason}")
+            self.server.send_wallops(f"{nick} killed {target_nick}: {reason}")
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] KILL handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "KILL :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] KILL handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during KILL")
 
     def _handle_connect(self, msg, addr):
         """CONNECT <host> <port> [password] — Initiate S2S link. Requires 'connect' flag."""
-        nick = self._get_nick(addr)
-        if not self.server.oper_has_flag(nick, "connect"):
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                               "Permission Denied- You do not have the connect flag")
-            return
-
-        if len(msg.params) < 2:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "CONNECT :Not enough parameters. Usage: CONNECT <host> <port> [password]")
-            return
-
-        host = msg.params[0]
         try:
-            port = int(msg.params[1])
-        except ValueError:
-            self._send_notice(addr, "Invalid port number.")
-            return
+            nick = self._get_nick(addr)
+            if not self.server.oper_has_flag(nick, "connect"):
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "Permission Denied- You do not have the connect flag")
+                return
 
-        password = msg.params[2] if len(msg.params) > 2 else None
+            if len(msg.params) < 2:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "CONNECT :Not enough parameters. Usage: CONNECT <host> <port> [password]")
+                return
 
-        if not hasattr(self.server, 's2s_network'):
-            self._send_notice(addr, "S2S network not initialized.")
-            return
+            host = msg.params[0]
+            try:
+                port = int(msg.params[1])
+            except ValueError:
+                self._send_notice(addr, "Invalid port number.")
+                return
 
-        self.server.log(f"[S2S] {nick} initiated CONNECT to {host}:{port}")
-        self._send_notice(addr, f"Attempting to connect to {host}:{port}...")
-        
-        # Link in background to avoid blocking the main server loop
-        def do_link():
-            success = self.server.s2s_network.link_to(host, port, password)
-            if success:
-                self._send_notice(addr, f"Successfully linked to {host}:{port}.")
-            else:
-                self._send_notice(addr, f"Failed to link to {host}:{port}. Check logs for details.")
+            password = msg.params[2] if len(msg.params) > 2 else None
 
-        threading.Thread(target=do_link, daemon=True).start()
+            if not hasattr(self.server, 's2s_network'):
+                self._send_notice(addr, "S2S network not initialized.")
+                return
+
+            self.server.log(f"[S2S] {nick} initiated CONNECT to {host}:{port}")
+            self._send_notice(addr, f"Attempting to connect to {host}:{port}...")
+            
+            # Link in background to avoid blocking the main server loop
+            def do_link():
+                success = self.server.s2s_network.link_to(host, port, password)
+                if success:
+                    self._send_notice(addr, f"Successfully linked to {host}:{port}.")
+                else:
+                    self._send_notice(addr, f"Failed to link to {host}:{port}. Check logs for details.")
+
+            threading.Thread(target=do_link, daemon=True).start()
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] CONNECT handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "CONNECT :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] CONNECT handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during CONNECT")
 
     def _handle_squit_cmd(self, msg, addr):
         """SQUIT <server_id> [:<reason>] — Drop an S2S link. Requires 'squit' flag."""
-        nick = self._get_nick(addr)
-        if not self.server.oper_has_flag(nick, "squit"):
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                               "Permission Denied- You do not have the squit flag")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if not self.server.oper_has_flag(nick, "squit"):
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "Permission Denied- You do not have the squit flag")
+                return
 
-        if len(msg.params) < 1:
-            self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "SQUIT :Not enough parameters. Usage: SQUIT <server_id> [:<reason>]")
-            return
+            if len(msg.params) < 1:
+                self._send_numeric(addr, ERR_NEEDMOREPARAMS, nick, "SQUIT :Not enough parameters. Usage: SQUIT <server_id> [:<reason>]")
+                return
 
-        server_id = msg.params[0]
-        reason = msg.params[1] if len(msg.params) > 1 else "Dropped by operator"
+            server_id = msg.params[0]
+            reason = msg.params[1] if len(msg.params) > 1 else "Dropped by operator"
 
-        if not hasattr(self.server, 's2s_network'):
-            self._send_notice(addr, "S2S network not initialized.")
-            return
+            if not hasattr(self.server, 's2s_network'):
+                self._send_notice(addr, "S2S network not initialized.")
+                return
 
-        link = self.server.s2s_network.get_link(server_id)
-        if not link:
-            self._send_notice(addr, f"No active link to {server_id}.")
-            return
+            link = self.server.s2s_network.get_link(server_id)
+            if not link:
+                self._send_notice(addr, f"No active link to {server_id}.")
+                return
 
-        self.server.log(f"[S2S] {nick} initiated SQUIT for {server_id}: {reason}")
-        link.send_message("SQUIT", self.server.s2s_network.server_id, reason)
-        link.close()
-        self._send_notice(addr, f"Link to {server_id} closed.")
+            self.server.log(f"[S2S] {nick} initiated SQUIT for {server_id}: {reason}")
+            link.send_message("SQUIT", self.server.s2s_network.server_id, reason)
+            link.close()
+            self._send_notice(addr, f"Link to {server_id} closed.")
+        except (IndexError, ValueError) as e:
+            self.server.log(f"[ERROR] SQUIT handler ValueError from {addr}: {e}")
+            self._send_numeric(addr, ERR_NEEDMOREPARAMS, self._get_nick(addr) or "*", "SQUIT :Invalid parameters")
+        except Exception as e:
+            self.server.log(f"[ERROR] SQUIT handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during SQUIT")
 
     # ======================================================================
     # Oper Hierarchy Commands: TRUST, SETMOTD, STATS, REHASH, SHUTDOWN, LOCALCONFIG
@@ -1987,81 +2033,89 @@ class MessageHandler:
         REMOVE <nick> - Remove trust from a nick.
         LIST          - Show all currently trusted nicks.
         """
-        nick = self._get_nick(addr)
-        if not self.server.oper_has_flag(nick, "trust"):
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                               "TRUST :Permission Denied- You do not have the trust flag")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if not self.server.oper_has_flag(nick, "trust"):
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "TRUST :Permission Denied- You do not have the trust flag")
+                return
 
-        if not msg.params:
-            self._send_notice(addr, "Usage: TRUST <ADD|REMOVE|LIST> [nick]")
-            return
+            if not msg.params:
+                self._send_notice(addr, "Usage: TRUST <ADD|REMOVE|LIST> [nick]")
+                return
 
-        subcmd = msg.params[0].upper()
+            subcmd = msg.params[0].upper()
 
-        if subcmd == "LIST":
-            trust_list = self.server.load_settings().get("trusted_nicks", [])
-            if not trust_list:
-                self._send_notice(addr, "No trusted nicks configured.")
+            if subcmd == "LIST":
+                trust_list = self.server.load_settings().get("trusted_nicks", [])
+                if not trust_list:
+                    self._send_notice(addr, "No trusted nicks configured.")
+                else:
+                    for trusted_nick in trust_list:
+                        self._send_notice(addr, f"  TRUST: {trusted_nick}")
+                self._send_notice(addr, "End of TRUST list.")
+                return
+
+            if len(msg.params) < 2:
+                self._send_notice(addr, "Usage: TRUST ADD <nick> | TRUST REMOVE <nick>")
+                return
+
+            target = msg.params[1]
+
+            if subcmd == "ADD":
+                settings = self.server.load_settings()
+                trusted = set(settings.get("trusted_nicks", []))
+                trusted.add(target.lower())
+                settings["trusted_nicks"] = sorted(trusted)
+                self.server.save_settings(settings)
+                self._send_notice(addr, f"Added {target} to trusted list.")
+                self.server.log(f"[TRUST] {nick} added {target} to trusted nicks")
+                self.server.send_wallops(f"{nick} added {target} to trusted nicks")
+
+            elif subcmd == "REMOVE":
+                settings = self.server.load_settings()
+                trusted = set(settings.get("trusted_nicks", []))
+                trusted.discard(target.lower())
+                settings["trusted_nicks"] = sorted(trusted)
+                self.server.save_settings(settings)
+                self._send_notice(addr, f"Removed {target} from trusted list.")
+                self.server.log(f"[TRUST] {nick} removed {target} from trusted nicks")
             else:
-                for trusted_nick in trust_list:
-                    self._send_notice(addr, f"  TRUST: {trusted_nick}")
-            self._send_notice(addr, "End of TRUST list.")
-            return
-
-        if len(msg.params) < 2:
-            self._send_notice(addr, "Usage: TRUST ADD <nick> | TRUST REMOVE <nick>")
-            return
-
-        target = msg.params[1]
-
-        if subcmd == "ADD":
-            settings = self.server.load_settings()
-            trusted = set(settings.get("trusted_nicks", []))
-            trusted.add(target.lower())
-            settings["trusted_nicks"] = sorted(trusted)
-            self.server.save_settings(settings)
-            self._send_notice(addr, f"Added {target} to trusted list.")
-            self.server.log(f"[TRUST] {nick} added {target} to trusted nicks")
-            self.server.send_wallops(f"{nick} added {target} to trusted nicks")
-
-        elif subcmd == "REMOVE":
-            settings = self.server.load_settings()
-            trusted = set(settings.get("trusted_nicks", []))
-            trusted.discard(target.lower())
-            settings["trusted_nicks"] = sorted(trusted)
-            self.server.save_settings(settings)
-            self._send_notice(addr, f"Removed {target} from trusted list.")
-            self.server.log(f"[TRUST] {nick} removed {target} from trusted nicks")
-        else:
-            self._send_notice(addr, "Usage: TRUST <ADD|REMOVE|LIST> [nick]")
+                self._send_notice(addr, "Usage: TRUST <ADD|REMOVE|LIST> [nick]")
+        except Exception as e:
+            self.server.log(f"[ERROR] TRUST handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during TRUST")
 
     def _handle_setmotd(self, msg, addr):
         """SETMOTD :<new message of the day> — Requires 'setmotd' oper flag."""
-        nick = self._get_nick(addr)
-        if not self.server.oper_has_flag(nick, "setmotd"):
-            self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                               "SETMOTD :Permission Denied- You do not have the setmotd flag")
-            return
+        try:
+            nick = self._get_nick(addr)
+            if not self.server.oper_has_flag(nick, "setmotd"):
+                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                   "SETMOTD :Permission Denied- You do not have the setmotd flag")
+                return
 
-        if not msg.params:
-            self._send_notice(addr, "Usage: SETMOTD :<message>")
-            return
+            if not msg.params:
+                self._send_notice(addr, "Usage: SETMOTD :<message>")
+                return
 
-        new_motd = msg.params[0]
-        # Persist MOTD
-        self.server.put_data("motd", new_motd)
-        self._send_notice(addr, f"MOTD updated: {new_motd}")
-        self.server.log(f"[SETMOTD] {nick} set new MOTD: {new_motd!r}")
-        self.server.send_wallops(f"{nick} set a new MOTD")
+            new_motd = msg.params[0]
+            # Persist MOTD
+            self.server.put_data("motd", new_motd)
+            self._send_notice(addr, f"MOTD updated: {new_motd}")
+            self.server.log(f"[SETMOTD] {nick} set new MOTD: {new_motd!r}")
+            self.server.send_wallops(f"{nick} set a new MOTD")
 
-        # Broadcast update notice to all channels
-        prefix = f"{nick}!{nick}@{SERVER_NAME}"
-        for channel in self.server.channel_manager.list_channels():
-            notice = format_irc_message(
-                prefix, "NOTICE", [channel.name], f"MOTD updated by {nick}: {new_motd}"
-            ) + "\r\n"
-            self.server.broadcast_to_channel(channel.name, notice)
+            # Broadcast update notice to all channels
+            prefix = f"{nick}!{nick}@{SERVER_NAME}"
+            for channel in self.server.channel_manager.list_channels():
+                notice = format_irc_message(
+                    prefix, "NOTICE", [channel.name], f"MOTD updated by {nick}: {new_motd}"
+                ) + "\r\n"
+                self.server.broadcast_to_channel(channel.name, notice)
+        except Exception as e:
+            self.server.log(f"[ERROR] SETMOTD handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during SETMOTD")
 
     def _handle_stats(self, msg, addr):
         """STATS [letter] — Server statistics query. Requires 'stats' oper flag.
@@ -3788,56 +3842,64 @@ class MessageHandler:
 
     def _handle_stats(self, msg, addr):
         """STATS <letter> — server statistics (oper only)."""
-        nick = self._require_oper(addr)
-        if not nick:
-            return
-        letter = msg.params[0].lower() if msg.params else "u"
-        RPL_STATSEND = "219"
+        try:
+            nick = self._require_oper(addr)
+            if not nick:
+                return
+            letter = msg.params[0].lower() if msg.params else "u"
+            RPL_STATSEND = "219"
 
-        if letter == "u":
-            import time as _time
-            uptime_sec = int(_time.time() - getattr(self.server, "_start_time", _time.time()))
-            h, rem = divmod(uptime_sec, 3600)
-            m, s = divmod(rem, 60)
-            clients = len([i for i in self.server.clients.values() if i.get("name")])
-            self._oper_notice(addr, f"Uptime: {h}h {m}m {s}s  |  Connected clients: {clients}")
-        elif letter == "o":
-            self._trust_list(addr)
-            return
-        elif letter == "c":
-            self._oper_notice(addr, "--- Active Clients ---")
-            for a, info in self.server.clients.items():
-                n = info.get("name")
-                if not n:
-                    continue
-                channels = self.server.channel_manager.find_channels_for_nick(n)
-                chans = ",".join(ch.name for ch in channels) or "(none)"
-                flags = self.server.get_oper_flags(n)
-                oper_tag = f" [OPER:{flags}]" if flags else ""
-                self._oper_notice(addr, f"  {n}{oper_tag} @ {a[0]}:{a[1]}  chans: {chans}")
-            self._oper_notice(addr, "--- End Clients ---")
-        elif letter == "l":
-            if hasattr(self.server, "s2s_network"):
-                links = getattr(self.server.s2s_network, "connections", {})
-                if links:
-                    for sname, conn in links.items():
-                        self._oper_notice(addr, f"  Link: {sname} @ {getattr(conn, 'host', '?')}")
+            if letter == "u":
+                import time as _time
+                uptime_sec = int(_time.time() - getattr(self.server, "_start_time", _time.time()))
+                h, rem = divmod(uptime_sec, 3600)
+                m, s = divmod(rem, 60)
+                clients = len([i for i in self.server.clients.values() if i.get("name")])
+                self._oper_notice(addr, f"Uptime: {h}h {m}m {s}s  |  Connected clients: {clients}")
+            elif letter == "o":
+                self._trust_list(addr)
+                return
+            elif letter == "c":
+                self._oper_notice(addr, "--- Active Clients ---")
+                for a, info in self.server.clients.items():
+                    n = info.get("name")
+                    if not n:
+                        continue
+                    channels = self.server.channel_manager.find_channels_for_nick(n)
+                    chans = ",".join(ch.name for ch in channels) or "(none)"
+                    flags = self.server.get_oper_flags(n)
+                    oper_tag = f" [OPER:{flags}]" if flags else ""
+                    self._oper_notice(addr, f"  {n}{oper_tag} @ {a[0]}:{a[1]}  chans: {chans}")
+                self._oper_notice(addr, "--- End Clients ---")
+            elif letter == "l":
+                if hasattr(self.server, "s2s_network"):
+                    links = getattr(self.server.s2s_network, "connections", {})
+                    if links:
+                        for sname, conn in links.items():
+                            self._oper_notice(addr, f"  Link: {sname} @ {getattr(conn, 'host', '?')}")
+                    else:
+                        self._oper_notice(addr, "No active S2S links.")
                 else:
-                    self._oper_notice(addr, "No active S2S links.")
+                    self._oper_notice(addr, "S2S not active.")
             else:
-                self._oper_notice(addr, "S2S not active.")
-        else:
-            self._oper_notice(addr, f"Unknown STATS letter '{letter}'. Use: u c o l")
+                self._oper_notice(addr, f"Unknown STATS letter '{letter}'. Use: u c o l")
 
-        end = f":{SERVER_NAME} {RPL_STATSEND} {nick} {letter} :End of /STATS report\r\n"
-        self.server.sock_send(end.encode(), addr)
+            end = f":{SERVER_NAME} {RPL_STATSEND} {nick} {letter} :End of /STATS report\r\n"
+            self.server.sock_send(end.encode(), addr)
+        except Exception as e:
+            self.server.log(f"[ERROR] STATS handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during STATS")
 
     def _handle_rehash(self, msg, addr):
         """REHASH — no longer supported. opers.json is the sole authority."""
-        nick = self._require_admin(addr)
-        if not nick:
-            return
-        self._oper_notice(addr, "REHASH is no longer supported. Edit opers.json directly.")
+        try:
+            nick = self._require_admin(addr)
+            if not nick:
+                return
+            self._oper_notice(addr, "REHASH is no longer supported. Edit opers.json directly.")
+        except Exception as e:
+            self.server.log(f"[ERROR] REHASH handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during REHASH")
 
     def _handle_shutdown(self, msg, addr):
         """SHUTDOWN [reason] — graceful server shutdown (requires server admin)."""
