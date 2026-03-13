@@ -7,6 +7,7 @@ Provides:
 """
 
 import time
+import threading
 from typing import Dict, Optional, Set, List, Tuple, Any
 
 
@@ -98,7 +99,7 @@ class Channel:
 
 
 class ChannelManager:
-    """Manages all channels on the server."""
+    """Manages all channels on the server. Now thread-safe."""
 
     DEFAULT_CHANNEL = "#general"
 
@@ -107,47 +108,56 @@ class ChannelManager:
         Initializes the instance.
         """
         self.channels: Dict[str, Channel] = {}
+        self._lock = threading.RLock()
         self.ensure_channel(self.DEFAULT_CHANNEL)
 
     def ensure_channel(self, name: str) -> Channel:
         """Create channel if it doesn't exist, return it."""
-        if name not in self.channels:
-            self.channels[name] = Channel(name)
-        return self.channels[name]
+        with self._lock:
+            lower_name = name.lower()
+            if lower_name not in self.channels:
+                self.channels[lower_name] = Channel(name)
+            return self.channels[lower_name]
 
     def get_channel(self, name: str) -> Optional[Channel]:
         """Get channel by name, or None."""
-        return self.channels.get(name)
+        with self._lock:
+            return self.channels.get(name.lower())
 
     def remove_channel(self, name: str) -> bool:
         """Remove a channel. Cannot remove the default channel."""
-        if name == self.DEFAULT_CHANNEL:
+        with self._lock:
+            lower_name = name.lower()
+            if lower_name == self.DEFAULT_CHANNEL.lower():
+                return False
+            if lower_name in self.channels:
+                del self.channels[lower_name]
+                return True
             return False
-        if name in self.channels:
-            del self.channels[name]
-            return True
-        return False
 
     def list_channels(self) -> List[Channel]:
         """Return all channels."""
-        return list(self.channels.values())
+        with self._lock:
+            return list(self.channels.values())
 
     def find_channels_for_nick(self, nick: str) -> List[Channel]:
         """Find all channels a nick is a member of."""
-        result = []
-        for channel in self.channels.values():
-            if channel.has_member(nick):
-                result.append(channel)
-        return result
+        with self._lock:
+            result = []
+            for channel in self.channels.values():
+                if channel.has_member(nick):
+                    result.append(channel)
+            return result
 
     def remove_nick_from_all(self, nick: str) -> List[str]:
         """Remove a nick from all channels. Returns list of channel names they were in."""
-        removed_from = []
-        for name, channel in list(self.channels.items()):
-            if channel.has_member(nick):
-                channel.remove_member(nick)
-                removed_from.append(name)
-                # Clean up empty non-default channels
-                if channel.member_count() == 0 and name != self.DEFAULT_CHANNEL:
-                    del self.channels[name]
-        return removed_from
+        with self._lock:
+            removed_from = []
+            for name, channel in list(self.channels.items()):
+                if channel.has_member(nick):
+                    channel.remove_member(nick)
+                    removed_from.append(name)
+                    # Clean up empty non-default channels
+                    if channel.member_count() == 0 and name.lower() != self.DEFAULT_CHANNEL.lower():
+                        del self.channels[name]
+            return removed_from
