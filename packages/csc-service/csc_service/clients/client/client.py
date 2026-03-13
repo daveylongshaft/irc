@@ -1125,6 +1125,13 @@ class Client(Network):
                 self._handle_status_command()
             elif command == "/ping":
                 self._handle_ping_command()
+            elif command == "/quote" or command == "/raw":
+                if args:
+                    self._last_message_sent = f"{args}\r\n"
+                    super().send(self._last_message_sent)
+                    print(f"Raw> {args}")
+                else:
+                    print("Usage: /quote <raw IRC command>  (alias: /raw)")
             else:
                 # Unknown command - pass to server as raw IRC (remove leading /)
                 irc_cmd = cmd[1:].strip() if cmd.startswith('/') else cmd
@@ -1184,8 +1191,11 @@ class Client(Network):
             "/macro <name>=<cmd1>; <cmd2> : Define or update a macro.\n"
             "/unmacro <name>              : Remove a macro.\n"
             "/macros                      : List all macros.\n"
+            "/quote <raw IRC>             : Send raw IRC command to server.\n"
+            "/raw <raw IRC>               : Alias for /quote.\n"
             "\n-- Server Commands --\n"
             "AI <token> <class> [method]  : Execute a service command.\n"
+            "Unknown /commands are sent as raw IRC (e.g. /mode, /whois).\n"
             "Any other text is sent as chat to your current channel."
         )
 
