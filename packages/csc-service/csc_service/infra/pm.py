@@ -879,7 +879,7 @@ def run_cycle() -> list:
 
         try:
             # Use agent_service directly (cross-platform, no subprocess)
-            from csc_service.shared.services.agent_service import agent as AgentService
+            from csc_service.shared.services.agent_service import Agent as AgentService
             _agent_svc = AgentService(None)
 
             sel_result = _agent_svc.select(agent_name)
