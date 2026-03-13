@@ -13,7 +13,7 @@ from csc_service.shared.platform import Platform
 from csc_service.shared.services import PROJECT_ROOT as _PROJECT_ROOT
 
 
-class agent( Service ):
+class Agent( Service ):
     """AI agent runner service.
 
     Spawns a non-interactive AI CLI session to work a prompt file,
