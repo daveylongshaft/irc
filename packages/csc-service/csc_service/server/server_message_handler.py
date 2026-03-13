@@ -967,7 +967,7 @@ class MessageHandler:
         token = parts[0]
 
         if len(parts) < 2:
-            self._send_notice(addr, f"{token} AI : Usage: AI <token> <service> [<method>] [args...]")
+            self._send_notice(addr, f"{token} AI : UPDATED Usage: AI <token> <service> [<method>] [args...]")
             return
 
         class_name = parts[1]
