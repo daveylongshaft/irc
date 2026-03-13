@@ -14,6 +14,12 @@ from pathlib import Path
 
 from csc_service.shared.platform import Platform
 
+def _run_hidden(cmd, **kwargs):
+    """Run subprocess with hidden window on Windows."""
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return subprocess.run(cmd, **kwargs)
+
 def _get_openssl_cmd():
     """Return path to openssl executable."""
     import shutil
