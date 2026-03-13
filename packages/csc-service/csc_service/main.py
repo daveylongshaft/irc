@@ -14,8 +14,12 @@ import subprocess
 from pathlib import Path
 
 def main():
+    # Patch subprocess to auto-hide windows on Windows (before any subprocess calls)
+    from csc_service.shared.subprocess_wrapper import patch_subprocess
+    patch_subprocess()
+
     args = sys.argv[1:]
-    
+
     # Walk up to find project root: check etc/csc-service.json and csc-service.json, fall back to CLAUDE.md
     csc_root = Path(__file__).resolve().parent
     claude_md_stop = None
