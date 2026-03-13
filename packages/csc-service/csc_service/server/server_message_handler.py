@@ -3903,19 +3903,24 @@ class MessageHandler:
 
     def _handle_shutdown(self, msg, addr):
         """SHUTDOWN [reason] — graceful server shutdown (requires server admin)."""
-        nick = self._require_admin(addr)
-        if not nick:
-            return
-        reason = " ".join(msg.params) if msg.params else "Server shutting down"
-        self.server.send_wallops(f"Server shutting down: {reason} (by {nick})")
-        error_msg = f"ERROR :Closing Link: Server shutting down ({reason})\r\n"
-        for a in list(self.server.clients.keys()):
-            try:
-                self.server.sock_send(error_msg.encode(), a)
-            except Exception:
-                pass
-        self.server._running = False
-        self.server.log(f"[SHUTDOWN] Initiated by {nick}: {reason}")
+        try:
+            nick = self._require_admin(addr)
+            if not nick:
+                return
+            reason = " ".join(msg.params) if msg.params else "Server shutting down"
+            self.server.send_wallops(f"Server shutting down: {reason} (by {nick})")
+            error_msg = f"ERROR :Closing Link: Server shutting down ({reason})\r\n"
+            for a in list(self.server.clients.keys()):
+                try:
+                    self.server.sock_send(error_msg.encode(), a)
+                except Exception:
+                    pass
+            self.server._running = False
+            self.server.log(f"[SHUTDOWN] Initiated by {nick}: {reason}")
+        except Exception as e:
+            self.server.log(f"[ERROR] SHUTDOWN handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            # Do not send a reply, server is going down.
+            self.server._running = False
 
     def _handle_link(self, msg, addr):
         """LINK <server> [port] — initiate S2S link."""
@@ -4058,73 +4063,77 @@ class MessageHandler:
 
     def _handle_localconfig(self, msg, addr):
         """LOCALCONFIG <show|list|get|set|del> [key] [value]"""
-        nick = self._get_nick(addr)
-        sub = msg.params[0].lower() if msg.params else "show"
-        args = msg.params[1:]
+        try:
+            nick = self._get_nick(addr)
+            sub = msg.params[0].lower() if msg.params else "show"
+            args = msg.params[1:]
 
-        if sub in ("show", "list"):
-            if nick.lower() not in self.server.opers:
-                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                                   "Permission Denied- You're not an IRC operator")
-                return
-            self._oper_notice(addr, "--- Server Config (cfg.*) ---")
-            for key, default in sorted(self._CFG_DEFAULTS.items()):
-                val = self.server.get_data(key)
-                display = val if val is not None else f"{default} (default)"
-                tag = " [RESTART]" if key in self._CFG_RESTART else (
-                      " [RELINK]"  if key in self._CFG_RELINK  else "")
-                self._oper_notice(addr, f"  {key} = {display}{tag}")
-            self._oper_notice(addr, "--- End Config ---")
-
-        elif sub == "get":
-            if nick.lower() not in self.server.opers:
-                self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
-                                   "Permission Denied- You're not an IRC operator")
-                return
-            if not args:
-                self._oper_notice(addr, "Usage: LOCALCONFIG get <key>")
-                return
-            key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
-            val = self.server.get_data(key)
-            default = self._CFG_DEFAULTS.get(key, "(no default)")
-            display = val if val is not None else f"{default} (default)"
-            self._oper_notice(addr, f"{key} = {display}")
-
-        elif sub == "set":
-            if not self._require_admin(addr):
-                return
-            if len(args) < 2:
-                self._oper_notice(addr, "Usage: LOCALCONFIG set <key> <value>")
-                return
-            key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
-            value = " ".join(args[1:])
-            # Type coerce based on default type
-            default = self._CFG_DEFAULTS.get(key)
-            if isinstance(default, bool):
-                value = value.lower() in ("true", "1", "yes", "on")
-            elif isinstance(default, int):
-                try:
-                    value = int(value)
-                except ValueError:
-                    self._oper_notice(addr, f"Invalid integer value for {key}")
+            if sub in ("show", "list"):
+                if nick.lower() not in self.server.opers:
+                    self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                       "Permission Denied- You're not an IRC operator")
                     return
-            self.server.put_data(key, value)
-            tag = " — NOTE: requires restart" if key in self._CFG_RESTART else (
-                  " — NOTE: requires relink" if key in self._CFG_RELINK else "")
-            self._oper_notice(addr, f"Set {key} = {value}{tag}")
-            self.server.send_wallops(f"{nick} set config {key} = {value}")
+                self._oper_notice(addr, "--- Server Config (cfg.*) ---")
+                for key, default in sorted(self._CFG_DEFAULTS.items()):
+                    val = self.server.get_data(key)
+                    display = val if val is not None else f"{default} (default)"
+                    tag = " [RESTART]" if key in self._CFG_RESTART else (
+                          " [RELINK]"  if key in self._CFG_RELINK  else "")
+                    self._oper_notice(addr, f"  {key} = {display}{tag}")
+                self._oper_notice(addr, "--- End Config ---")
 
-        elif sub == "del":
-            if not self._require_admin(addr):
-                return
-            if not args:
-                self._oper_notice(addr, "Usage: LOCALCONFIG del <key>")
-                return
-            key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
-            self.server.put_data(key, None)
-            default = self._CFG_DEFAULTS.get(key, "(none)")
-            self._oper_notice(addr, f"Deleted {key} — will use default: {default}")
-            self.server.send_wallops(f"{nick} deleted config {key}")
+            elif sub == "get":
+                if nick.lower() not in self.server.opers:
+                    self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
+                                       "Permission Denied- You're not an IRC operator")
+                    return
+                if not args:
+                    self._oper_notice(addr, "Usage: LOCALCONFIG get <key>")
+                    return
+                key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
+                val = self.server.get_data(key)
+                default = self._CFG_DEFAULTS.get(key, "(no default)")
+                display = val if val is not None else f"{default} (default)"
+                self._oper_notice(addr, f"{key} = {display}")
 
-        else:
-            self._oper_notice(addr, "Usage: LOCALCONFIG <show|list|get|set|del> [key] [value]")
+            elif sub == "set":
+                if not self._require_admin(addr):
+                    return
+                if len(args) < 2:
+                    self._oper_notice(addr, "Usage: LOCALCONFIG set <key> <value>")
+                    return
+                key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
+                value = " ".join(args[1:])
+                # Type coerce based on default type
+                default = self._CFG_DEFAULTS.get(key)
+                if isinstance(default, bool):
+                    value = value.lower() in ("true", "1", "yes", "on")
+                elif isinstance(default, int):
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        self._oper_notice(addr, f"Invalid integer value for {key}")
+                        return
+                self.server.put_data(key, value)
+                tag = " — NOTE: requires restart" if key in self._CFG_RESTART else (
+                      " — NOTE: requires relink" if key in self._CFG_RELINK else "")
+                self._oper_notice(addr, f"Set {key} = {value}{tag}")
+                self.server.send_wallops(f"{nick} set config {key} = {value}")
+
+            elif sub == "del":
+                if not self._require_admin(addr):
+                    return
+                if not args:
+                    self._oper_notice(addr, "Usage: LOCALCONFIG del <key>")
+                    return
+                key = args[0] if args[0].startswith("cfg.") else f"cfg.{args[0]}"
+                self.server.put_data(key, None)
+                default = self._CFG_DEFAULTS.get(key, "(none)")
+                self._oper_notice(addr, f"Deleted {key} — will use default: {default}")
+                self.server.send_wallops(f"{nick} deleted config {key}")
+
+            else:
+                self._oper_notice(addr, "Usage: LOCALCONFIG <show|list|get|set|del> [key] [value]")
+        except Exception as e:
+            self.server.log(f"[ERROR] LOCALCONFIG handler unexpected error from {addr}: {type(e).__name__}: {e}")
+            self._send_numeric(addr, ERR_UNKNOWNERROR, self._get_nick(addr) or "*", "Internal server error during LOCALCONFIG")

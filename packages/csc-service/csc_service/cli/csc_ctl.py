@@ -6,6 +6,9 @@ from ..config import ConfigManager
 
 
 def main():
+    # Patch subprocess to auto-hide windows on Windows (before any subprocess calls)
+    from ..shared.subprocess_wrapper import patch_subprocess
+    patch_subprocess()
     parser = argparse.ArgumentParser(
         prog="csc-ctl",
         description="CSC service management CLI"

@@ -189,6 +189,10 @@ def main():
     from .transports.tcp_inbound import TCPInbound
     from .transports.udp_inbound import UDPInbound
     from .transports.udp_outbound import UDPOutbound
+    from ..shared.subprocess_wrapper import patch_subprocess
+
+    # Patch subprocess to auto-hide windows on Windows
+    patch_subprocess()
 
     # Load configuration
     config_file = "config.json"
