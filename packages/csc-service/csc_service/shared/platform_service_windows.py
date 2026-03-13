@@ -27,7 +27,7 @@ class WindowsServiceDetector:
                 "powershell", "-NoProfile", "-Command",
                 f"Get-Service | Where-Object {{ $_.Name -like '{WindowsServiceDetector.SERVICE_PREFIX}*' }} | Select-Object Name, Status, StartType | ConvertTo-Json"
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0 and result.stdout.strip():
                 data = json.loads(result.stdout)
                 if isinstance(data, dict):
@@ -45,7 +45,7 @@ class WindowsServiceDetector:
                 "powershell", "-NoProfile", "-Command",
                 f"Get-Service -Name '{service_name}' | Select-Object Name, Status, StartType | ConvertTo-Json"
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0 and result.stdout.strip():
                 return json.loads(result.stdout)
             return None
