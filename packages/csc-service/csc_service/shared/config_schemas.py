@@ -1,8 +1,8 @@
+
 """
 JSON Schemas for csc-service configuration files.
 """
 
-# Schema for settings.json
 SETTINGS_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -12,13 +12,19 @@ SETTINGS_SCHEMA = {
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "max_clients": {"type": "integer", "minimum": 1},
         "motd": {"type": "string"},
-        "timeout": {"type": "integer", "minimum": 1}
+        "timeout": {"type": "integer", "minimum": 1},
+        "nickserv": {
+            "type": "object",
+            "properties": {
+                "enforce_timeout": {"type": "integer"},
+                "enforce_mode": {"type": "string", "enum": ["disconnect", "kill", "none"]}
+            }
+        }
     },
     "required": ["version", "server_name", "port"],
     "additionalProperties": True
 }
 
-# Schema for platform.json
 PLATFORM_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -26,167 +32,31 @@ PLATFORM_SCHEMA = {
         "version": {"type": "number", "minimum": 1.0},
         "csc_root": {"type": "string"},
         "temp_path": {"type": "string"},
-        "log_path": {"type": "string"}
+        "log_path": {"type": "string"},
     },
     "required": ["version", "csc_root"],
     "additionalProperties": True
 }
 
-# Schema for opers.json
 OPERS_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
     "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "olines": {
-            "type": "object",
-            "patternProperties": {
-                "^[a-zA-Z0-9_`{\[\]}\|\^\-]+$": {
-                    "type": "object",
-                    "properties": {
-                        "password": {"type": "string"},
-                        "hosts": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "flags": {"type": "string"}
-                    },
-                    "required": ["password", "hosts", "flags"]
-                }
-            }
-        }
-    },
-    "required": ["version", "olines"],
-    "additionalProperties": True
-}
-
-# Schema for users.json
-USERS_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "users": {
-            "type": "object",
-            "patternProperties": {
-                "^[a-zA-Z0-9_`{\[\]}\|\^\-]+$": {
-                    "type": "object",
-                    "properties": {
-                        "password": {"type": "string"},
-                        "email": {"type": "string", "format": "email"},
-                        "registered": {"type": "number"}
-                    },
-                    "required": ["password"]
-                }
-            }
-        }
-    },
-    "required": ["version"],
-    "additionalProperties": True
-}
-
-# Schema for channels.json
-CHANNELS_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "channels": {
-            "type": "object",
-            "patternProperties": {
-                "^#.*$": {
-                    "type": "object",
-                    "properties": {
-                        "topic": {"type": "string"},
-                        "modes": {"type": "string"},
-                        "members": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        },
-                        "bans": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        }
-                    },
-                    "required": ["topic", "modes", "members", "bans"]
-                }
-            }
-        }
-    },
-    "required": ["version", "channels"],
-    "additionalProperties": True
-}
-
-# Schema for bans.json
-BANS_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "bans": {
+        "version": {"type": "number", "const": 2},
+        "protect_local_opers": {"type": "boolean"},
+        "active_opers": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "mask": {"type": "string"},
-                    "reason": {"type": "string"},
-                    "expires": {"type": "number"},
-                    "set_by": {"type": "string"}
+                    "nick": {"type": "string"},
+                    "account": {"type": "string"},
+                    "flags": {"type": "string"}
                 },
-                "required": ["mask", "reason", "expires", "set_by"]
+                "required": ["nick", "account", "flags"]
             }
-        }
-    },
-    "required": ["version", "bans"],
-    "additionalProperties": True
-}
-
-# Schema for nickserv.json
-NICKSERV_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "enabled": {"type": "boolean"},
-        "config": {"type": "object"}
-    },
-    "required": ["version", "enabled"],
-    "additionalProperties": True
-}
-
-# Schema for chanserv.json
-CHANSERV_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "enabled": {"type": "boolean"},
-        "config": {"type": "object"}
-    },
-    "required": ["version", "enabled"],
-    "additionalProperties": True
-}
-
-# Schema for botserv.json
-BOTSERV_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "enabled": {"type": "boolean"},
-        "config": {"type": "object"}
-    },
-    "required": ["version", "enabled"],
-    "additionalProperties": True
-}
-
-# Schema for history.json
-HISTORY_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "version": {"type": "number", "minimum": 1.0},
-        "history": {
+        },
+        "olines": {
             "type": "object",
             "patternProperties": {
                 "^[a-zA-Z0-9_`{\[\]}\|\^\-]+$": {
@@ -195,21 +65,178 @@ HISTORY_SCHEMA = {
                         "type": "object",
                         "properties": {
                             "user": {"type": "string"},
-                            "host": {"type": "string"},
-                            "realname": {"type": "string"},
-                            "quit_time": {"type": "number"},
-                            "quit_message": {"type": "string"}
+                            "password": {"type": "string"},
+                            "servers": {"type": "array", "items": {"type": "string"}},
+                            "host_masks": {"type": "array", "items": {"type": "string"}},
+                            "flags": {"type": "string"},
+                            "comment": {"type": "string"}
                         },
-                        "required": ["user", "host", "realname", "quit_time", "quit_message"]
+                        "required": ["user", "password", "flags"]
                     }
                 }
             }
         }
     },
-    "required": ["version", "history"],
-    "additionalProperties": True
+    "required": ["version", "olines"]
 }
 
+
+USERS_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "users": {
+            "type": "object",
+            "patternProperties": {
+                "^[a-zA-Z0-9_`{\[\]}\|\^\-]+$": {
+                    "type": "object",
+                    "properties": {
+                        "password_hash": {"type": "string"},
+                        "email": {"type": "string"},
+                        "registered": {"type": "boolean"}
+                    }
+                }
+            }
+        }
+    },
+    "required": ["version", "users"]
+}
+
+CHANNELS_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "channels": {
+            "type": "object",
+            "patternProperties": {
+                "^#.*$": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string"},
+                        "modes": {"type": "array", "items": {"type": "string"}},
+                        "members": {
+                            "type": "object",
+                            "patternProperties": {
+                                "^.*$": {
+                                    "type": "object",
+                                    "properties": {
+                                        "modes": {"type": "array", "items": {"type": "string"}}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "required": ["version", "channels"]
+}
+
+BANS_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "channel_bans": {
+            "type": "object",
+            "patternProperties": {
+                "^#.*$": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "required": ["version"]
+}
+
+NICKSERV_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "nicks": {
+            "type": "object",
+            "patternProperties": {
+                "^.*$": {
+                    "type": "object",
+                    "properties": {
+                        "nick": {"type": "string"},
+                        "password": {"type": "string"},
+                        "registered_by": {"type": "string"},
+                        "registered_at": {"type": "number"}
+                    },
+                    "required": ["nick", "password"]
+                }
+            }
+        }
+    },
+    "required": ["version", "nicks"]
+}
+
+CHANSERV_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "channels": {
+            "type": "object",
+            "patternProperties": {
+                "^#.*$": {
+                    "type": "object"
+                }
+            }
+        }
+    },
+    "required": ["version", "channels"]
+}
+
+
+BOTSERV_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "bots": {
+            "type": "object",
+            "patternProperties": {
+                "^.*:.*$": {
+                    "type": "object"
+                }
+            }
+        }
+    },
+    "required": ["version", "bots"]
+}
+
+HISTORY_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {"type": "number", "const": 1},
+        "disconnections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "nick": {"type": "string"},
+                    "user": {"type": "string"},
+                    "realname": {"type": "string"},
+                    "host": {"type": "string"},
+                    "quit_time": {"type": "number"},
+                    "quit_reason": {"type": "string"}
+                },
+                "required": ["nick", "user", "host", "quit_time"]
+            }
+        }
+    },
+    "required": ["version", "disconnections"]
+}
 
 SCHEMAS = {
     "settings": SETTINGS_SCHEMA,
@@ -221,5 +248,5 @@ SCHEMAS = {
     "nickserv": NICKSERV_SCHEMA,
     "chanserv": CHANSERV_SCHEMA,
     "botserv": BOTSERV_SCHEMA,
-    "history": HISTORY_SCHEMA,
+    "history": HISTORY_SCHEMA
 }

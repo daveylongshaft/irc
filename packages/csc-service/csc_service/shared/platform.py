@@ -253,7 +253,7 @@ class Platform(Version):
                 # Use powershell for CPU speed (wmic is deprecated)
                 result = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_Processor).MaxClockSpeed"],
-                    capture_output=True, text=True, timeout=10
+                    capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     return int(result.stdout.strip())
