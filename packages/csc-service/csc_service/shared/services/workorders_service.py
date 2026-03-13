@@ -206,9 +206,8 @@ class workorders( Service ):
         fm_lines.append("---")
         front_matter = "\n".join(fm_lines) + "\n"
 
-        timestamp = int(time.time())
         safe_desc = self._sanitize_filename(description)
-        filename = f"{timestamp}-{safe_desc}.md"
+        filename = f"{safe_desc}.md"
         filepath = self.queue.get("ready") / filename
 
         try:
