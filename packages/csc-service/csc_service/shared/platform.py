@@ -805,7 +805,7 @@ class Platform(Version):
     @property
     def run_dir(self) -> Path:
         """Return the absolute path to the run/ directory."""
-        return self.get_abs_tmp_path(["run"])
+        return Path(self.get_abs_tmp_path(["run"]))
 
     def get_abs_etc_path(self, components) -> str:
         """Return absolute path under etc/ (platform-native separators).
