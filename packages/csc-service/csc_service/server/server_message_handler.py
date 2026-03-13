@@ -735,22 +735,24 @@ class MessageHandler:
                                    f"{target} :Cannot send to channel (+m)")
                 return
 
-            out = format_irc_message(prefix, "PRIVMSG", [target], text) + "\r\n"
+            # Normalize channel name to lowercase for consistent output (RFC 1459)
+            normalized_target = target.lower()
+            out = format_irc_message(prefix, "PRIVMSG", [normalized_target], text) + "\r\n"
             # Wakeword-filtered broadcast: check each recipient individually
             self._broadcast_privmsg_filtered(channel, out, text, nick, exclude=addr)
-            self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
+            self.server.chat_buffer.append(normalized_target, nick, "PRIVMSG", text)
 
             # S2S: Route channel message to federation network
             if hasattr(self.server, 's2s_network'):
-                self.server.s2s_network.route_message(nick, target, text)
+                self.server.s2s_network.route_message(nick, normalized_target, text)
 
             # Check for embedded service command (AI ...)
             if text.upper().startswith("AI "):
-                self._handle_service_via_chatline(text, addr, nick, target)
+                self._handle_service_via_chatline(text, addr, nick, normalized_target)
             # Check for embedded file upload start
             elif text.startswith("<begin file=") or text.startswith("<append file="):
                 # Require ircop or chanop for file uploads
-                if not self._is_authorized(nick, target):
+                if not self._is_authorized(nick, normalized_target):
                     self.server.log(f"[SECURITY] 🚫 File upload blocked from unauthorized user {nick}@{addr}")
                     self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                     return
@@ -951,9 +953,11 @@ class MessageHandler:
         if target.startswith("#"):
             channel = self.server.channel_manager.get_channel(target)
             if channel and channel.has_member(nick):
-                out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"
-                self.server.broadcast_to_channel(target, out, exclude=addr)
-                self.server.chat_buffer.append(target, nick, "NOTICE", text)
+                # Normalize channel name to lowercase for consistent output (RFC 1459)
+                normalized_target = target.lower()
+                out = format_irc_message(prefix, "NOTICE", [normalized_target], text) + "\r\n"
+                self.server.broadcast_to_channel(normalized_target, out, exclude=addr)
+                self.server.chat_buffer.append(normalized_target, nick, "NOTICE", text)
         else:
             self._maybe_replay_pm_buffer(target, nick)
             out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"
