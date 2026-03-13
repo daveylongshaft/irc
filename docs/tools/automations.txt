@@ -107,6 +107,7 @@ AUTOMATIONS SUBMODULE MAP
   LOGS_DIR = None
   AGENT_DATA_FILE = None
   PENDING_FILE = None
+  AGENT_EXECUTOR = None
   API_KEY_MGR = None
   QUEUE_LOG = None
   STALE_FILE = None
@@ -144,14 +145,13 @@ AUTOMATIONS SUBMODULE MAP
   def find_cagent()  # Find the cagent binary.
   def _extract_role(wip_path)  # Read role from workorder YAML front-matter. Default: 'worker'.
   def build_full_prompt(agent_name, prompt_filename)  # Assemble: role context + agent context + WIP content.
-  def spawn_agent(agent_name, prompt_filename, agent_repo=None)  # Spawn AI agent in agent's temp repo. Returns (PID, log_path) or (None, None).
   def get_wip_summary(prompt_filename, max_lines=15)  # Get last N lines of WIP file for commit message.
   def get_wip_size(prompt_filename)  # Get WIP file size in bytes, or -1 if missing.
   def get_agent_started_at()  # Get the started_at timestamp from agent_data.json.
   def get_agent_current_log_path()  # Get the path to the agent's current log file from agent_data.json.
   def load_stale_state()
   def save_stale_state(state)
-  def process_work()  # Check queue/work/ for running or finished tasks.
+  def process_finished_work(agent_name, prompt_filename, return_code, agent_log)  # Process a finished workorder. This is called after the agent executor finishes.
   def process_inbox()  # Process one workorder from the pending work list (FIFO by datestamp).
   def run_cycle(work_dir_arg=None)  # Run one complete queue-worker cycle.
   def main()

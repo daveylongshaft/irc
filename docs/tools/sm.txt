@@ -27,7 +27,7 @@ SM SUBMODULE MAP
     def select(self, name: str) -> str  # Select which AI agent backend to use.
     def assign(self, prompt_filename: str) -> str  # Assign a prompt to the selected agent for queue-based processing.
     def _write_queued_files(self, wip_path: Path, metadata: dict, agent_name: str, workorder_filename: str)  # Writes the workorder content and its metadata to the agent's queue/in/ directory.
-    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str)  # Run the generate_orders_md script to create orders.md in agent's queue/in/.
+    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str)  # Generate orders.md in agent's queue/in/ with cached context.
     def _format_elapsed(self, started)  # Format elapsed time from a start timestamp.
     def _get_proc_mem(self, pid)  # Get resident memory of a process in MB from /proc. Returns str or '?'.
     def _get_log_size(self, log_path)  # Get log file size as human-readable string.
@@ -254,30 +254,6 @@ SM SUBMODULE MAP
     def __init__(self, service_layer=None)
     def run(self, *args)  # Execute proof of concept
     def default(self, *args)  # Default handler
-
-── irc/packages/csc-service/csc_service/shared/services/queue_worker_service.py ──
-# Queue Worker Service: Background service for processing agent prompt queues.
-  class QueueWorkerService(Service):  # Background service for processing agent prompt queues.
-    def __init__(self, server_instance)
-    def _load_platform(self)  # Load platform data with dual-notation paths.
-    def _ensure_agent_dirs(self, agent_name)  # Auto-create agent directories from template if they don't exist.
-    def _ensure_temp_dirs(self)  # Auto-create temp/runtime directories if they don't exist.
-    def _get_path_for_shell(self, windows_path, use_linux=False)  # Convert path to appropriate notation for shell (bash uses Linux notation).
-    def is_process_alive(self, pid)  # Check if a process with given PID is still running.
-    def append_agent_log_to_wip(self, agent_name, prompt_filename)  # Append agent log file to WIP file for audit trail.
-    def check_wip_complete(self, prompt_filename)  # Check if WIP file has COMPLETE as the last non-empty line.
-    def add_verification_message(self, prompt_filename)  # Add verification message to incomplete workorder.
-    def find_run_agent(self, agent_name)  # Find the run_agent script for an agent.
-    def run_refresh_maps(self)  # Run refresh-maps to update code maps.
-    def git_commit_push(self, message)  # Git add, commit, pull --rebase, and push changes.
-    def spawn_agent(self, agent_name, prompt_filename)  # Start an agent using its run_agent script. Returns PID or None.
-    def _any_agent_running(self)  # Check if any agent is currently running (has a .pid in queue/work/).
-    def process_queue_in(self)  # Check agents/*/queue/in/ for new prompts and start agents.
-    def process_queue_work(self)  # Check agents/*/queue/work/ for completed agents.
-    def run_cycle(self)  # Run one complete queue processing cycle.
-    def default(self, *args) -> str  # Show available commands.
-    def cycle(self) -> str  # Run one queue processing cycle.
-    def status(self) -> str  # Show queue status.
 
 ── irc/packages/csc-service/csc_service/shared/services/run_agent_executor.py ──
 # RunAgentExecutor: Pure Python executor for running AI agents without bash/batch scripts.

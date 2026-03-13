@@ -128,9 +128,6 @@ SERVER SUBMODULE MAP
     def close(self)  # Cleanly close the network socket and stop the listener thread.
     def connected_for(self)  # A placeholder method for subclasses to override.
 
-── irc/packages/csc-service/csc_service/server/olines.conf ──
-# # IRC Operator Configuration (O-Lines)
-
 ── irc/packages/csc-service/csc_service/server/persistent_clients.bat ──
 # @echo off
 
@@ -234,7 +231,7 @@ SERVER SUBMODULE MAP
     def _handle_trust(self, msg, addr)  # TRUST <ADD|REMOVE|LIST> [nick_or_host] — Manage trusted hosts/nicks.
     def _handle_setmotd(self, msg, addr)  # SETMOTD :<new message of the day> — Requires 'setmotd' oper flag.
     def _handle_stats(self, msg, addr)  # STATS [letter] — Server statistics query. Requires 'stats' oper flag.
-    def _handle_rehash(self, msg, addr)  # REHASH — Reload olines.conf and server config. Requires 'rehash' flag.
+    def _handle_rehash(self, msg, addr)  # REHASH — no longer supported. opers.json is the sole authority.
     def _handle_shutdown(self, msg, addr)  # SHUTDOWN [:<reason>] — Gracefully shut down the server. Requires 'shutdown' flag.
     def _handle_localconfig(self, msg, addr)  # LOCALCONFIG <key> [value] — Read or set a local server config value.
     def _server_kill(self, target_nick, reason='Disconnected')  # Disconnect a client by nick. Cleans up channels, clients, registration,
@@ -306,9 +303,9 @@ SERVER SUBMODULE MAP
     def _trust_edit(self, addr, args)
     def _trust_addhost(self, addr, args)
     def _trust_delhost(self, addr, args)
-    def _write_olines_conf(self, data)  # Rewrite olines.conf from current opers.json data.
+    def _write_olines_conf(self, data)  # Rewrite olines.conf from current opers.json data (export only).
     def _handle_stats(self, msg, addr)  # STATS <letter> — server statistics (oper only).
-    def _handle_rehash(self, msg, addr)  # REHASH — reload olines.conf into memory (requires server admin).
+    def _handle_rehash(self, msg, addr)  # REHASH — no longer supported. opers.json is the sole authority.
     def _handle_shutdown(self, msg, addr)  # SHUTDOWN [reason] — graceful server shutdown (requires server admin).
     def _handle_link(self, msg, addr)  # LINK <server> [port] — initiate S2S link.
     def _handle_relink(self, msg, addr)  # RELINK <server> — reconnect a dropped S2S link.
@@ -381,60 +378,6 @@ SERVER SUBMODULE MAP
     def __init__(self, server_instance=None)
     def default(self, *args)  # Default command handler for a service.
     def handle_command(self, class_name_raw, method_name_raw, args, source_name, source_address)  # Executes a command by dynamically loading a service module.
-
-── irc/packages/csc-service/csc_service/server/storage.py ──
-# PersistentStorageManager - Atomic file-based persistence for the IRC server.
-  class PersistentStorageManager(Data):  # Atomic file-based storage for IRC server state.
-    def __init__(self, base_path, log_func=None)  # Initialize storage manager.
-    def _file_path(self, key)  # Get full path for a storage file.
-    def _has_changed(self, key)  # Check if a file has changed on disk since last read.
-    def _atomic_write(self, filepath, data)  # Write data to file atomically — routes through Data._write_json_file.
-    def _atomic_read(self, filepath)  # Read a JSON file safely — routes through Data._read_json_file.
-    def _quarantine(self, filepath)  # Rename corrupt file to .corrupt.<timestamp> for investigation.
-    def _ensure_all_files(self)  # Create any missing storage files with defaults.
-    def _load_channels_from_disk(self)  # Load all channel data from disk. Returns dict or defaults on error.
-    def load_channels(self)  # Load all channel data. Returns dict or defaults on error.
-    def save_channels(self, data)  # Save complete channel data. Returns True/False.
-    def save_channels_from_manager(self, channel_manager)  # Build and save channel data from a ChannelManager instance.
-    def load_users(self)  # Load all user data. Returns dict or defaults on error.
-    def save_users(self, data)  # Save complete user data. Returns True/False.
-    def set_user(self, nick, user_data)  # Update or create a single user entry on disk.
-    def remove_user(self, nick)  # Remove a user entry from disk.
-    def save_users_from_server(self, server)  # Build and save user data from server state.
-    def load_bans(self)  # Load ban data. Returns dict or defaults on error.
-    def save_bans(self, data)  # Save complete ban data. Returns True/False.
-    def save_bans_from_manager(self, channel_manager)  # Build and save ban data from ChannelManager.
-    def load_history(self)  # Load disconnection history. Returns dict or defaults on error.
-    def save_history(self, data)  # Save complete history data. Returns True/False.
-    def add_disconnection(self, nick, user, realname, host, quit_reason='')  # Record a user disconnection for WHOWAS.
-    def save_history_from_server(self, server)  # Save disconnection history from server's disconnected_clients dict.
-    def load_nickserv(self)  # Load NickServ nick registration database.
-    def save_nickserv(self, data)  # Save NickServ database. Returns True/False.
-    def nickserv_register(self, nick, password, registered_by='')  # Register a nick with NickServ. Returns True/False.
-    def nickserv_drop(self, nick)  # Unregister a nick. Returns True if dropped, False if not found.
-    def nickserv_get(self, nick)  # Get registration info for a nick. Returns dict or None.
-    def nickserv_check_password(self, nick, password)  # Validate a NickServ password. Returns True/False.
-    def load_chanserv(self)  # Load ChanServ channel registration database.
-    def save_chanserv(self, data)  # Save ChanServ database. Returns True/False.
-    def chanserv_register(self, channel, owner, topic='')  # Register a channel with ChanServ. Returns True/False.
-    def chanserv_get(self, channel)  # Get registration info for a channel. Returns dict or None.
-    def chanserv_update(self, channel, info)  # Update registration info for a channel.
-    def chanserv_drop(self, channel)  # Unregister a channel. Returns True/False.
-    def load_botserv(self)  # Load BotServ bot registration database.
-    def save_botserv(self, data)  # Save BotServ database. Returns True/False.
-    def botserv_register(self, channel, botnick, owner, password)  # Register a bot for a channel. Returns True/False.
-    def botserv_get_for_channel(self, channel)  # Get all bots for a channel.
-    def botserv_get(self, channel, botnick)  # Get specific bot info.
-    def botserv_drop(self, channel, botnick)  # Unregister a bot.
-    def load_settings(self)  # Load server settings.
-    def save_settings(self, data)  # Save server settings.
-    def persist_all(self, server)  # Persist all server state to disk atomically.
-    def restore_channels(self, channel_manager)  # Restore channel state from disk into a ChannelManager.
-    def restore_users(self, server)  # Restore user sessions from disk into server state.
-    def restore_opers(self, server)  # Restore operator state from disk (v2 format).
-    def restore_bans(self, server)  # Restore per-channel bans from disk.
-    def restore_history(self, server)  # Restore disconnection history from disk.
-    def restore_all(self, server)  # Restore complete server state from disk.
 
 ── irc/packages/csc-service/csc_service/server/version.py ──
   class Version(Data):  # Extends the Data class.

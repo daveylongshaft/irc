@@ -10,22 +10,6 @@ AGENTS SUBMODULE MAP
 ── bin/manual-agent-runner.md ──
 # # Manual Agent Runner
 
-── bin/run_agent.bat ──
-# @echo off
-
-── bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
 ── bin/track_agents.sh ──
 # #!/bin/bash
 
@@ -50,7 +34,7 @@ AGENTS SUBMODULE MAP
     def select(self, name: str) -> str  # Select which AI agent backend to use.
     def assign(self, prompt_filename: str) -> str  # Assign a prompt to the selected agent for queue-based processing.
     def _write_queued_files(self, wip_path: Path, metadata: dict, agent_name: str, workorder_filename: str)  # Writes the workorder content and its metadata to the agent's queue/in/ directory.
-    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str)  # Run the generate_orders_md script to create orders.md in agent's queue/in/.
+    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str)  # Generate orders.md in agent's queue/in/ with cached context.
     def _format_elapsed(self, started)  # Format elapsed time from a start timestamp.
     def _get_proc_mem(self, pid)  # Get resident memory of a process in MB from /proc. Returns str or '?'.
     def _get_log_size(self, log_path)  # Get log file size as human-readable string.
@@ -82,22 +66,6 @@ AGENTS SUBMODULE MAP
     def execute(self) -> int  # Main execution flow: load, prepare, build, run, journal.
   def main()  # Entry point when run as: python run_agent_executor.py <agent> <queue_entry>
 
-── ops/agents/chatgpt/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/chatgpt/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
 ── ops/agents/chatgpt/cagent.yaml ──
 # version: "2"
 
@@ -106,35 +74,6 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/claude-batch/orders.md-template ──
 # You are an AI coding agent running from /opt/.
-
-── ops/agents/claude/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/claude/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  ANTHROPIC_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  CLAUDE_AGENTS = ANTHROPIC_AGENTS
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  MAX_TURNS = 100
-  OUTPUT_CAP = 50000
-  MAX_TOKENS_BY_MODEL = {'claude-opus-4-6': 32768, 'claude-sonnet-4-5-20250929': 32768, 'claude-haiku...
-  DEFAULT_MAX_TOKENS = 16384
-  SKIP_DIRS = {'.git', 'node_modules', '.trash', '__pycache__', '.venv', 'venv', '.tox'}
-  CLAUDE_SYSTEM_PROMPT = 'You are an AI coding agent working on the CSC project. Your working director...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def build_tools()  # Define the 6 tools available to Anthropic agents, matching Claude Code.
-  def _safe_path(csc_root: Path, relative: str) -> Path  # Resolve a relative path within csc_root, preventing directory traversal.
-  def execute_tool(name: str, tool_input: dict, csc_root: Path) -> str  # Execute a tool call locally, return result string.
-  def build_cached_system_prompt(csc_root: Path)  # Build system prompt from project context files with cache_control.
-  def log_usage(turn: int, usage)  # Log token usage for a single turn, including cache stats.
-  def run_anthropic_api(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Run workorder via Anthropic Messages API with tools + prompt caching.
-  def run_claude_cli(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Invoke Claude Code CLI with system prompt (legacy fallback).
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
 
 ── ops/agents/claude/cagent.yaml ──
 # version: "2"
@@ -145,25 +84,6 @@ AGENTS SUBMODULE MAP
 ── ops/agents/claude/context/test-guidelines.md ──
 # # Test Writing Guidelines
 
-── ops/agents/codellama/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/codellama/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/codellama/bin/run_agent.sh ──
-# #!/bin/bash
-
 ── ops/agents/codellama/cagent.yaml ──
 # version: "2"
 
@@ -172,25 +92,6 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/codellama/context/test-guidelines.md ──
 # # Test Writing Guidelines
-
-── ops/agents/deepseek/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/deepseek/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/deepseek/bin/run_agent.sh ──
-# #!/bin/bash
 
 ── ops/agents/deepseek/cagent.yaml ──
 # version: "2"
@@ -201,43 +102,8 @@ AGENTS SUBMODULE MAP
 ── ops/agents/deepseek/context/test-guidelines.md ──
 # # Test Writing Guidelines
 
-── ops/agents/dmr_qwen_task_runner/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/dmr_qwen_task_runner/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/dmr_qwen_task_runner/bin/run_agent.sh ──
-# #!/bin/bash
-
 ── ops/agents/dmr_qwen_task_runner/cagent.yaml ──
 # # cagent.yaml for DMR Qwen task runner
-
-── ops/agents/gemini-2.5-flash-lite/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-2.5-flash-lite/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
 
 ── ops/agents/gemini-2.5-flash-lite/cagent.yaml ──
 # version: "2"
@@ -256,25 +122,6 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/gemini-2.5-flash-lite/state.json ──
 # {
-
-── ops/agents/gemini-2.5-flash/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-2.5-flash/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/gemini-2.5-flash/bin/run_agent.sh ──
-# #!/bin/bash
 
 ── ops/agents/gemini-2.5-flash/cagent.yaml ──
 # version: "2"
@@ -300,27 +147,11 @@ AGENTS SUBMODULE MAP
 ── ops/agents/gemini-2.5-flash/queue/out/orders-1772627097.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
-── ops/agents/gemini-2.5-pro/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-2.5-pro/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/gemini-2.5-pro/bin/run_agent.sh ──
-# #!/bin/bash
-
 ── ops/agents/gemini-2.5-pro/orders.md-template ──
 # You are an AI coding agent running from /opt/.
+
+── ops/agents/gemini-2.5-pro/queue/in/tmp-restructure.json ──
+# {
 
 ── ops/agents/gemini-2.5-pro/queue/out/agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log ──
 # Updating 083aef9..b890419
@@ -393,6 +224,9 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/gemini-2.5-pro/queue/out/agent_1773229264_windows-service-update.log ──
 # Already up to date.
+
+── ops/agents/gemini-2.5-pro/queue/out/agent_1773367934_tmp-restructure.log ──
+# [run_agent] Agent: gemini-2.5-pro, Root: C:\csc\tmp\csc\clones\gemini-2.5-pro\tmp-restructure-1773367933\repo
 
 ── ops/agents/gemini-2.5-pro/queue/out/orders-1773106043.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
@@ -490,49 +324,23 @@ AGENTS SUBMODULE MAP
 ── ops/agents/gemini-2.5-pro/queue/out/orders-1773229336.md ──
 # You are an AI coding agent running from /opt/.
 
+── ops/agents/gemini-2.5-pro/queue/out/orders-1773368142.md ──
+# You are an AI coding agent running from /opt/.
+
+── ops/agents/gemini-2.5-pro/queue/out/orders-1773368219.md ──
+# You are an AI coding agent running from /opt/.
+
+── ops/agents/gemini-2.5-pro/queue/out/orders-1773369064.md ──
+# You are an AI coding agent running from /opt/.
+
 ── ops/agents/gemini-2.5-pro/queue/out/orders-orphan-1773105219.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
 ── ops/agents/gemini-2.5-pro/queue/out/orders-orphan-1773106191.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
-── ops/agents/gemini-3-flash-preview/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-3-flash-preview/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
 ── ops/agents/gemini-3-flash-preview/cagent.yaml ──
 # version: "2"
-
-── ops/agents/gemini-3-flash/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-3-flash/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/gemini-3-flash/bin/run_agent.sh ──
-# #!/bin/bash
 
 ── ops/agents/gemini-3-flash/cagent.yaml ──
 # version: "2"
@@ -543,43 +351,8 @@ AGENTS SUBMODULE MAP
 ── ops/agents/gemini-3-flash/context/test-guidelines.md ──
 # # Test Writing Guidelines
 
-── ops/agents/gemini-3-pro-preview/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-3-pro-preview/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
 ── ops/agents/gemini-3-pro-preview/cagent.yaml ──
 # version: "2"
-
-── ops/agents/gemini-3-pro/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-3-pro/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/gemini-3-pro/bin/run_agent.sh ──
-# #!/bin/bash
 
 ── ops/agents/gemini-3-pro/cagent.yaml ──
 # version: "2"
@@ -599,25 +372,6 @@ AGENTS SUBMODULE MAP
 ── ops/agents/gemini-3-pro/queue/out/orders-1772626272.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
-── ops/agents/gemini-3.1-pro-preview/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini-3.1-pro-preview/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3.1-pro-preview': 'gemini-3.1-pro-preview', 'gemini-3.1-flash-previe...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has .csc_root).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/gemini-3.1-pro-preview/bin/run_agent.sh ──
-# #!/bin/bash
-
 ── ops/agents/gemini-3.1-pro-preview/cagent.yaml ──
 # version: "2"
 
@@ -636,22 +390,6 @@ AGENTS SUBMODULE MAP
 ── ops/agents/gemini-3.1-pro-preview/queue/out/orders-1772626272.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
-── ops/agents/gemini/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/gemini/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
 ── ops/agents/gemini/cagent.yaml ──
 # version: "2"
 
@@ -660,38 +398,6 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/gemini/context/test-guidelines.md ──
 # # Test Writing Guidelines
-
-── ops/agents/haiku/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/haiku/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  ANTHROPIC_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  CLAUDE_AGENTS = ANTHROPIC_AGENTS
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  MAX_TURNS = 100
-  OUTPUT_CAP = 50000
-  MAX_TOKENS_BY_MODEL = {'claude-opus-4-6': 32768, 'claude-sonnet-4-5-20250929': 32768, 'claude-haiku...
-  DEFAULT_MAX_TOKENS = 16384
-  SKIP_DIRS = {'.git', 'node_modules', '.trash', '__pycache__', '.venv', 'venv', '.tox'}
-  CLAUDE_SYSTEM_PROMPT = 'You are an AI coding agent working on the CSC project. Your working director...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def build_tools()  # Define the 6 tools available to Anthropic agents, matching Claude Code.
-  def _safe_path(csc_root: Path, relative: str) -> Path  # Resolve a relative path within csc_root, preventing directory traversal.
-  def execute_tool(name: str, tool_input: dict, csc_root: Path) -> str  # Execute a tool call locally, return result string.
-  def build_cached_system_prompt(csc_root: Path)  # Build system prompt from project context files with cache_control.
-  def log_usage(turn: int, usage)  # Log token usage for a single turn, including cache stats.
-  def run_anthropic_api(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Run workorder via Anthropic Messages API with tools + prompt caching.
-  def run_claude_cli(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Invoke Claude Code CLI with system prompt (legacy fallback).
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/haiku/bin/run_agent.sh ──
-# #!/bin/bash
 
 ── ops/agents/haiku/cagent.yaml ──
 # version: "2"
@@ -705,95 +411,6 @@ AGENTS SUBMODULE MAP
 ── ops/agents/haiku/orders.md-template ──
 # You are an AI coding agent running from /opt/.
 
-── ops/agents/ollama-codellama/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/ollama-codellama/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/ollama-codellama/bin/run_agent.sh ──
-# #!/bin/bash
-
-── ops/agents/ollama-deepseek/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/ollama-deepseek/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/ollama-deepseek/bin/run_agent.sh ──
-# #!/bin/bash
-
-── ops/agents/ollama-qwen/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/ollama-qwen/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/ollama-qwen/bin/run_agent.sh ──
-# #!/bin/bash
-
-── ops/agents/opus/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/opus/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  ANTHROPIC_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  CLAUDE_AGENTS = ANTHROPIC_AGENTS
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  MAX_TURNS = 100
-  OUTPUT_CAP = 50000
-  MAX_TOKENS_BY_MODEL = {'claude-opus-4-6': 32768, 'claude-sonnet-4-5-20250929': 32768, 'claude-haiku...
-  DEFAULT_MAX_TOKENS = 16384
-  SKIP_DIRS = {'.git', 'node_modules', '.trash', '__pycache__', '.venv', 'venv', '.tox'}
-  CLAUDE_SYSTEM_PROMPT = 'You are an AI coding agent working on the CSC project. Your working director...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def build_tools()  # Define the 6 tools available to Anthropic agents, matching Claude Code.
-  def _safe_path(csc_root: Path, relative: str) -> Path  # Resolve a relative path within csc_root, preventing directory traversal.
-  def execute_tool(name: str, tool_input: dict, csc_root: Path) -> str  # Execute a tool call locally, return result string.
-  def build_cached_system_prompt(csc_root: Path)  # Build system prompt from project context files with cache_control.
-  def log_usage(turn: int, usage)  # Log token usage for a single turn, including cache stats.
-  def run_anthropic_api(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Run workorder via Anthropic Messages API with tools + prompt caching.
-  def run_claude_cli(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Invoke Claude Code CLI with system prompt (legacy fallback).
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/opus/bin/run_agent.sh ──
-# #!/bin/bash
-
 ── ops/agents/opus/cagent.yaml ──
 # version: "2"
 
@@ -805,6 +422,9 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/opus/orders.md-template ──
 # You are an AI coding agent running from /opt/.
+
+── ops/agents/opus/queue/in/upgrade_server.json ──
+# {
 
 ── ops/agents/opus/queue/out/agent_1773106893_csc-ftpd-wo-watcher.log ──
 # Invoking: gemini -y -m gemini-2.5-pro -p " "
@@ -830,8 +450,8 @@ AGENTS SUBMODULE MAP
 ── ops/agents/opus/queue/out/agent_1773216377_PKI_CERTIFICATE_ENROLLMENT_SYSTEM.log ──
 # Already up to date.
 
-── ops/agents/opus/queue/out/orders-1772617733.md ──
-# You are an AI coding agent. Your working directory is the CSC project root.
+── ops/agents/opus/queue/out/agent_1773366887_upgrade_server.log ──
+# ERROR: Workorder not found: ops\agents\opus\queue\work\orders.md
 
 ── ops/agents/opus/queue/out/orders-1772618228.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
@@ -899,6 +519,9 @@ AGENTS SUBMODULE MAP
 ── ops/agents/opus/queue/out/orders-1773217374.md ──
 # You are an AI coding agent running from /opt/.
 
+── ops/agents/opus/queue/out/orders-1773367516.md ──
+# You are an AI coding agent running from /opt/.
+
 ── ops/agents/opus/queue/out/orders-orphan-1773105521.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
@@ -907,25 +530,6 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/opus/workorders/wip/opus_plan_queue_worker_python_implementation.md ──
 # Starting task: reading reference materials
-
-── ops/agents/qwen/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/qwen/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/qwen/bin/run_agent.sh ──
-# #!/bin/bash
 
 ── ops/agents/qwen/cagent.yaml ──
 # version: "2"
@@ -936,40 +540,11 @@ AGENTS SUBMODULE MAP
 ── ops/agents/qwen/context/test-guidelines.md ──
 # # Test Writing Guidelines
 
-── ops/agents/sonnet/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/sonnet/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  ANTHROPIC_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  CLAUDE_AGENTS = ANTHROPIC_AGENTS
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  MAX_TURNS = 100
-  OUTPUT_CAP = 50000
-  MAX_TOKENS_BY_MODEL = {'claude-opus-4-6': 32768, 'claude-sonnet-4-5-20250929': 32768, 'claude-haiku...
-  DEFAULT_MAX_TOKENS = 16384
-  SKIP_DIRS = {'.git', 'node_modules', '.trash', '__pycache__', '.venv', 'venv', '.tox'}
-  CLAUDE_SYSTEM_PROMPT = 'You are an AI coding agent working on the CSC project. Your working director...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def build_tools()  # Define the 6 tools available to Anthropic agents, matching Claude Code.
-  def _safe_path(csc_root: Path, relative: str) -> Path  # Resolve a relative path within csc_root, preventing directory traversal.
-  def execute_tool(name: str, tool_input: dict, csc_root: Path) -> str  # Execute a tool call locally, return result string.
-  def build_cached_system_prompt(csc_root: Path)  # Build system prompt from project context files with cache_control.
-  def log_usage(turn: int, usage)  # Log token usage for a single turn, including cache stats.
-  def run_anthropic_api(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Run workorder via Anthropic Messages API with tools + prompt caching.
-  def run_claude_cli(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Invoke Claude Code CLI with system prompt (legacy fallback).
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/sonnet/bin/run_agent.sh ──
-# #!/bin/bash
-
 ── ops/agents/sonnet/orders.md-template ──
 # You are an AI coding agent running from /opt/.
+
+── ops/agents/sonnet/queue/in/tmp-restructure.json ──
+# {
 
 ── ops/agents/sonnet/queue/out/agent_1773105745_PROMPT_review_pr_daveylongshaft_irc_1_20260309-201234.log ──
 # Updating 083aef9..b890419
@@ -1010,6 +585,9 @@ AGENTS SUBMODULE MAP
 ── ops/agents/sonnet/queue/out/agent_1773229264_windows-service-update.log ──
 # Already up to date.
 
+── ops/agents/sonnet/queue/out/agent_1773367934_tmp-restructure.log ──
+# [run_agent] Agent: gemini-2.5-pro, Root: C:\csc\tmp\csc\clones\gemini-2.5-pro\tmp-restructure-1773367933\repo
+
 ── ops/agents/sonnet/queue/out/orders-1773106277.md ──
 # You are an AI coding agent. Your working directory is the CSC project root.
 
@@ -1049,6 +627,9 @@ AGENTS SUBMODULE MAP
 ── ops/agents/sonnet/queue/out/orders-1773229493.md ──
 # You are an AI coding agent running from /opt/.
 
+── ops/agents/sonnet/queue/out/orders-1773368572.md ──
+# You are an AI coding agent running from /opt/.
+
 ── ops/agents/templates/README.md ──
 # # Agent Task Templates
 
@@ -1063,54 +644,3 @@ AGENTS SUBMODULE MAP
 
 ── ops/agents/templates/orders.md-template ──
 # You are an AI coding agent running from /opt/.
-
-── ops/agents/templates/run_agent.bat ──
-# @echo off
-
-── ops/agents/templates/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  ANTHROPIC_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  CLAUDE_AGENTS = ANTHROPIC_AGENTS
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  MAX_TURNS = 100
-  OUTPUT_CAP = 50000
-  MAX_TOKENS_BY_MODEL = {'claude-opus-4-6': 32768, 'claude-sonnet-4-5-20250929': 32768, 'claude-haiku...
-  DEFAULT_MAX_TOKENS = 16384
-  SKIP_DIRS = {'.git', 'node_modules', '.trash', '__pycache__', '.venv', 'venv', '.tox'}
-  CLAUDE_SYSTEM_PROMPT = 'You are an AI coding agent working on the CSC project. Your working director...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def build_tools()  # Define the 6 tools available to Anthropic agents, matching Claude Code.
-  def _safe_path(csc_root: Path, relative: str) -> Path  # Resolve a relative path within csc_root, preventing directory traversal.
-  def execute_tool(name: str, tool_input: dict, csc_root: Path) -> str  # Execute a tool call locally, return result string.
-  def build_cached_system_prompt(csc_root: Path)  # Build system prompt from project context files with cache_control.
-  def log_usage(turn: int, usage)  # Log token usage for a single turn, including cache stats.
-  def run_anthropic_api(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Run workorder via Anthropic Messages API with tools + prompt caching.
-  def run_claude_cli(agent_name: str, model: str, user_prompt: str, csc_root: Path)  # Invoke Claude Code CLI with system prompt (legacy fallback).
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI (installed locally, not via npx).
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/templates/run_agent.sh ──
-# #!/bin/bash
-
-── ops/agents/test-agent/bin/run_agent.bat ──
-# @echo off
-
-── ops/agents/test-agent/bin/run_agent.py ──
-# Universal agent runner — detects agent type from directory name and
-  CLAUDE_AGENTS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-5-20250929'...
-  GEMINI_AGENTS = {'gemini-3-pro': 'gemini-2.5-pro', 'gemini-3-flash': 'gemini-2.5-flash', 'gem...
-  LOCAL_AGENTS = {'ollama-codellama': 'codellama', 'ollama-deepseek': 'deepseek-coder', 'ollam...
-  def detect_agent_name(workorder_path: Path) -> str  # Derive agent name from directory structure or environment.
-  def find_csc_root(workorder_path: Path) -> Path  # Walk up from workorder to find project root (has CLAUDE.md).
-  def _make_env(**extras)  # Create a clean subprocess environment with UTF-8 encoding.
-  def run_claude(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Claude Code CLI.
-  def run_gemini(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke Gemini CLI via npx.
-  def run_local(agent_name: str, model: str, workorder_content: str, csc_root: Path)  # Invoke local model via ollama CLI.
-  def main()
-
-── ops/agents/test-agent/bin/run_agent.sh ──
-# #!/bin/bash

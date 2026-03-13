@@ -33,7 +33,9 @@ class Root:
 
         self.name = "root"
 
-        print(f"system command keyword is: {self.command_keyword}")
+        import os
+        if os.environ.get("DEBUG"):
+            print(f"system command keyword is: {self.command_keyword}")
 
         #self.log(f"{self.name}->")
 
