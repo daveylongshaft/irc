@@ -154,6 +154,15 @@ class PlanReviewer(Data):
         )
 
         try:
+            import sys
+            kwargs = {
+                "capture_output": True,
+                "text": True,
+                "timeout": 120,
+                "cwd": str(self.csc_root),
+            }
+            if sys.platform == "win32":
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             result = subprocess.run(
                 [
                     "python3",
@@ -164,10 +173,7 @@ class PlanReviewer(Data):
                     "--prompt",
                     review_prompt,
                 ],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                cwd=str(self.csc_root),
+                **kwargs
             )
             ai_output = result.stdout
         except subprocess.TimeoutExpired:

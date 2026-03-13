@@ -46,12 +46,18 @@ class PRReviewer(Data):
             return
 
         try:
+            import sys
+            kwargs = {
+                "cwd": str(self.csc_root),
+                "capture_output": True,
+                "text": True,
+                "timeout": 300,
+            }
+            if sys.platform == "win32":
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             result = subprocess.run(
                 ["bash", str(script_path)],
-                cwd=str(self.csc_root),
-                capture_output=True,
-                text=True,
-                timeout=300,
+                **kwargs
             )
 
             # Log output

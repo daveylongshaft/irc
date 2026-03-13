@@ -10,6 +10,7 @@ lowercase nick, with the display nick preserved in the value dict.
 """
 
 import time
+import threading
 from typing import Dict, Optional, Set, List, Tuple, Any
 
 
@@ -494,11 +495,12 @@ class Channel:
 
 
 class ChannelManager:
-    """Manages all channels on the server.
+    """Manages all channels on the server. Thread-safe.
 
     Maintains a dict of Channel instances keyed by lowercase channel name.
     Provides create/get/remove/list operations and cross-channel nick lookups.
     Automatically creates a default channel ("#general") on initialization.
+    All public methods are protected by a reentrant lock to ensure thread safety.
 
     Attributes:
         channels (Dict[str, Channel]): All channels, keyed by lowercase name.
@@ -523,6 +525,7 @@ class ChannelManager:
             Writes:
                 - self.channels (Dict[str, Channel]): Empty dict mapping lowercase
                   channel name to Channel instances
+                - self._lock (threading.RLock): Reentrant lock for thread safety
             Reads:
                 - self.DEFAULT_CHANNEL (str): Class constant "#general"
 
@@ -530,7 +533,7 @@ class ChannelManager:
             - Creates the default channel "#general" via ensure_channel()
 
         Thread safety:
-            Not thread-safe. Caller must synchronize access to ChannelManager instances.
+            This constructor is thread-safe.
 
         Children:
             - self.ensure_channel(): Creates the default channel
@@ -539,10 +542,11 @@ class ChannelManager:
             - Server initialization code or other application-level setup
         """
         self.channels: Dict[str, Channel] = {}
+        self._lock = threading.RLock()
         self.ensure_channel(self.DEFAULT_CHANNEL)
 
     def ensure_channel(self, name: str) -> Channel:
-        """Get an existing channel or create it if it doesn't exist.
+        """Get an existing channel or create it if it doesn't exist. Thread-safe.
 
         Args:
             name: Channel name (str), typically starting with '#'. Case-insensitive
@@ -568,7 +572,8 @@ class ChannelManager:
             - Channel.__init__ calls time.time()
 
         Thread safety:
-            Not thread-safe. Caller must synchronize access to self.channels.
+            This method is thread-safe, using a lock to protect access to the
+            internal channels dictionary.
 
         Children:
             - Channel.__init__(): Creates new channel if needed
@@ -578,13 +583,14 @@ class ChannelManager:
             - IRC JOIN handlers
             - Channel creation commands
         """
-        key = name.lower()
-        if key not in self.channels:
-            self.channels[key] = Channel(name)
-        return self.channels[key]
+        with self._lock:
+            key = name.lower()
+            if key not in self.channels:
+                self.channels[key] = Channel(name)
+            return self.channels[key]
 
     def get_channel(self, name: str) -> Optional[Channel]:
-        """Get an existing channel by name.
+        """Get an existing channel by name. Thread-safe.
 
         Args:
             name: Channel name (str). Case-insensitive lookup. Can be any string value.
@@ -604,7 +610,8 @@ class ChannelManager:
             None
 
         Thread safety:
-            Not thread-safe. Caller must synchronize access to self.channels.
+            This method is thread-safe, using a lock to protect access to the
+            internal channels dictionary.
 
         Children:
             None
@@ -613,10 +620,11 @@ class ChannelManager:
             - IRC command handlers (PART, PRIVMSG, TOPIC, MODE, etc.)
             - Channel lookup operations
         """
-        return self.channels.get(name.lower())
+        with self._lock:
+            return self.channels.get(name.lower())
 
     def remove_channel(self, name: str) -> bool:
-        """Remove a channel from the manager.
+        """Remove a channel from the manager. Thread-safe.
 
         The default channel (DEFAULT_CHANNEL = "#general") cannot be removed.
 
@@ -643,7 +651,8 @@ class ChannelManager:
             None
 
         Thread safety:
-            Not thread-safe. Caller must synchronize access to self.channels.
+            This method is thread-safe, using a lock to protect access to the
+            internal channels dictionary.
 
         Children:
             None
@@ -652,16 +661,17 @@ class ChannelManager:
             - Channel cleanup code
             - Administrative channel removal commands
         """
-        key = name.lower()
-        if key == self.DEFAULT_CHANNEL.lower():
+        with self._lock:
+            key = name.lower()
+            if key == self.DEFAULT_CHANNEL.lower():
+                return False
+            if key in self.channels:
+                del self.channels[key]
+                return True
             return False
-        if key in self.channels:
-            del self.channels[key]
-            return True
-        return False
 
     def list_channels(self) -> List[Channel]:
-        """Get a list of all channels.
+        """Get a list of all channels. Thread-safe.
 
         Args:
             None
@@ -670,6 +680,7 @@ class ChannelManager:
             List[Channel]: A list containing all Channel objects managed by this
                 ChannelManager. Returns empty list if no channels exist (though
                 normally at least DEFAULT_CHANNEL exists). Order is not guaranteed.
+                This returns a copy of the list of channels.
 
         Raises:
             None
@@ -682,8 +693,8 @@ class ChannelManager:
             None
 
         Thread safety:
-            Not thread-safe. Caller must synchronize access to self.channels.
-            Returned list is a snapshot, but Channel objects are direct references.
+            This method is thread-safe. It returns a new list containing the
+            channel objects, preventing modification of the internal list.
 
         Children:
             None
@@ -693,24 +704,28 @@ class ChannelManager:
             - Server status queries
             - Administrative tools
         """
-        return list(self.channels.values())
+        with self._lock:
+            return list(self.channels.values())
 
     def find_channels_for_nick(self, nick: str) -> List[Channel]:
-        """Find all channels a nick is a member of (case-insensitive)."""
-        result = []
-        for channel in self.channels.values():
-            if channel.has_member(nick):
-                result.append(channel)
-        return result
+        """Find all channels a nick is a member of (case-insensitive). Thread-safe."""
+        with self._lock:
+            result = []
+            for channel in self.channels.values():
+                if channel.has_member(nick):
+                    result.append(channel)
+            return result
 
     def remove_nick_from_all(self, nick: str) -> List[str]:
-        """Remove a nick from all channels. Returns list of channel names they were in."""
-        removed_from = []
-        for name, channel in list(self.channels.items()):
-            if channel.has_member(nick):
-                channel.remove_member(nick)
-                removed_from.append(channel.name)
-                # Clean up empty non-default channels
-                if channel.member_count() == 0 and name != self.DEFAULT_CHANNEL.lower():
-                    del self.channels[name]
-        return removed_from
+        """Remove a nick from all channels. Returns list of channel names they were in. Thread-safe."""
+        with self._lock:
+            removed_from = []
+            # Create a copy of items to avoid modification during iteration
+            for name, channel in list(self.channels.items()):
+                if channel.has_member(nick):
+                    channel.remove_member(nick)
+                    removed_from.append(channel.name)
+                    # Clean up empty non-default channels
+                    if channel.member_count() == 0 and name != self.DEFAULT_CHANNEL.lower():
+                        del self.channels[name]
+            return removed_from
