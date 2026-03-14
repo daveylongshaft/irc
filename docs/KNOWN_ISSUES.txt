@@ -1,0 +1,5 @@
+2026-03-08 | shared/server storage | os.replace() atomic rename is NOT atomic on Windows — the crash-safety guarantee (temp→fsync→rename) only holds on POSIX. On Windows a process kill mid-rename can leave a partial file. Affects channels.json, users.json, opers.json, bans.json, history.json. Fix: use a Windows-safe atomic write (e.g. write to temp, flush, close, then os.replace with retry logic or use a Win32 ReplaceFile call).
+2026-03-10 | server/server_console.py | In daemon mode input() raises EOFError immediately setting _running=False — server exits; fixed with sys.stdin.isatty() check in run_loop() [FIXED 2026-03-10]
+2026-03-10 | csc-server log.log | log.log in WorkingDirectory /opt/csc/irc owned by davey, not writable by csc_user — needs sudo chown csc_user:csc_group + chmod 664
+2026-03-11 | csc-server | buffers/chan_general.log had wrong permissions (644, owned by csc_user, server running as davey) — fixed with chmod 664 + chmod 775 on dir
+2026-03-13 | chanserv_service.py | syntax error - unterminated string literal at line 95 (same \n bug as server_data.py)
