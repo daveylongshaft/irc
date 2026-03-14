@@ -525,9 +525,8 @@ class Agent( Service ):
             metadata_content = json.dumps(metadata, indent=4)
             self._write_text_file(queue_in_path / metadata_filename, metadata_content)
 
-            # Generate orders.md from template via script
-            # This script creates queue/in/orders.md which points to the WIP file
-            self._run_generate_orders_md_script(selected, wip_filename)
+            # Assemble orders.md from template + role/agent context
+            self._assemble_orders(selected, wip_filename)
 
             self.log(f"Queued '{wip_filename}' for {selected}")
             return f"Queued '{wip_filename}' for agent '{selected}'."
@@ -570,8 +569,36 @@ class Agent( Service ):
         self._write_text_file(queue_in_path / metadata_filename, metadata_content)
         self.log(f"Wrote queued workorder metadata: {queue_in_path / metadata_filename}")
 
-    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str):
-        """Generate orders.md in agent's queue/in/ with cached context.
+    def _assemble_orders(self, agent_name: str, workorder_filename: str):
+        """Assemble orders.md from template + role/agent context.
+
+        Uses OrdersAssembler to read the orders.md-template, resolve @include
+        directives (role context, agent context, code maps, task content),
+        and write the fully assembled orders.md to the agent's queue/in/.
+
+        Per-agent template override: checks agents/<agent>/orders.md-template
+        first, falls back to agents/templates/orders.md-template.
+        """
+        try:
+            from .orders_assembler import OrdersAssembler
+
+            assembler = OrdersAssembler(self.PROJECT_ROOT)
+            role = assembler.extract_role(self.WIP_DIR / workorder_filename)
+            content = assembler.assemble(agent_name, workorder_filename, role)
+
+            queue_in_dir = Platform.get_agent_queue_dir(agent_name, "in")
+            queue_in_dir.mkdir(parents=True, exist_ok=True)
+            orders_path = queue_in_dir / "orders.md"
+            self._write_text_file(orders_path, content)
+            self.log(f"Assembled orders.md for {agent_name} role={role} ({len(content)} chars)")
+
+        except Exception as e:
+            self.log(f"ERROR: Failed to assemble orders.md: {e}", "ERROR")
+            import traceback
+            self.log(traceback.format_exc(), "ERROR")
+
+    def _DEPRECATED_run_generate_orders_md_script(self, agent_name: str, workorder_filename: str):
+        """DEPRECATED: Replaced by _assemble_orders(). Generate orders.md in agent's queue/in/ with cached context.
 
         Generates stable context files from tools/ (based on .lastrun), then
         concatenates them with pathspecs and the workorder for prompt caching.
