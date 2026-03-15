@@ -353,23 +353,19 @@ def git_commit_push_in_repo(repo_path, message, label=""):
 
 
 def handle_push_success(agent_repo):
-    """Move agent temp repo to .trash after successful push.
+    """Delete agent temp repo after successful push.
 
     Args:
-        agent_repo: Path to agent temp repo
+        agent_repo: Path to agent temp repo (the repo/ subdir inside the task dir)
     """
-    trash_path = agent_repo.parent / ".trash"
+    task_dir = agent_repo.parent
     try:
-        trash_path.mkdir(parents=True, exist_ok=True)
-        if agent_repo.exists():
+        if task_dir.exists():
             import shutil
-            dest = trash_path / agent_repo.name
-            if dest.exists():
-                shutil.rmtree(str(dest))
-            shutil.move(str(agent_repo), str(dest))
-            log(f"Moved successful agent repo to trash: {agent_repo.name}")
+            shutil.rmtree(str(task_dir))
+            log(f"Deleted clone dir after successful push: {task_dir.name}")
     except Exception as e:
-        log(f"WARNING: Failed to trash successful repo {agent_repo}: {e}", "WARN")
+        log(f"WARNING: Failed to delete clone dir {task_dir}: {e}", "WARN")
 
 
 def handle_push_failure(agent_name, agent_repo, error_msg):
@@ -600,6 +596,20 @@ def log(msg, level="INFO"):
         pass # Continue without file logging if there's an error
 
 
+def _runtime(msg):
+    """Write to runtime.log for #runtime IRC feed."""
+    if not CSC_ROOT:
+        return
+    try:
+        ts = time.strftime("%H:%M:%S")
+        log_dir = CSC_ROOT / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_dir / "runtime.log", "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] [Q] {msg}\n")
+    except Exception:
+        pass
+
+
 # ======================================================================
 # Environment
 # ======================================================================
@@ -812,71 +822,6 @@ def find_cagent():
         return found
     log("cagent not found in PATH", "ERROR")
     return None
-
-
-# ======================================================================
-# Prompt assembly
-# ======================================================================
-
-def _extract_role(wip_path):
-    """Read role from workorder YAML front-matter. Default: 'worker'."""
-    try:
-        text = Path(wip_path).read_text(encoding='utf-8', errors='replace')
-        if text.startswith('---'):
-            end = text.find('---', 3)
-            if end > 0:
-                for line in text[3:end].splitlines():
-                    if line.strip().startswith('role:'):
-                        return line.split(':', 1)[1].strip()
-    except Exception:
-        pass
-    return 'worker'
-
-
-def build_full_prompt(agent_name, prompt_filename):
-    """Assemble: role context + agent context + WIP content."""
-    parts = []
-
-    # 1. Role context from ops/roles/<role>/
-    wip_path = WIP_DIR / prompt_filename
-    role = _extract_role(wip_path)
-    role_dir = CSC_ROOT / "ops" / "roles" / role
-    if not role_dir.exists():
-        role_dir = CSC_ROOT / "ops" / "roles" / "worker"  # fallback
-    if role_dir.exists():
-        readme = role_dir / "README.md"
-        if readme.exists():
-            parts.append(readme.read_text(encoding='utf-8'))
-        for f in sorted(role_dir.glob("*.md")):
-            if f.name != "README.md":
-                parts.append(f"=== {f.name} ===\n{f.read_text(encoding='utf-8')}")
-    else:
-        # Legacy fallback: docs/README.1shot
-        legacy = CSC_ROOT / "docs" / "README.1shot"
-        if legacy.exists():
-            parts.append(legacy.read_text(encoding='utf-8'))
-
-    # 2. Agent-specific context files (overrides/additions)
-    ctx_dir = AGENTS_DIR / agent_name / "context"
-    if ctx_dir.exists():
-        for f in sorted(ctx_dir.glob("*.md")):
-            parts.append(f"=== {f.name} ===\n{f.read_text(encoding='utf-8')}")
-
-    # 3. System rule (journal to WIP — use absolute path since agent runs in irc.git clone)
-    wip_abs = str(WIP_DIR / prompt_filename)
-    sys_rule = (
-        f"SYSTEM RULE: Journal every step to {wip_abs} "
-        f"BEFORE doing it. Use: echo '<step>' >> {wip_abs}. "
-        f"Do NOT touch git. Do NOT move files. Do NOT run tests. "
-        f"When done, echo 'COMPLETE' >> {wip_abs} and exit."
-    )
-    parts.append(sys_rule)
-
-    # 4. WIP file content (the actual task)
-    if wip_path.exists():
-        parts.append(f"=== TASK: {prompt_filename} ===\n{wip_path.read_text(encoding='utf-8', errors='replace')}")
-
-    return "\n\n".join(parts).replace('\0', '')
 
 
 # ======================================================================
@@ -1096,6 +1041,7 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log, c
     # Move WO to done or back to ready
     if is_complete:
         log(f"COMPLETE: {prompt_filename} -> done/")
+        _runtime(f"{prompt_filename} COMPLETE -> done/")
         DONE_DIR.mkdir(parents=True, exist_ok=True)
         dst = DONE_DIR / prompt_filename
         if wip.exists():
@@ -1103,6 +1049,7 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log, c
         result = "done"
     else:
         log(f"INCOMPLETE: {prompt_filename} -> ready/")
+        _runtime(f"{prompt_filename} INCOMPLETE -> ready/. reassigning")
         dst = READY_DIR / prompt_filename
         if wip.exists():
             shutil.move(str(wip), str(dst))
@@ -1140,14 +1087,13 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log, c
             else:
                 handle_push_failure(agent_name, Path(clone_path), error or "unknown")
         else:
-            # Rename to mark as consumed (don't delete, may have useful work)
+            # Delete the clone — task goes back to ready, no need to keep it
             try:
-                ts = int(time.time())
-                consumed = Path(clone_path).parent / f"repo-consumed-{ts}"
-                shutil.move(str(clone_path), str(consumed))
-                log(f"Archived clone to {consumed.name}")
+                task_dir = Path(clone_path).parent
+                shutil.rmtree(str(task_dir))
+                log(f"Deleted clone dir (incomplete/deferred): {task_dir.name}")
             except Exception as e:
-                log(f"WARNING: Could not archive clone: {e}", "WARN")
+                log(f"WARNING: Could not delete clone dir: {e}", "WARN")
 
     # Refresh maps and commit/push main repo
     refresh_maps()
@@ -1193,6 +1139,7 @@ def process_inbox():
     workorder_path = WIP_DIR / workorder_filename
 
     log(f"Processing workorder: {workorder_filename} for agent {agent_name}")
+    _runtime(f"found {workorder_filename} for {agent_name}. running")
 
     if not workorder_path.exists():
         log(f"Workorder file not found: {workorder_path}", "ERROR")
@@ -1277,10 +1224,12 @@ def process_inbox():
             ACTIVE_PROCS[pid] = proc
             write_agent_data(agent_name, pid, workorder_filename, agent_log)
             log(f"Agent spawned: PID={pid}")
+            _runtime(f"spawned {agent_name} PID={pid}")
 
             # Wait for agent to finish (blocking)
             return_code = proc.wait()
             log(f"Agent exited: PID={pid}, return_code={return_code}")
+            _runtime(f"agent {agent_name} exited rc={return_code}")
 
     except Exception as e:
         log(f"ERROR: Failed to spawn agent: {e}", "ERROR")
@@ -1329,7 +1278,14 @@ def run_cycle(work_dir_arg=None):
         git_pull()
 
     # Process inbox
-    result = process_inbox()
+    try:
+        result = process_inbox()
+    except Exception as e:
+        log(f"ERROR: process_inbox() crashed: {e}", "ERROR")
+        import traceback
+        log(traceback.format_exc(), "ERROR")
+        log("Cycle end (error)")
+        return False
 
     if result is None:
         log("Cycle end (idle)")
