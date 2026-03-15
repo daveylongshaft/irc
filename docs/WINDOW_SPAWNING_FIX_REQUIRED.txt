@@ -1,0 +1,32 @@
+CRITICAL BUG - WINDOW SPAWNING (2026-03-12)
+=============================================
+
+PROBLEM: csc-service spawns uncontrollable terminal windows when running agents.
+
+ROOT CAUSE: Line 99 in /c/csc/irc/packages/csc-service/csc_service/cli/commands/service_cmd.py
+
+CURRENT CODE (BROKEN):
+  subprocess.Popen(cmd,
+                   cwd=str(Platform.PROJECT_ROOT),
+                   stdout=f,
+                   stderr=f,
+                   creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS)
+
+FIX REQUIRED:
+  subprocess.Popen(cmd,
+                   cwd=str(Platform.PROJECT_ROOT),
+                   stdout=f,
+                   stderr=f,
+                   creationflags=subprocess.CREATE_NO_WINDOW)
+
+NEVER USE:
+  - subprocess.CREATE_NEW_PROCESS_GROUP
+  - subprocess.DETACHED_PROCESS
+  - subprocess.CREATE_NEW_WINDOW
+  - subprocess.CREATE_NEW_CONSOLE
+
+These flags spawn visible terminal windows that cannot be closed and fill the desktop.
+
+STATUS: Service is SHUT DOWN with SHUTDOWN file until this is fixed.
+
+DO NOT START csc-service until this code is fixed.

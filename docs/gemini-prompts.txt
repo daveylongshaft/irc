@@ -1,0 +1,514 @@
+# Certificate-Based Message Encryption System
+
+**SEVERITY:** CRITICAL (10/10) - Security feature required before internet deployment
+
+**Problem Description:**
+Before deploying to an internet-enabled Linux server, the system needs end-to-end message encryption. The server should act as a Certificate Authority (CA), issuing per-channel and per-DM certificates to clients for encrypting their messages.
+
+**Requirements:**
+
+## Architecture Overview
+
+### Server as Certificate Authority (CA)
+- Server generates 2048-bit RSA key pair on first startup
+- Stores CA private key securely in `Server_data.json`
+- CA public key shared with all clients
+- Issues signed certificates for channels and DM pairs
+- Tracks issued certificates per client
+
+### Certificate Issuance
+- **Per-Channel**: When client JOINs a channel, server issues certificate for that channel
+- **Per-DM Pair**: When first DM between nick1 and nick2 occurs, server issues certificate for that pair
+- Each certificate contains:
+  - Public key (for encryption)
+  - Private key (for decryption)
+  - Channel/DM identifier
+  - Expiration timestamp (optional)
+  - CA signature
+
+### Client-Side Encryption
+- Clients receive and store certificates locally
+- Before sending PRIVMSG, encrypt plaintext with appropriate certificate
+- Base64-encode ciphertext for IRC safety (no binary/control characters)
+- Limit base64-encoded payload to 180 bytes per message (accounts for base64 33% overhead and IRC format overhead)
+- Split longer encrypted messages across multiple PRIVMSGs
+- Decrypt incoming encrypted messages using stored certificates
+
+## Implementation Details
+
+### Part 1: Server CA Implementation
+
+#### File: `server/certificate_authority.py` (NEW)
+
+Create new module with:
+
+```python
+class CertificateAuthority:
+    def __init__(self):
+        """Initialize CA with key pair"""
+        # Load or generate 2048-bit RSA key pair
+        # Store in Server_data.json
+
+    def generate_ca_keypair(self):
+        """Generate 2048-bit RSA key pair for CA"""
+        # Use cryptography library
+        # Return (private_key, public_key)
+
+    def issue_channel_certificate(self, channel_name, client_nick):
+        """Issue certificate for channel access"""
+        # Generate channel-specific key pair
+        # Sign with CA private key
+        # Return certificate dict
+
+    def issue_dm_certificate(self, nick1, nick2):
+        """Issue certificate for DM pair"""
+        # Generate DM-specific key pair (sorted nicks for consistency)
+        # Sign with CA private key
+        # Return certificate dict
+
+    def sign_certificate(self, certificate_data):
+        """Sign certificate with CA private key"""
+        # Create signature
+        # Return signed certificate
+
+    def verify_certificate(self, certificate):
+        """Verify certificate signature"""
+        # Use CA public key to verify
+        # Return True/False
+```
+
+**Certificate Format:**
+```python
+{
+    'type': 'channel' or 'dm',
+    'target': '#channel' or 'nick1:nick2',
+    'public_key': '<pem_encoded_public_key>',
+    'private_key': '<pem_encoded_private_key>',
+    'issued_to': 'client_nick',
+    'issued_at': timestamp,
+    'expires_at': timestamp (optional),
+    'ca_signature': '<signature>'
+}
+```
+
+#### File: `server/server.py` (MODIFY)
+
+Add to Server class:
+```python
+from certificate_authority import CertificateAuthority
+
+def __init__(self):
+    # ... existing code ...
+    self.ca = CertificateAuthority()
+    self.issued_certificates = {}  # Track {client_addr: [certs]}
+```
+
+#### File: `server/server_message_handler.py` (MODIFY)
+
+Add handlers:
+```python
+def _handle_join(self, addr, prefix, params, trailing):
+    # ... existing JOIN logic ...
+    # After successful join:
+    channel_name = params[0]
+    client_nick = self.server.clients[addr]['nick']
+
+    # Issue channel certificate
+    cert = self.server.ca.issue_channel_certificate(channel_name, client_nick)
+
+    # Send certificate to client via CERTISSUE command
+    self._send_certificate(addr, cert)
+
+def _handle_privmsg(self, addr, prefix, params, trailing):
+    # ... existing PRIVMSG logic ...
+    # If target is a nick (DM), check for existing DM certificate
+    target = params[0]
+    if not target.startswith('#'):
+        # DM - issue certificate if not exists
+        sender_nick = self.server.clients[addr]['nick']
+        dm_pair = self._get_dm_pair(sender_nick, target)
+
+        if not self._has_dm_certificate(addr, dm_pair):
+            cert = self.server.ca.issue_dm_certificate(sender_nick, target)
+            self._send_certificate(addr, cert)
+
+            # Also send to recipient
+            recipient_addr = self._get_client_addr(target)
+            if recipient_addr:
+                self._send_certificate(recipient_addr, cert)
+
+def _send_certificate(self, addr, certificate):
+    """Send certificate to client"""
+    # Format: CERTISSUE <target> :<json_certificate>
+    cert_json = json.dumps(certificate)
+    msg = format_irc_message(
+        command='CERTISSUE',
+        params=[certificate['target']],
+        trailing=cert_json
+    )
+    self.server.send_to_client(addr, msg)
+
+def _get_dm_pair(self, nick1, nick2):
+    """Get sorted DM pair identifier"""
+    return ':'.join(sorted([nick1, nick2]))
+
+def _has_dm_certificate(self, addr, dm_pair):
+    """Check if client has certificate for DM pair"""
+    # Check self.server.issued_certificates
+    pass
+```
+
+### Part 2: Client-Side Encryption
+
+#### File: `client/message_encryption.py` (NEW)
+
+Create new module:
+
+```python
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.backends import default_backend
+import json
+import base64
+
+class MessageEncryption:
+    def __init__(self):
+        """Initialize encryption manager"""
+        self.certificates = {}  # {target: certificate}
+        self.ca_public_key = None
+
+    def store_certificate(self, certificate):
+        """Store received certificate"""
+        target = certificate['target']
+        self.certificates[target] = certificate
+
+    def encrypt_message(self, target, plaintext):
+        """Encrypt message for target (channel or nick)"""
+        if target not in self.certificates:
+            # No certificate - send plaintext
+            return [(plaintext, False)]
+
+        cert = self.certificates[target]
+        public_key = serialization.load_pem_public_key(
+            cert['public_key'].encode(),
+            backend=default_backend()
+        )
+
+        # Encrypt plaintext
+        ciphertext = public_key.encrypt(
+            plaintext.encode(),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        # Base64 encode (IRC-safe, ensures no control characters or binary data)
+        encoded = base64.b64encode(ciphertext).decode()
+
+        # Split into 180-byte chunks of base64 data
+        # Note: 180 bytes base64 decodes to ~135 bytes binary (~75% ratio)
+        # This leaves room for IRC message overhead:
+        #   - PRIVMSG prefix: ~15 bytes
+        #   - [ENC] marker: ~6 bytes
+        #   - [ENC:n/m] marker: ~10 bytes
+        #   - Safety margin: ~20 bytes
+        # Total IRC message stays well under 512-byte limit
+        chunks = self._split_into_chunks(encoded, 180)
+
+        # Return list of (chunk, is_encrypted) tuples
+        return [(chunk, True) for chunk in chunks]
+
+    def decrypt_message(self, target, ciphertext_b64):
+        """Decrypt received message"""
+        if target not in self.certificates:
+            # No certificate - return as-is
+            return ciphertext_b64
+
+        cert = self.certificates[target]
+        private_key = serialization.load_pem_private_key(
+            cert['private_key'].encode(),
+            password=None,
+            backend=default_backend()
+        )
+
+        # Base64 decode
+        ciphertext = base64.b64decode(ciphertext_b64)
+
+        # Decrypt
+        plaintext = private_key.decrypt(
+            ciphertext,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+
+        return plaintext.decode()
+
+    def _split_into_chunks(self, data, chunk_size):
+        """Split base64-encoded data into chunks.
+
+        Args:
+            data: Base64-encoded string (IRC-safe text)
+            chunk_size: Maximum bytes per chunk (default 180 for base64 data)
+
+        Returns:
+            List of chunk strings
+
+        Note: Base64 encoding is sufficient for IRC transport. Each character
+        in base64 is printable ASCII (A-Z, a-z, 0-9, +, /, =), making it
+        safe for IRC PRIVMSG transmission without escaping or special encoding.
+        Unlike uuencode, base64 has no length restrictions and is universally
+        available in Python's stdlib via base64 module.
+        """
+        return [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
+```
+
+#### File: `client/client.py` (MODIFY)
+
+Add to Client class:
+
+```python
+from message_encryption import MessageEncryption
+
+def __init__(self, config):
+    # ... existing code ...
+    self.encryption = MessageEncryption()
+    self.pending_encrypted_messages = {}  # Track multi-part messages
+
+def handle_server_message(self, message):
+    # ... existing handlers ...
+
+    command = parsed['command']
+
+    if command == 'CERTISSUE':
+        self._handle_certissue(parsed)
+    elif command == 'PRIVMSG':
+        # Check if encrypted
+        self._handle_privmsg_with_decryption(parsed)
+
+def _handle_certissue(self, parsed):
+    """Handle certificate issuance from server"""
+    target = parsed['params'][0]
+    cert_json = parsed['trailing']
+    certificate = json.loads(cert_json)
+
+    # Store certificate
+    self.encryption.store_certificate(certificate)
+
+    # Display notification
+    print(f"[Encryption] Certificate received for {target}")
+
+def _send_privmsg_encrypted(self, target, text):
+    """Send PRIVMSG with encryption"""
+    # Encrypt message
+    chunks = self.encryption.encrypt_message(target, text)
+
+    if len(chunks) == 1 and not chunks[0][1]:
+        # Not encrypted - send normally
+        self._send_privmsg_plain(target, text)
+        return
+
+    # Send encrypted chunks
+    for i, (chunk, is_encrypted) in enumerate(chunks):
+        if len(chunks) > 1:
+            # Multi-part message - add header
+            msg_text = f"[ENC:{i+1}/{len(chunks)}] {chunk}"
+        else:
+            msg_text = f"[ENC] {chunk}"
+
+        self._send_privmsg_plain(target, msg_text)
+        time.sleep(0.05)  # Small delay between chunks
+
+def _handle_privmsg_with_decryption(self, parsed):
+    """Handle PRIVMSG with potential decryption"""
+    sender = parsed['prefix'].split('!')[0] if parsed['prefix'] else 'unknown'
+    target = parsed['params'][0]
+    text = parsed['trailing']
+
+    # Check for encrypted message marker
+    if text.startswith('[ENC'):
+        # Check for multi-part
+        if text.startswith('[ENC:'):
+            # Multi-part: [ENC:1/3] <data>
+            self._handle_multipart_encrypted(sender, target, text)
+        else:
+            # Single part: [ENC] <data>
+            ciphertext = text[6:]  # Remove "[ENC] "
+            plaintext = self.encryption.decrypt_message(target, ciphertext)
+            self._display_decrypted_message(sender, target, plaintext)
+    else:
+        # Not encrypted - display normally
+        self._display_message(sender, target, text)
+
+def _handle_multipart_encrypted(self, sender, target, text):
+    """Handle multi-part encrypted message"""
+    # Parse: [ENC:1/3] <data>
+    import re
+    match = re.match(r'\[ENC:(\d+)/(\d+)\] (.+)', text)
+    if not match:
+        return
+
+    part_num = int(match.group(1))
+    total_parts = int(match.group(2))
+    data = match.group(3)
+
+    # Track in pending messages
+    key = f"{sender}:{target}"
+    if key not in self.pending_encrypted_messages:
+        self.pending_encrypted_messages[key] = {}
+
+    self.pending_encrypted_messages[key][part_num] = data
+
+    # Check if all parts received
+    if len(self.pending_encrypted_messages[key]) == total_parts:
+        # Reassemble
+        full_ciphertext = ''.join([
+            self.pending_encrypted_messages[key][i]
+            for i in range(1, total_parts + 1)
+        ])
+
+        # Decrypt
+        plaintext = self.encryption.decrypt_message(target, full_ciphertext)
+        self._display_decrypted_message(sender, target, plaintext)
+
+        # Clean up
+        del self.pending_encrypted_messages[key]
+```
+
+### Part 3: Protocol Definition
+
+#### New IRC Command: CERTISSUE
+
+**Format:**
+```
+CERTISSUE <target> :<json_certificate>
+```
+
+**Example:**
+```
+:server.local CERTISSUE #general :{"type":"channel","target":"#general",...}
+```
+
+#### Encrypted Message Format
+
+**Single-part:**
+```
+PRIVMSG #general :[ENC] <base64_ciphertext>
+```
+
+**Multi-part:**
+```
+PRIVMSG #general :[ENC:1/3] <base64_chunk1>
+PRIVMSG #general :[ENC:2/3] <base64_chunk2>
+PRIVMSG #general :[ENC:3/3] <base64_chunk3>
+```
+
+### Part 4: Configuration and Storage
+
+#### Server Data Storage
+
+Add to `Server_data.json`:
+```json
+{
+  "ca_private_key": "<pem_encoded_ca_private_key>",
+  "ca_public_key": "<pem_encoded_ca_public_key>",
+  "issued_certificates": {
+    "client_addr": [
+      {"target": "#general", "issued_at": timestamp},
+      {"target": "Alice:Bob", "issued_at": timestamp}
+    ]
+  }
+}
+```
+
+#### Client Certificate Storage
+
+Add to `client_config.json`:
+```json
+{
+  "certificates": {
+    "#general": {<certificate_data>},
+    "Alice:Bob": {<certificate_data>}
+  }
+}
+```
+
+### Part 5: Dependencies
+
+Add to requirements:
+```
+cryptography>=41.0.0
+```
+
+Install:
+```bash
+pip install cryptography
+```
+
+### Part 6: AI Client Integration
+
+Update `claude/claude.py` and `gemini/gemini.py`:
+- Inherit encryption capabilities from base Client class
+- Automatically encrypt all messages to channels/DMs
+- Display decrypted messages in formatted output
+
+Update system prompts:
+```
+Message Encryption:
+- All channel and DM messages are end-to-end encrypted
+- Server issues certificates when you join channels or send DMs
+- Encryption is automatic - send messages normally
+- Encrypted messages are base64-encoded for IRC safety (no binary data)
+- Messages over ~135 bytes plaintext become multiple encrypted chunks (each ~180 bytes base64)
+- Infrastructure automatically handles chunking and reassembly
+```
+
+## Testing Checklist
+
+After implementation:
+- [ ] Server generates CA key pair on first startup
+- [ ] CA keys stored in Server_data.json
+- [ ] Client receives certificate when joining channel
+- [ ] Client receives certificate on first DM
+- [ ] Client encrypts messages before sending
+- [ ] Messages are base64-encoded (IRC-safe)
+- [ ] Messages over 180 bytes of base64 data split correctly
+- [ ] Multi-part messages reassemble correctly
+- [ ] Client decrypts incoming encrypted messages
+- [ ] Plaintext never sent over wire for encrypted channels/DMs
+- [ ] Certificates persist across client restarts
+- [ ] All clients (human, Claude, Gemini) support encryption
+- [ ] Error handling for missing certificates
+- [ ] Graceful fallback to plaintext if no certificate
+
+## Security Considerations
+
+1. **CA Private Key Protection**: Store CA private key with restricted permissions (600)
+2. **Certificate Expiration**: Consider implementing certificate expiration and renewal
+3. **Key Rotation**: Plan for periodic CA key rotation
+4. **Certificate Revocation**: Consider adding certificate revocation list (CRL)
+5. **Perfect Forward Secrecy**: Current design does not provide PFS - consider for future enhancement
+6. **Memory Security**: Clear sensitive key material from memory when not needed
+7. **Transport Security**: Use TLS/SSL for initial connection before certificate exchange
+
+## Performance Notes
+
+- RSA 2048 encryption: ~0.3ms per operation
+- 180-byte base64 chunks (decodes to ~135 bytes binary) minimize network overhead while staying well under 512-byte IRC limit
+- Base64 adds ~33% size overhead: 135 bytes binary → 180 bytes base64 (accounting for = padding)
+- Consider caching encrypted messages for recent sends
+- Multi-part messages need buffering - implement timeout for partial messages
+- Chunk size calculation: (512 - IRC overhead) / 1.33 = ~285 bytes theoretical max; 180 bytes chosen for safety margin
+
+## Future Enhancements
+
+- [ ] Certificate revocation mechanism
+- [ ] Key rotation protocol
+- [ ] Perfect forward secrecy (ephemeral keys)
+- [ ] Group key agreement for channels (reduce overhead)
+- [ ] Client-to-client verification (TOFU model)
+- [ ] Certificate pinning

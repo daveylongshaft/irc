@@ -1,0 +1,64 @@
+=================================================================
+CSC SYSTEM STATUS - 2026-03-13 18:57:00
+=================================================================
+
+STATUS: OPERATIONAL - Windows Popup Audit in Progress
+
+=================================================================
+FIXES APPLIED:
+=================================================================
+
+1. POPUP WINDOW CRISIS RESOLVED (earlier session)
+   - Killed all hanging Python processes  
+   - Subprocess monkey-patch applied to prevent visible windows
+   - CREATE_NO_WINDOW flag added to all critical subprocess calls
+
+2. PM (PROJECT MANAGER) BROKEN - NOW FIXED
+   - Added all agents to PM roster:
+     claude, codex, gemini, haiku, jules, sonnet, opus
+   - Fixed frontmatter parser to accept simple key:value format (not just YAML)
+   - Added escalation paths for new agents
+   - Note: "codex" and "jules" are nickname references, actual names are "chatgpt" and "gemini"
+
+3. QUEUE-WORKER CRASH FIXED
+   - Cleared stale queue entries causing WinError 2
+   - Reset queue directory structure
+   - Cleared cached state files
+
+=================================================================
+CURRENT WORK:
+=================================================================
+
+AUDIT: Windows Popup Window Elimination
+- Agent: ChatGPT (OpenAI API)
+- Status: QUEUED AND PROCESSING
+- Location: ops/wo/wip/AUDIT_WINDOWS_POPUP_ELIMINATION.md
+- Service: csc-service daemon (PID 19988)
+- Expected: ChatGPT will audit all subprocess calls and create PR with fixes
+
+=================================================================
+SERVICES RUNNING:
+=================================================================
+
+csc-service: RUNNING (PID 19988)
+- Daemon mode
+- Processing queue-worker cycles
+- PM cycles enabled
+- No visible windows (CREATE_NO_WINDOW flag)
+
+=================================================================
+NEXT STEPS:
+=================================================================
+
+ChatGPT will:
+1. Complete the popup audit
+2. Find all subprocess calls needing Windows safety fixes
+3. Create PR with all fixes
+4. Auto-review system will review and merge
+
+If ChatGPT gets stuck or audit fails:
+- Check logs: tail -100 /c/csc/logs/csc-service.log
+- Check work: cat /c/csc/ops/wo/wip/AUDIT_WINDOWS_POPUP_ELIMINATION.md
+- Current queue: ls /c/csc/ops/agents/chatgpt/queue/*/
+
+=================================================================

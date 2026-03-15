@@ -1,0 +1,12 @@
+{
+  "01_phase_pre_shutdown": {
+    "status": "SUCCESS",
+    "batch_id": "msgbatch_01WCtY9THsM8cZxXJDSuPLCV",
+    "timestamp": "2026-03-05T13:53:10.155142"
+  },
+  "02_phase_uninstall_packages": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01WqBZsGMNUhtujktJnasCPE",
+    "timestamp": "2026-03-05T13:53:51.132050"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "01_phase_pre_shutdown": {
+    "status": "ERROR",
+    "error": "No module named 'anthropic'",
+    "timestamp": "2026-03-05T12:14:36.442226"
+  }
+}

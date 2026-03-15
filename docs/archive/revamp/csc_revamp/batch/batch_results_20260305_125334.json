@@ -1,0 +1,37 @@
+{
+  "01_phase_pre_shutdown": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01JaNgE9q6gxunRcUiZwnTDN",
+    "timestamp": "2026-03-05T12:53:29.252176"
+  },
+  "02_phase_uninstall_packages": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_019tM43brDNfpvsqDGDfyE4Z",
+    "timestamp": "2026-03-05T12:53:29.866181"
+  },
+  "03_phase_restructure": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01MXLuQPvCwGvxQ98JV11Ec3",
+    "timestamp": "2026-03-05T12:53:30.482425"
+  },
+  "04_phase_reinstall_packages": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01CE9TTKgV4sVs4W3KTLxmEa",
+    "timestamp": "2026-03-05T12:53:32.152958"
+  },
+  "05_phase_verify_filesystem": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01Suxc4U3HLBR5Vy4i3vUHBL",
+    "timestamp": "2026-03-05T12:53:32.834165"
+  },
+  "06_phase_start_services": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01PXXgRwT2E7Eb2fMDjh3QGX",
+    "timestamp": "2026-03-05T12:53:33.462248"
+  },
+  "07_phase_final_verification": {
+    "status": "FAILED",
+    "batch_id": "msgbatch_01Etqm3jxrL7A9RcTCmRsMfv",
+    "timestamp": "2026-03-05T12:53:34.057854"
+  }
+}
