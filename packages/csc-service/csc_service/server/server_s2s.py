@@ -24,13 +24,52 @@ Uses UDP with DH-derived AES-256-GCM encryption for server-to-server communicati
 All traffic after key exchange is authenticated and encrypted.
 """
 
+import base64
 import json
 import socket
 import threading
 import time
 import hashlib
 import os
+from pathlib import Path
 from csc_service.shared.crypto import DHExchange, encrypt, decrypt, is_encrypted
+
+
+def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
+    """Verify a PEM cert against a CA cert file.
+
+    Returns (ok: bool, cn: str, reason: str).
+    cn is the CommonName of the cert on success.
+    """
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.x509.oid import NameOID
+
+        cert = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
+        ca_cert = x509.load_pem_x509_certificate(
+            Path(ca_cert_path).read_bytes(), default_backend()
+        )
+
+        # Verify signature
+        ca_cert.public_key().verify(
+            cert.signature,
+            cert.tbs_certificate_bytes,
+            padding.PKCS1v15(),
+            cert.signature_hash_algorithm,
+        )
+
+        # Check not expired
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        if now < cert.not_valid_before_utc or now > cert.not_valid_after_utc:
+            return (False, "", "certificate expired or not yet valid")
+
+        cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        return (True, cn, "ok")
+    except Exception as e:
+        return (False, "", f"cert verification failed: {e}")
 
 
 # S2S protocol line terminator
@@ -42,22 +81,29 @@ class ServerLink:
     """Represents a single UDP connection to a peer CSC server with DH encryption."""
 
     def __init__(self, local_server, remote_host, remote_port, password,
-                 remote_server_id=None, sock=None):
+                 remote_server_id=None, sock=None,
+                 cert_path="", key_path="", ca_path=""):
         """Initialize a server link.
 
         Args:
             local_server: Reference to the local Server instance.
             remote_host: Hostname or IP of the remote server.
             remote_port: UDP port of the remote S2S listener.
-            password: Shared secret for link authentication.
+            password: Shared secret for link auth (empty string when using certs).
             remote_server_id: ID of the remote server (set after handshake).
             sock: Pre-connected socket (for inbound links accepted by listener).
+            cert_path: Path to our cert chain PEM (for cert-based auth).
+            key_path: Path to our private key PEM (for cert-based auth).
+            ca_path: Path to CA cert PEM used to verify peer certs.
         """
         self.local_server = local_server
         self.remote_host = remote_host
         self.remote_port = remote_port
         self.password = password
         self.remote_server_id = remote_server_id
+        self.cert_path = cert_path
+        self.key_path = key_path
+        self.ca_path = ca_path
         self._sock = sock
         self._connected = sock is not None
         self._authenticated = False
@@ -107,19 +153,30 @@ class ServerLink:
             return False
 
     def _initiate_dh_exchange(self):
-        """Send CRYPTOINIT DH message to initiate key exchange.
+        """Send CRYPTOINIT DH and wait for DHREPLY to derive AES key.
 
         Returns:
-            True if DH init sent successfully, False on error.
+            True if DH exchange completed, False on error.
         """
         try:
             self._dh_exchange = DHExchange()
             init_msg = self._dh_exchange.format_init_message()
             self._sock.sendto(init_msg.encode(), self._remote_address)
             self._log("Sent CRYPTOINIT DH")
-            return True
+
+            # Wait for DHREPLY from remote
+            line = self._recv_line(timeout=10)
+            if not line:
+                self._log("No DHREPLY received (timeout)")
+                return False
+            parts = line.split()
+            if len(parts) >= 3 and parts[0] == "CRYPTOINIT" and parts[1] == "DHREPLY":
+                return self._handle_dh_reply(parts[2])
+            else:
+                self._log(f"Unexpected response to DH init: {line[:80]}")
+                return False
         except Exception as e:
-            self._log(f"Failed to send DH init: {e}")
+            self._log(f"Failed DH exchange: {e}")
             return False
 
     def _handle_dh_reply(self, pubkey_hex):
@@ -200,30 +257,71 @@ class ServerLink:
             local_id = self._get_local_server_id()
             local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
 
-            # Send SLINK (will be encrypted by send_message)
-            self.send_message("SLINK", self.password, local_id, local_ts)
+            if self.cert_path and self.ca_path:
+                # Cert-based auth: send our cert chain, verify theirs
+                cert_pem = Path(self.cert_path).read_text()
+                cert_b64 = base64.b64encode(cert_pem.encode()).decode()
+                self.send_message("SLINK", "CERT", cert_b64, local_id, local_ts)
 
-            # Wait for SLINKACK
-            line = self._recv_line(timeout=10)
-            if not line:
-                self._log("No response during S2S handshake")
-                return False
+                # Read response, skipping any SYNC* messages from cross-link
+                line = None
+                for _ in range(10):  # up to 10 attempts to find SLINKACK
+                    line = self._recv_line(timeout=10)
+                    if not line:
+                        break
+                    parts = line.split()
+                    if parts and parts[0].startswith("SYNC"):
+                        # Buffer sync messages from cross-link, skip
+                        continue
+                    break
 
-            parts = line.split()
-            if len(parts) < 3 or parts[0] != "SLINKACK":
-                self._log(f"Invalid handshake response: {line}")
-                return False
+                if not line:
+                    self._log("No response during S2S cert handshake")
+                    return False
 
-            self.remote_server_id = parts[1]
-            try:
-                self.remote_timestamp = int(parts[2])
-            except ValueError:
-                self.remote_timestamp = int(time.time())
+                parts = line.split()
+                if len(parts) < 5 or parts[0] != "SLINKACK" or parts[1] != "CERT":
+                    self._log(f"Invalid cert handshake response: {line[:80]}")
+                    return False
+
+                remote_cert_b64 = parts[2]
+                self.remote_server_id = parts[3]
+                try:
+                    self.remote_timestamp = int(parts[4])
+                except ValueError:
+                    self.remote_timestamp = int(time.time())
+
+                remote_cert_pem = base64.b64decode(remote_cert_b64).decode()
+                ok, cn, reason = _verify_cert_pem(remote_cert_pem, self.ca_path)
+                if not ok:
+                    self._log(f"Remote cert rejected: {reason}")
+                    return False
+                if cn != self.remote_server_id:
+                    self._log(f"Cert CN {cn!r} != claimed server_id {self.remote_server_id!r}")
+                    return False
+            else:
+                # Password-based auth
+                self.send_message("SLINK", self.password, local_id, local_ts)
+
+                line = self._recv_line(timeout=10)
+                if not line:
+                    self._log("No response during S2S handshake")
+                    return False
+
+                parts = line.split()
+                if len(parts) < 3 or parts[0] != "SLINKACK":
+                    self._log(f"Invalid handshake response: {line}")
+                    return False
+
+                self.remote_server_id = parts[1]
+                try:
+                    self.remote_timestamp = int(parts[2])
+                except ValueError:
+                    self.remote_timestamp = int(time.time())
 
             self._authenticated = True
             self._log(f"Authenticated with {self.remote_server_id} (encrypted)")
 
-            # Check time drift
             drift = abs(time.time() - self.remote_timestamp)
             if drift > 10:
                 self._log(f"WARNING: Time drift with {self.remote_server_id} is {drift:.1f}s")
@@ -300,7 +398,7 @@ class ServerLink:
                 # Receive UDP datagram (blocking with timeout)
                 self._sock.settimeout(2)
                 try:
-                    data, addr = self._sock.recvfrom(4096)
+                    data, addr = self._sock.recvfrom(65535)
                 except socket.timeout:
                     continue
 
@@ -432,24 +530,28 @@ class ServerLink:
         self._log(f"Link to {self.remote_server_id or 'unknown'} closed")
 
     def _recv_line(self, timeout=None):
-        """Read one CRLF-terminated line from the socket.
+        """Read one message from the UDP socket, decrypting if needed.
+
+        For encrypted links, each UDP datagram is a complete encrypted message.
+        For plaintext, reads CRLF-terminated lines.
 
         Returns:
-            str: The line (without CRLF), or None on timeout, or "" on disconnect.
+            str: The message (without CRLF), or None on timeout, or "" on disconnect.
         """
         if not self._sock:
             return ""
         if timeout:
             self._sock.settimeout(timeout)
         try:
-            while S2S_CRLF not in self._recv_buffer:
-                chunk = self._sock.recv(S2S_MAX_LINE)
-                if not chunk:
-                    return ""  # Connection closed
-                self._recv_buffer += chunk
-            idx = self._recv_buffer.index(S2S_CRLF)
-            line = self._recv_buffer[:idx].decode("utf-8", errors="ignore")
-            self._recv_buffer = self._recv_buffer[idx + len(S2S_CRLF):]
+            data = self._sock.recv(65535)
+            if not data:
+                return ""
+
+            # Decrypt if we have an AES key and data looks encrypted
+            if self._encrypted and self._aes_key and is_encrypted(data):
+                data = decrypt(self._aes_key, data)
+
+            line = data.decode("utf-8", errors="ignore").strip()
             return line
         except socket.timeout:
             return None
@@ -464,9 +566,10 @@ class ServerLink:
                     pass
 
     def _get_local_server_id(self):
-        """Return the local server's unique ID."""
-        return getattr(self.local_server, 'server_id',
-                       os.environ.get('CSC_SERVER_ID', 'server_001'))
+        """Return the local server's unique ID (shortname like haven.4346)."""
+        return getattr(self.local_server, 'server_name',
+                       getattr(self.local_server, 'server_id',
+                               os.environ.get('CSC_SERVER_ID', 'server_001')))
 
     def _log(self, message):
         """Log via the local server's logger."""
@@ -495,17 +598,52 @@ class ServerNetwork:
         self.remote_channels = {}  # chan_lower -> {name, server_id, modes, members}
 
         # S2S configuration
-        self.s2s_port = int(os.environ.get('CSC_S2S_PORT', '9526'))
+        self.s2s_port = int(os.environ.get('CSC_S2S_PORT', '9520'))
         self.s2s_password = os.environ.get('CSC_SERVER_LINK_PASSWORD', '')
         self.server_id = os.environ.get('CSC_SERVER_ID', 'server_001')
+
+        # Cert-based auth: load paths from csc-service.json
+        self.s2s_cert_path = ""   # chain PEM (our cert + CA)
+        self.s2s_key_path = ""    # our private key
+        self.s2s_ca_path = ""     # CA cert for verifying peers
+        self._load_cert_config()
 
         # Track which servers have been seen (loop prevention)
         self._seen_servers = {self.server_id}
 
+    def _load_cert_config(self):
+        """Load S2S cert paths from csc-service.json (CSC_HOME or cwd)."""
+        try:
+            csc_root = os.environ.get('CSC_HOME', '')
+            candidates = []
+            if csc_root:
+                candidates.append(Path(csc_root) / "csc-service.json")
+            candidates.append(Path.cwd() / "csc-service.json")
+            cfg_path = None
+            for c in candidates:
+                if c.exists():
+                    cfg_path = c
+                    break
+            if not cfg_path:
+                return
+            import json as _json
+            cfg = _json.loads(cfg_path.read_text())
+            self.s2s_cert_path = cfg.get("s2s_cert", "")
+            self.s2s_key_path = cfg.get("s2s_key", "")
+            self.s2s_ca_path = cfg.get("s2s_ca", "")
+            # Allow config to override default S2S listen port
+            s2s_port_cfg = cfg.get("s2s_port", 0)
+            if s2s_port_cfg:
+                self.s2s_port = int(s2s_port_cfg)
+            if self.s2s_cert_path:
+                self._log(f"Cert auth configured: {Path(self.s2s_cert_path).name}")
+        except Exception as e:
+            self._log(f"WARNING: Could not load cert config: {e}")
+
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
-        if not self.s2s_password:
-            self._log("No S2S password configured, S2S listener disabled")
+        if not self.s2s_password and not (self.s2s_cert_path and self.s2s_ca_path):
+            self._log("No S2S password or certs configured, S2S listener disabled")
             return False
 
         try:
@@ -531,7 +669,7 @@ class ServerNetwork:
 
         while self._running:
             try:
-                data, addr = self._listener_sock.recvfrom(4096)
+                data, addr = self._listener_sock.recvfrom(65535)
                 if not data:
                     continue
 
@@ -563,7 +701,10 @@ class ServerNetwork:
                         remote_host=addr[0],
                         remote_port=addr[1],
                         password=self.s2s_password,
-                        sock=None
+                        sock=None,
+                        cert_path=self.s2s_cert_path,
+                        key_path=self.s2s_key_path,
+                        ca_path=self.s2s_ca_path,
                     )
                     link._remote_address = addr
                     link._connected = True
@@ -595,7 +736,63 @@ class ServerNetwork:
                     if link._authenticated:
                         continue  # Already authenticated
                     parts = line.split()
-                    if len(parts) >= 4:
+                    local_id = self._get_local_server_id()
+                    local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
+
+                    if len(parts) >= 5 and parts[1] == "CERT":
+                        # Cert-based auth
+                        remote_cert_b64 = parts[2]
+                        remote_id = parts[3]
+                        try:
+                            remote_ts = int(parts[4])
+                        except ValueError:
+                            remote_ts = int(time.time())
+
+                        if not (self.s2s_cert_path and self.s2s_ca_path):
+                            self._log(f"Cert auth from {addr} but no certs configured")
+                            reply = "ERROR Cert auth not configured"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+
+                        try:
+                            remote_cert_pem = base64.b64decode(remote_cert_b64).decode()
+                            ok, cn, reason = _verify_cert_pem(remote_cert_pem, self.s2s_ca_path)
+                        except Exception as e:
+                            ok, cn, reason = False, "", str(e)
+
+                        if not ok:
+                            self._log(f"Cert rejected from {addr}: {reason}")
+                            reply = "ERROR Cert rejected"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+
+                        if cn != remote_id:
+                            self._log(f"Cert CN {cn!r} != claimed id {remote_id!r} from {addr}")
+                            reply = "ERROR Cert CN mismatch"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+
+                        link.remote_server_id = remote_id
+                        link.remote_timestamp = remote_ts
+                        link._authenticated = True
+
+                        our_cert_pem = Path(self.s2s_cert_path).read_text()
+                        our_cert_b64 = base64.b64encode(our_cert_pem.encode()).decode()
+                        reply = f"SLINKACK CERT {our_cert_b64} {local_id} {local_ts}"
+                        reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                        self._listener_sock.sendto(reply_data, addr)
+
+                        with self._lock:
+                            self._links[remote_id] = link
+                            self._seen_servers.add(remote_id)
+                        self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
+                        self._send_full_sync(link)
+
+                    elif len(parts) >= 4:
+                        # Password-based auth
                         remote_password = parts[1]
                         remote_id = parts[2]
                         try:
@@ -603,7 +800,6 @@ class ServerNetwork:
                         except ValueError:
                             remote_ts = int(time.time())
 
-                        # Validate password
                         if remote_password != self.s2s_password:
                             self._log(f"Password mismatch from {addr}")
                             reply = "ERROR Authentication failed"
@@ -611,19 +807,14 @@ class ServerNetwork:
                             self._listener_sock.sendto(reply_data, addr)
                             continue
 
-                        # Accept link
                         link.remote_server_id = remote_id
                         link.remote_timestamp = remote_ts
                         link._authenticated = True
 
-                        # Send SLINKACK
-                        local_id = self._get_local_server_id()
-                        local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
                         reply = f"SLINKACK {local_id} {local_ts}"
                         reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
                         self._listener_sock.sendto(reply_data, addr)
 
-                        # Register authenticated link and start sync
                         with self._lock:
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
@@ -693,11 +884,14 @@ class ServerNetwork:
             True if link established, False otherwise.
         """
         password = password or self.s2s_password
-        if not password:
-            self._log("No S2S password configured")
+        if not password and not (self.s2s_cert_path and self.s2s_ca_path):
+            self._log("No S2S password or certs configured")
             return False
 
-        link = ServerLink(self.local_server, host, port, password)
+        link = ServerLink(self.local_server, host, port, password,
+                          cert_path=self.s2s_cert_path,
+                          key_path=self.s2s_key_path,
+                          ca_path=self.s2s_ca_path)
         if not link.connect():
             return False
 
@@ -1489,8 +1683,9 @@ class ServerNetwork:
         self._log("S2S network shut down")
 
     def _get_local_server_id(self):
-        """Return the local server's unique ID."""
-        return self.server_id
+        """Return the local server's unique ID (shortname like haven.4346)."""
+        return getattr(self.local_server, 'server_name',
+                       self.server_id)
 
     def _log(self, message):
         """Log via the local server's logger."""
