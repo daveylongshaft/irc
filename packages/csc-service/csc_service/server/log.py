@@ -1,4 +1,5 @@
 import time
+import inspect
 from csc_service.shared.root import Root
 
 class Log(Root):
@@ -50,22 +51,36 @@ class Log(Root):
             print( f"CRITICAL: Failed to write to log file '{self.log_file}': {e}" )
 
 
-    def help(self):
+    def help(self, method_name=None):
         """
-        Displays base help information for the class.
+        Returns help for the class or a specific method as a string.
 
-        - What it does: Logs that the help command was called and prints basic
-          help information to the console. This method is intended to be
-          extended by subclasses.
-        - Arguments: None.
-        - What calls it: Typically called by the command handling system when a
-          user issues a `help` command.
-        - What it calls: `self.log()`, `print()`.
+        With no args: lists all public methods with signature and first line of docstring.
+        With method_name arg: shows the full docstring of that method.
         """
         self.log( "Displaying log help information." )
-        print( f"\n--- Help for {self.__class__.__name__} ---" )
-        print( "  help(): Displays this message." )
-        print( "  test(): Runs the module's internal self-test." )
+        lines = []
+        if method_name:
+            m = getattr(self, method_name, None)
+            if m is None or method_name.startswith('_'):
+                lines.append( f"No method '{method_name}' found on {self.__class__.__name__}" )
+            else:
+                doc = inspect.getdoc(m) or "No docstring."
+                sig = str(inspect.signature(m))
+                lines.append( f"--- {self.__class__.__name__}.{method_name}{sig} ---" )
+                lines.append( doc )
+        else:
+            lines.append( f"--- Help for {self.__class__.__name__} ---" )
+            for name, m in inspect.getmembers(self, predicate=inspect.ismethod):
+                if name.startswith('_'):
+                    continue
+                sig = str(inspect.signature(m))
+                doc = inspect.getdoc(m) or ""
+                first_line = doc.splitlines()[0] if doc else ""
+                lines.append( f"  {name}{sig}: {first_line}" )
+        result = "\n".join(lines)
+        print( result )
+        return result
 
     def test(self):
         """
