@@ -210,8 +210,8 @@ def ensure_agent_temp_repo(agent_name):
 def create_agent_temp_repo(agent_name, wo_stem):
     """Create a unique temp repo for this agent+WO combination.
 
-    Each workorder gets its own isolated clone so multiple agents can run
-    concurrently without filesystem conflicts.
+    Purges any stale clone dirs for this agent before creating a new one,
+    keeping disk usage bounded to 1 clone per agent at a time.
 
     Returns the Path to the newly cloned repo, or None if creation fails.
     """
@@ -222,6 +222,17 @@ def create_agent_temp_repo(agent_name, wo_stem):
     from csc_service.shared.platform import Platform as _Plat
     _plat = _Plat()
     clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp") / "clones"
+
+    # Purge stale clones for this agent before creating a new one
+    agent_clones_dir = clones_base / agent_name
+    if agent_clones_dir.exists():
+        import shutil
+        for stale in agent_clones_dir.iterdir():
+            try:
+                shutil.rmtree(str(stale))
+                log(f"Purged stale clone dir: {stale.name}")
+            except Exception as e:
+                log(f"WARNING: Could not purge stale clone {stale}: {e}", "WARN")
     repo = clones_base / agent_name / f"{safe_stem}-{ts}" / "repo"
     repo.mkdir(parents=True, exist_ok=True)
 
