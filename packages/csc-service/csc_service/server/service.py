@@ -54,8 +54,7 @@ class Service( Network ):
         """
         self.log( f"Handling command for service '{class_name_raw}' from {source_name}@{source_address}" )
 
-        module_name = f"services.{class_name_raw.lower()}_service"
-        class_name = class_name_raw.capitalize()
+        module_name = f"csc_service.shared.services.{class_name_raw.lower()}_service"
 
         try:
             # Dynamically import the module
@@ -64,8 +63,20 @@ class Service( Network ):
             else:
                 module = importlib.import_module( module_name )
 
-            if not hasattr( module, class_name ):
-                raise ImportError( f"Class '{class_name}' not found in module '{module_name}'." )
+            # Try multiple name variants: raw, lowercase, capitalize, then case-insensitive scan
+            class_name = None
+            for candidate in [class_name_raw, class_name_raw.lower(), class_name_raw.capitalize()]:
+                if hasattr(module, candidate):
+                    class_name = candidate
+                    break
+            if class_name is None:
+                raw_lower = class_name_raw.lower()
+                for attr in dir(module):
+                    if attr.lower() == raw_lower and inspect.isclass(getattr(module, attr)):
+                        class_name = attr
+                        break
+            if class_name is None:
+                raise ImportError( f"Class '{class_name_raw}' not found in module '{module_name}'." )
 
             module_class = getattr( module, class_name )
 
