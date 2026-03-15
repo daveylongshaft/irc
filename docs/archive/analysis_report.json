@@ -1,0 +1,358 @@
+[
+  {
+    "file": "batch_executor.py",
+    "class": "BatchToolExecutor",
+    "method": "__init__",
+    "line": 162
+  },
+  {
+    "file": "batch_executor.py",
+    "function": "main",
+    "line": 700
+  },
+  {
+    "file": "gh-app-token.py",
+    "function": "parse_env",
+    "line": 8
+  },
+  {
+    "file": "gh-app-token.py",
+    "function": "get_token",
+    "line": 25
+  },
+  {
+    "file": "haiku_restructure_live.py",
+    "function": "exec_tool",
+    "line": 36
+  },
+  {
+    "file": "read_privileged_log.py",
+    "function": "read_privileged_log",
+    "line": 6
+  },
+  {
+    "file": "run_agent.py",
+    "function": "main",
+    "line": 227
+  },
+  {
+    "file": "send_chat.py",
+    "function": "main",
+    "line": 4
+  },
+  {
+    "file": "task_converter.py",
+    "function": "main",
+    "line": 268
+  },
+  {
+    "file": "update_bins_for_venv.py",
+    "function": "update_bat_files",
+    "line": 7
+  },
+  {
+    "file": "update_bins_for_venv.py",
+    "function": "update_shell_scripts",
+    "line": 17
+  },
+  {
+    "file": "workorders_quick.py",
+    "function": "main",
+    "line": 84
+  },
+  {
+    "file": "archive/services/platform_service.py",
+    "class": "platform",
+    "method": "__init__",
+    "line": 23
+  },
+  {
+    "file": "claude-batch/cbatch_add.py",
+    "function": "build_parser",
+    "line": 17
+  },
+  {
+    "file": "claude-batch/cbatch_add.py",
+    "function": "main",
+    "line": 37
+  },
+  {
+    "file": "claude-batch/cbatch_dir.py",
+    "function": "_is_claude_model",
+    "line": 20
+  },
+  {
+    "file": "claude-batch/cbatch_dir.py",
+    "function": "_files_from_config",
+    "line": 24
+  },
+  {
+    "file": "claude-batch/cbatch_dir.py",
+    "function": "_run_list",
+    "line": 42
+  },
+  {
+    "file": "claude-batch/cbatch_dir.py",
+    "function": "main",
+    "line": 59
+  },
+  {
+    "file": "claude-batch/cbatch_edit.py",
+    "function": "build_parser",
+    "line": 9
+  },
+  {
+    "file": "claude-batch/cbatch_edit.py",
+    "function": "main",
+    "line": 23
+  },
+  {
+    "file": "claude-batch/cbatch_executor.py",
+    "function": "_execute_tool",
+    "line": 118
+  },
+  {
+    "file": "claude-batch/cbatch_executor.py",
+    "function": "_load_system_context",
+    "line": 150
+  },
+  {
+    "file": "claude-batch/cbatch_executor.py",
+    "function": "main",
+    "line": 292
+  },
+  {
+    "file": "claude-batch/cbatch_list.py",
+    "function": "build_parser",
+    "line": 19
+  },
+  {
+    "file": "claude-batch/cbatch_list.py",
+    "function": "main",
+    "line": 30
+  },
+  {
+    "file": "claude-batch/cbatch_parallel.py",
+    "function": "_poll",
+    "line": 59
+  },
+  {
+    "file": "claude-batch/cbatch_parallel.py",
+    "function": "_load_wos",
+    "line": 187
+  },
+  {
+    "file": "claude-batch/cbatch_parallel.py",
+    "function": "_files_from_config",
+    "line": 205
+  },
+  {
+    "file": "claude-batch/cbatch_parallel.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "claude-batch/cbatch_queue_run.py",
+    "class": "_DummyService",
+    "method": "log",
+    "line": 19
+  },
+  {
+    "file": "claude-batch/cbatch_queue_run.py",
+    "function": "build_parser",
+    "line": 23
+  },
+  {
+    "file": "claude-batch/cbatch_queue_run.py",
+    "function": "_prompt_filename",
+    "line": 34
+  },
+  {
+    "file": "claude-batch/cbatch_queue_run.py",
+    "function": "main",
+    "line": 38
+  },
+  {
+    "file": "claude-batch/cbatch_remove.py",
+    "function": "build_parser",
+    "line": 9
+  },
+  {
+    "file": "claude-batch/cbatch_remove.py",
+    "function": "main",
+    "line": 16
+  },
+  {
+    "file": "claude-batch/cbatch_retrieve.py",
+    "function": "build_parser",
+    "line": 13
+  },
+  {
+    "file": "claude-batch/cbatch_retrieve.py",
+    "function": "main",
+    "line": 20
+  },
+  {
+    "file": "claude-batch/cbatch_run.py",
+    "function": "build_parser",
+    "line": 12
+  },
+  {
+    "file": "claude-batch/cbatch_run.py",
+    "function": "_load_system_text",
+    "line": 20
+  },
+  {
+    "file": "claude-batch/cbatch_run.py",
+    "function": "_request_from_entry",
+    "line": 28
+  },
+  {
+    "file": "claude-batch/cbatch_run.py",
+    "function": "main",
+    "line": 52
+  },
+  {
+    "file": "claude-batch/cbatch_status.py",
+    "function": "build_parser",
+    "line": 12
+  },
+  {
+    "file": "claude-batch/cbatch_status.py",
+    "function": "main",
+    "line": 18
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "_default_data",
+    "line": 55
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "load_config",
+    "line": 71
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "save_config",
+    "line": 82
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "repo_root",
+    "line": 90
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "rel_to_repo",
+    "line": 94
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "abs_from_user_path",
+    "line": 102
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "parse_json_arg",
+    "line": 107
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "find_entry",
+    "line": 117
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "make_entry_id",
+    "line": 124
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "read_text",
+    "line": 130
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "ensure_env",
+    "line": 135
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "estimate_input_tokens",
+    "line": 142
+  },
+  {
+    "file": "claude-batch/common.py",
+    "function": "estimate_cost_usd",
+    "line": 147
+  },
+  {
+    "file": "gemini-batch/gbatch_convert.py",
+    "function": "make_entry_id",
+    "line": 26
+  },
+  {
+    "file": "gemini-batch/gbatch_convert.py",
+    "function": "load_config",
+    "line": 65
+  },
+  {
+    "file": "gemini-batch/gbatch_convert.py",
+    "function": "main",
+    "line": 226
+  },
+  {
+    "file": "gemini-batch/gbatch_dir.py",
+    "function": "main",
+    "line": 54
+  },
+  {
+    "file": "gemini-batch/gbatch_executor.py",
+    "function": "main",
+    "line": 216
+  },
+  {
+    "file": "gemini-batch/gbatch_run.py",
+    "function": "load_config",
+    "line": 38
+  },
+  {
+    "file": "gemini-batch/gbatch_run.py",
+    "function": "_save_job_state",
+    "line": 44
+  },
+  {
+    "file": "gemini-batch/gbatch_run.py",
+    "function": "_update_job_state",
+    "line": 67
+  },
+  {
+    "file": "gemini-batch/gbatch_run.py",
+    "function": "main",
+    "line": 326
+  },
+  {
+    "file": "gemini-batch/gbatch_tool_run.py",
+    "function": "main",
+    "line": 131
+  },
+  {
+    "file": "gemini-batch/gbatch_tools.py",
+    "class": "ToolExecutor",
+    "method": "__init__",
+    "line": 403
+  },
+  {
+    "file": "gemini-batch/gbatch_tools.py",
+    "class": "ToolExecutor",
+    "method": "_build_declarations",
+    "line": 407
+  },
+  {
+    "file": "gemini-batch/gbatch_tools.py",
+    "class": "ToolExecutor",
+    "method": "get_tool_declarations",
+    "line": 491
+  }
+]
