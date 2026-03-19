@@ -370,6 +370,53 @@ python -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); 
 
 ---
 
+## Cross-Server Communication (claude-relay-ask)
+
+CSC servers linked via S2S can query each other's Claude instance using mTLS relay.
+
+### Usage
+```bash
+# Ask another server's Claude a question
+echo "your prompt" | claude-relay-ask <host> [port]
+claude-relay-ask 10.10.10.2 9531 <<< "what is the Windows server's uptime?"
+```
+
+### How It Works
+- Uses the SAME S2S mTLS certs (s2s_cert, s2s_key, s2s_ca from csc-service.json)
+- Connects to the remote server's relay port (default 9531)
+- Both sides must present valid CSC CA-signed certs
+
+### Known Peers
+- `10.10.10.1:9531` - haven.ef6e (Linux, this server)
+- `10.10.10.2:9531` - haven.4346 (Windows)
+
+### When to Use
+- Need information from the other server's environment
+- Want to delegate a task to another server's AI
+- Cross-platform verification
+
+---
+
+## S2S Server Linking
+
+### Port Allocation (9520-9529)
+- 9520: S2S inter-server link (UDP)
+- 9525: IRC server (UDP)
+- 9526: Bridge proxy (UDP, localhost only)
+- 9531: Claude relay (TCP+TLS)
+
+### Config (csc-service.json)
+```json
+{
+  "s2s_cert": "/opt/csc/etc/haven.ef6e.chain.pem",
+  "s2s_key": "/opt/csc/etc/haven.ef6e.key",
+  "s2s_ca": "/opt/csc/etc/ca.crt",
+  "s2s_peers": [{"host": "10.10.10.2", "port": 9520}]
+}
+```
+
+---
+
 ## References
 
 - `README.md` - Overview, quick start, directory structure

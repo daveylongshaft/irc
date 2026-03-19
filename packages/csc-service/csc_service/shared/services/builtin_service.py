@@ -393,7 +393,7 @@ class builtin( Service ):
                 try:
                     ftp_or_err.quit()
                     self.log( f"FTP connection closed for {host}" )
-                except:
+                except Exception:
                     self.log( f"FTP error during quit for {host}", level="warning" )  # Log but don't crash
 
     def ftp_download_file(self, host: str, remote_filepath: str, local_filepath: str, port_str: str = "21",
@@ -441,7 +441,7 @@ class builtin( Service ):
                 try:
                     ftp_or_err.quit()
                     self.log( f"FTP connection closed for {host}" )
-                except:
+                except Exception:
                     self.log( f"FTP error during quit for {host}", level="warning" )
 
     def ftp_upload_file(self, host: str, local_filepath: str, remote_filepath: str, port_str: str = "21",
@@ -502,6 +502,6 @@ class builtin( Service ):
                 try:
                     ftp_or_err.quit()
                     self.log( f"FTP connection closed for {host}" )
-                except:
+                except Exception:
                     self.log( f"FTP error during quit for {host}", level="warning" )
 

@@ -19,6 +19,7 @@ S2S Commands (encrypted with AES-256-GCM):
   SYNCLINE <target> <line>        - Route a raw IRC line to a user
   DESYNC <nick|channel>           - Remove a nick or channel from remote
   SQUIT <server_id> <reason>      - Server disconnect notification
+  SYNCINVENTORY <idx> <total> <json> - File inventory chunk for reconciliation
 
 Uses UDP with DH-derived AES-256-GCM encryption for server-to-server communication.
 All traffic after key exchange is authenticated and encrypted.
@@ -75,6 +76,10 @@ def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
 # S2S protocol line terminator
 S2S_CRLF = b"\r\n"
 S2S_MAX_LINE = 8192
+
+# NTP drift thresholds for reconciliation
+DRIFT_WARN_SECS = 5     # >5s: warn but proceed with reconciliation
+DRIFT_SKIP_SECS = 60    # >60s: skip reconciliation (mtime unreliable)
 
 
 class ServerLink:
@@ -255,7 +260,7 @@ class ServerLink:
 
         try:
             local_id = self._get_local_server_id()
-            local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
+            local_ts = str(int(time.time()))
 
             if self.cert_path and self.ca_path:
                 # Cert-based auth: send our cert chain, verify theirs
@@ -323,8 +328,12 @@ class ServerLink:
             self._log(f"Authenticated with {self.remote_server_id} (encrypted)")
 
             drift = abs(time.time() - self.remote_timestamp)
-            if drift > 10:
+            if drift > DRIFT_SKIP_SECS:
+                self._log(f"ERROR: Time drift with {self.remote_server_id} is {drift:.1f}s "
+                          f"(>{DRIFT_SKIP_SECS}s) -- reconciliation will be skipped")
+            elif drift > DRIFT_WARN_SECS:
                 self._log(f"WARNING: Time drift with {self.remote_server_id} is {drift:.1f}s")
+            self._drift = drift
 
             return True
 
@@ -365,7 +374,7 @@ class ServerLink:
 
             # Send SLINKACK
             local_id = self._get_local_server_id()
-            local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
+            local_ts = str(int(time.time()))
             self.send_message("SLINKACK", local_id, local_ts)
 
             self._authenticated = True
@@ -600,7 +609,8 @@ class ServerNetwork:
         # S2S configuration
         self.s2s_port = int(os.environ.get('CSC_S2S_PORT', '9520'))
         self.s2s_password = os.environ.get('CSC_SERVER_LINK_PASSWORD', '')
-        self.server_id = os.environ.get('CSC_SERVER_ID', 'server_001')
+        # Use actual server shortname; env var as fallback only
+        self.server_id = getattr(local_server, 'server_name', '') or os.environ.get('CSC_SERVER_ID', 'server_001')
 
         # Cert-based auth: load paths from csc-service.json
         self.s2s_cert_path = ""   # chain PEM (our cert + CA)
@@ -737,7 +747,7 @@ class ServerNetwork:
                         continue  # Already authenticated
                     parts = line.split()
                     local_id = self._get_local_server_id()
-                    local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
+                    local_ts = str(int(time.time()))
 
                     if len(parts) >= 5 and parts[1] == "CERT":
                         # Cert-based auth
@@ -790,6 +800,7 @@ class ServerNetwork:
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
                         self._send_full_sync(link)
+                        self._send_inventory(link)
 
                     elif len(parts) >= 4:
                         # Password-based auth
@@ -820,6 +831,7 @@ class ServerNetwork:
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
                         self._send_full_sync(link)
+                        self._send_inventory(link)
                     continue
 
                 # For authenticated links, dispatch to message handler
@@ -871,6 +883,7 @@ class ServerNetwork:
         self._log(f"Inbound link established with {remote_id}")
         link.start_reader(self._dispatch_s2s_message)
         self._send_full_sync(link)
+        self._send_inventory(link)
 
     def link_to(self, host, port, password=None):
         """Initiate an outbound link to a remote server.
@@ -921,6 +934,7 @@ class ServerNetwork:
         self._log(f"Outbound link established with {remote_id}")
         link.start_reader(self._dispatch_s2s_message)
         self._send_full_sync(link)
+        self._send_inventory(link)
         return True
 
     def get_peer_servers(self):
@@ -1158,6 +1172,31 @@ class ServerNetwork:
             if ch.topic:
                 link.send_message("SYNCTOPIC", ch.name, ":" + ch.topic)
 
+    def _send_inventory(self, link):
+        """Send file inventory to a peer for reconciliation (if drift allows).
+
+        Checks NTP drift stored on the link, skips if >60s.
+        Delegates to the FXP bridge's send_inventory method.
+        """
+        bridge = getattr(self, '_fxp_bridge', None)
+        if not bridge:
+            return
+
+        drift = getattr(link, '_drift', 0)
+        if drift > DRIFT_SKIP_SECS:
+            self._log(f"Skipping inventory sync with {link.remote_server_id} "
+                      f"(drift {drift:.1f}s exceeds {DRIFT_SKIP_SECS}s)")
+            return
+
+        if drift > DRIFT_WARN_SECS:
+            self._log(f"Inventory sync with {link.remote_server_id} proceeding "
+                      f"despite drift of {drift:.1f}s")
+
+        try:
+            bridge.send_inventory(link)
+        except Exception as e:
+            self._log(f"Error sending inventory to {link.remote_server_id}: {e}")
+
     def _dispatch_s2s_message(self, link, command, rest):
         """Route an incoming S2S command to the appropriate handler.
 
@@ -1178,7 +1217,30 @@ class ServerNetwork:
             "DESYNC":   self._handle_desync,
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
+            "SYNCCMD":  self._handle_synccmd,
         }
+
+        # FXP S2S file sync handlers (delegated to bridge if attached)
+        if command in ("SYNCFILE", "RSYNCFILE", "SYNCFILE_ACK", "SYNCINVENTORY", "SYNCRENAME"):
+            bridge = getattr(self, '_fxp_bridge', None)
+            if bridge:
+                try:
+                    if command == "SYNCFILE":
+                        bridge.handle_syncfile(link, rest)
+                    elif command == "RSYNCFILE":
+                        bridge.handle_rsyncfile(link, rest)
+                    elif command == "SYNCFILE_ACK":
+                        bridge.handle_syncfile_ack(link, rest)
+                    elif command == "SYNCINVENTORY":
+                        bridge.handle_syncinventory(link, rest)
+                    elif command == "SYNCRENAME":
+                        bridge.handle_syncrename(link, rest)
+                except Exception as e:
+                    self._log(f"Error handling {command}: {e}")
+            else:
+                self._log(f"Received {command} but no FXP bridge attached")
+            return
+
         handler = handlers.get(command)
         if handler:
             try:
@@ -1471,18 +1533,85 @@ class ServerNetwork:
             # Channel message - broadcast to local members
             server.broadcast_to_channel(target, irc_msg)
             # Log to chat buffer
-            server.chat_buffer.add(target, source_nick, text)
+            server.chat_buffer.append(target, source_nick, "PRIVMSG", text)
         else:
             # PM to local user
             server.send_to_nick(target, irc_msg)
             # Log to chat buffer
             pm_key = "".join(sorted([source_nick.lower(), target.lower()]))
-            server.chat_buffer.add(pm_key, source_nick, text)
+            server.chat_buffer.append(pm_key, source_nick, "PRIVMSG", text)
 
         # Re-broadcast to other peers
         self.broadcast_to_network(
             "SYNCMSG", rest, exclude_server=link.remote_server_id
         )
+
+    def _handle_synccmd(self, link, rest):
+        """Handle SYNCCMD: execute an AI command forwarded from another server.
+
+        Format: SYNCCMD <source_nick> <channel|*> <target_server> :<ai_text>
+        Point-to-point (not flood-filled). Response goes back as SYNCMSG.
+        """
+        # Parse: "nick #channel target_server :AI 1 agent status"
+        parts = rest.split(" ", 3)
+        if len(parts) < 4:
+            self._log(f"Malformed SYNCCMD: {rest}")
+            return
+
+        source_nick = parts[0]
+        channel = parts[1]
+        target_server = parts[2]
+        ai_text = parts[3]
+        if ai_text.startswith(":"):
+            ai_text = ai_text[1:]
+
+        # If not for us, forward to the target (multi-hop)
+        if target_server.lower() != self.server_id.lower():
+            fwd_link = self.get_link(target_server)
+            if fwd_link:
+                fwd_link.send_raw(f"SYNCCMD {rest}")
+                self._log(f"Forwarded SYNCCMD to {target_server}")
+            else:
+                self._log(f"Cannot forward SYNCCMD: {target_server} not linked")
+            return
+
+        self._log(f"Executing SYNCCMD from {source_nick}: {ai_text}")
+
+        # Parse AI text: "AI 1 agent status" -> token=1, class=agent, method=status
+        cmd_text = ai_text
+        if cmd_text.upper().startswith("AI "):
+            cmd_text = cmd_text[3:].strip()
+
+        cmd_parts = cmd_text.split()
+        if not cmd_parts:
+            return
+
+        token = cmd_parts[0]
+        if len(cmd_parts) < 2:
+            return
+
+        class_name = cmd_parts[1]
+        method_name = cmd_parts[2] if len(cmd_parts) > 2 else "help"
+        method_args = cmd_parts[3:] if len(cmd_parts) > 3 else []
+
+        server = self.local_server
+        result = server.handle_command(class_name, method_name, method_args, source_nick, None)
+
+        if token == "0":
+            return  # Fire and forget
+
+        from csc_service.shared.irc import format_irc_message, SERVER_NAME
+
+        # Send response lines to local channel + relay via SYNCMSG
+        for line in str(result).splitlines():
+            prefixed = f"{token} AI : {line}"
+            if channel and channel != "*":
+                source_host = f"ServiceBot!service@{SERVER_NAME}"
+                msg = format_irc_message(source_host, "PRIVMSG", [channel], prefixed) + "\r\n"
+                server.broadcast_to_channel(channel, msg)
+                # Relay to all linked servers (including the requester)
+                self.route_message("ServiceBot", channel, prefixed)
+            # If channel is "*", response was a PM — skip for now
 
     def _handle_syncline(self, link, rest):
         """Handle SYNCLINE: deliver a raw IRC line to a local user.
@@ -1681,6 +1810,15 @@ class ServerNetwork:
             self._listener_thread.join(timeout=2)
 
         self._log("S2S network shut down")
+
+    def attach_fxp_bridge(self, bridge):
+        """Attach an FXP S2S bridge for SYNCFILE/RSYNCFILE/SYNCFILE_ACK handling.
+
+        Args:
+            bridge: FtpS2sBridge instance.
+        """
+        self._fxp_bridge = bridge
+        self._log("FXP S2S bridge attached")
 
     def _get_local_server_id(self):
         """Return the local server's unique ID (shortname like haven.4346)."""

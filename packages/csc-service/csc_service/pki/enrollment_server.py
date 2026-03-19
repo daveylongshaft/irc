@@ -118,7 +118,7 @@ def _sign_csr(shortname, csr_pem):
 
         # Sign the request as a server cert
         result = subprocess.run(
-            [str(EASYRSA_BIN), "--batch", "sign-req", "server", shortname],
+            [str(EASYRSA_BIN), "--batch", "sign-req", "serverClient", shortname],
             capture_output=True, text=True, timeout=30,
             cwd=str(EASYRSA_DIR),
         )

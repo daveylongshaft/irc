@@ -35,7 +35,27 @@ Manage all CSC services. Source of truth for service state — always use this, 
 | import | `csc-ctl import < file.json` | `csc-ctl import < backup.json` | Restore config from JSON |
 | import (one) | `csc-ctl import <service> < file` | `csc-ctl import pm < pm.json` | Restore one service |
 
-**Known services:** `queue-worker`, `test-runner`, `pm`, `pr-reviewer`, `server`, `bridge`, `gemini` (client)
+**Known services:** `queue-worker`, `test-runner`, `pm`, `pr-reviewer`, `codex`, `server`, `bridge`, `gemini` (client)
+
+---
+
+## csc-ctl codex — Codex Cloud Tasks
+
+Submit coding tasks to OpenAI Codex Cloud, monitor progress, and apply results. Uses your ChatGPT account (login via `npx codex login`).
+
+| Command | Syntax | Example | What It Does |
+|---------|--------|---------|--------------|
+| submit | `csc-ctl codex submit <prompt\|wo>` | `csc-ctl codex submit improve_error_handling.md` | Submit a workorder or prompt to Codex Cloud |
+| status | `csc-ctl codex status` | `csc-ctl codex status` | Show tracked tasks with live cloud status |
+| list | `csc-ctl codex list` | `csc-ctl codex list -n 20` | List all Codex Cloud tasks (default: last 10) |
+| apply | `csc-ctl codex apply <task_id>` | `csc-ctl codex apply e22f` | Apply diffs from a completed task locally |
+| diff | `csc-ctl codex diff <task_id>` | `csc-ctl codex diff e22f` | Show the diff for a task |
+| login | `csc-ctl codex login` | `csc-ctl codex login` | Check Codex authentication status |
+
+**Setup:** `npm install -g @openai/codex && npx codex login`
+**Config:** `csc-service.json` -> `codex.enabled`, `codex.environment`, `codex.max_concurrent_tasks`
+**Tracking:** `tmp/codex_tasks.json` — maps task IDs to workorder filenames
+**Auto-routing:** Workorders with `agent: codex` front-matter are auto-submitted by PM
 
 ---
 
@@ -121,6 +141,12 @@ csc-ctl config pm model gemini-2.5-pro-preview
 
 # Restart a service
 csc-ctl restart queue-worker
+
+# Codex Cloud
+csc-ctl codex submit improve_error_handling.md
+csc-ctl codex status
+csc-ctl codex list
+csc-ctl codex apply <task_id>
 
 # Direct service call (when fixed)
 sm-run builtin ping

@@ -58,8 +58,7 @@ def _get_csc_service_pid():
             if _is_pid_alive(pid):
                 return pid
     except Exception as e:
-        # Debug: log the error
-        pass
+        print(f"[status] Failed to load config: {e}")
     return None
 
 
@@ -172,7 +171,7 @@ def _server_stats():
         from csc_service.shared.irc import SERVER_NAME
         stats["shortname"] = SERVER_NAME
     except Exception:
-        pass
+        SERVER_NAME = "unknown"
 
     # Uptime from systemd
     if not IS_WINDOWS:
@@ -230,7 +229,7 @@ def _server_stats():
             d = json.loads(links_file.read_text())
             stats["links"] = len(d.get("links", {}))
     except Exception:
-        pass
+        links = []
 
     return stats
 

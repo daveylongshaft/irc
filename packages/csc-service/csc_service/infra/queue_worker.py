@@ -46,6 +46,36 @@ from csc_service.shared.agent_executor import AgentExecutor
 from csc_service.shared.api_key_manager import APIKeyManager
 from csc_service.shared.service import Service
 
+# Lazy singleton for FTP-aware file operations
+_file_ops_instance = None
+
+
+def _get_file_ops():
+    """Get the FtpFileOps singleton (lazy init, falls back to plain mode)."""
+    global _file_ops_instance
+    if _file_ops_instance is not None:
+        return _file_ops_instance
+    try:
+        from csc_service.ftpd.ftp_file_ops import FtpFileOps
+        _file_ops_instance = FtpFileOps()  # standalone fallback mode
+    except ImportError:
+        _file_ops_instance = None
+    return _file_ops_instance
+
+
+def _read_lock_id(agent_name, prompt_filename):
+    """Read lock_id from queue metadata JSON if it exists."""
+    stem = Path(prompt_filename).stem
+    for dir_type in ("work", "in"):
+        meta_path = agent_queue_dir(agent_name, dir_type) / f"{stem}.json"
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                return meta.get("lock_id")
+            except Exception:
+                pass
+    return None
+
 # --- Configuration ---
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -210,8 +240,8 @@ def ensure_agent_temp_repo(agent_name):
 def create_agent_temp_repo(agent_name, wo_stem):
     """Create a unique temp repo for this agent+WO combination.
 
-    Each workorder gets its own isolated clone so multiple agents can run
-    concurrently without filesystem conflicts.
+    Purges any stale clone dirs for this agent before creating a new one,
+    keeping disk usage bounded to 1 clone per agent at a time.
 
     Returns the Path to the newly cloned repo, or None if creation fails.
     """
@@ -222,6 +252,17 @@ def create_agent_temp_repo(agent_name, wo_stem):
     from csc_service.shared.platform import Platform as _Plat
     _plat = _Plat()
     clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp") / "clones"
+
+    # Purge stale clones for this agent before creating a new one
+    agent_clones_dir = clones_base / agent_name
+    if agent_clones_dir.exists():
+        import shutil
+        for stale in agent_clones_dir.iterdir():
+            try:
+                shutil.rmtree(str(stale))
+                log(f"Purged stale clone dir: {stale.name}")
+            except Exception as e:
+                log(f"WARNING: Could not purge stale clone {stale}: {e}", "WARN")
     repo = clones_base / agent_name / f"{safe_stem}-{ts}" / "repo"
     repo.mkdir(parents=True, exist_ok=True)
 
@@ -353,23 +394,19 @@ def git_commit_push_in_repo(repo_path, message, label=""):
 
 
 def handle_push_success(agent_repo):
-    """Move agent temp repo to .trash after successful push.
+    """Delete agent temp repo after successful push.
 
     Args:
-        agent_repo: Path to agent temp repo
+        agent_repo: Path to agent temp repo (the repo/ subdir inside the task dir)
     """
-    trash_path = agent_repo.parent / ".trash"
+    task_dir = agent_repo.parent
     try:
-        trash_path.mkdir(parents=True, exist_ok=True)
-        if agent_repo.exists():
+        if task_dir.exists():
             import shutil
-            dest = trash_path / agent_repo.name
-            if dest.exists():
-                shutil.rmtree(str(dest))
-            shutil.move(str(agent_repo), str(dest))
-            log(f"Moved successful agent repo to trash: {agent_repo.name}")
+            shutil.rmtree(str(task_dir))
+            log(f"Deleted clone dir after successful push: {task_dir.name}")
     except Exception as e:
-        log(f"WARNING: Failed to trash successful repo {agent_repo}: {e}", "WARN")
+        log(f"WARNING: Failed to delete clone dir {task_dir}: {e}", "WARN")
 
 
 def handle_push_failure(agent_name, agent_repo, error_msg):
@@ -600,6 +637,34 @@ def log(msg, level="INFO"):
         pass # Continue without file logging if there's an error
 
 
+def _runtime(msg):
+    """Write to runtime.log for #runtime IRC feed."""
+    if not CSC_ROOT:
+        return
+    try:
+        ts = time.strftime("%H:%M:%S")
+        log_dir = CSC_ROOT / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_dir / "runtime.log", "ab") as f:
+            f.write(f"[{ts}] [Q] {msg}\n".encode("utf-8"))
+    except Exception:
+        pass
+
+
+def _ftp_announce(msg):
+    """Write to ftp_announce.log for #ftp IRC feed."""
+    if not CSC_ROOT:
+        return
+    try:
+        ts = time.strftime("%H:%M:%S")
+        log_dir = CSC_ROOT / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_dir / "ftp_announce.log", "ab") as f:
+            f.write(f"[{ts}] [Q] {msg}\n".encode("utf-8"))
+    except Exception:
+        pass
+
+
 # ======================================================================
 # Environment
 # ======================================================================
@@ -610,14 +675,23 @@ def load_env():
     if not env_file.exists():
         return
     try:
+        # Two-pass: first load literal values, then resolve ${VAR} references
+        raw = {}
         for line in env_file.read_text(encoding='utf-8').splitlines():
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
                 k, v = line.split('=', 1)
                 k = k.strip()
                 v = v.strip().strip('"').strip("'")
-                if k and k not in os.environ:
-                    os.environ[k] = v
+                if k:
+                    raw[k] = v
+        # Resolve ${VAR} references
+        for k, v in raw.items():
+            if v.startswith('${') and v.endswith('}'):
+                ref = v[2:-1]
+                v = raw.get(ref, os.environ.get(ref, v))
+            if k not in os.environ:
+                os.environ[k] = v
     except Exception:
         pass
 
@@ -815,71 +889,6 @@ def find_cagent():
 
 
 # ======================================================================
-# Prompt assembly
-# ======================================================================
-
-def _extract_role(wip_path):
-    """Read role from workorder YAML front-matter. Default: 'worker'."""
-    try:
-        text = Path(wip_path).read_text(encoding='utf-8', errors='replace')
-        if text.startswith('---'):
-            end = text.find('---', 3)
-            if end > 0:
-                for line in text[3:end].splitlines():
-                    if line.strip().startswith('role:'):
-                        return line.split(':', 1)[1].strip()
-    except Exception:
-        pass
-    return 'worker'
-
-
-def build_full_prompt(agent_name, prompt_filename):
-    """Assemble: role context + agent context + WIP content."""
-    parts = []
-
-    # 1. Role context from ops/roles/<role>/
-    wip_path = WIP_DIR / prompt_filename
-    role = _extract_role(wip_path)
-    role_dir = CSC_ROOT / "ops" / "roles" / role
-    if not role_dir.exists():
-        role_dir = CSC_ROOT / "ops" / "roles" / "worker"  # fallback
-    if role_dir.exists():
-        readme = role_dir / "README.md"
-        if readme.exists():
-            parts.append(readme.read_text(encoding='utf-8'))
-        for f in sorted(role_dir.glob("*.md")):
-            if f.name != "README.md":
-                parts.append(f"=== {f.name} ===\n{f.read_text(encoding='utf-8')}")
-    else:
-        # Legacy fallback: docs/README.1shot
-        legacy = CSC_ROOT / "docs" / "README.1shot"
-        if legacy.exists():
-            parts.append(legacy.read_text(encoding='utf-8'))
-
-    # 2. Agent-specific context files (overrides/additions)
-    ctx_dir = AGENTS_DIR / agent_name / "context"
-    if ctx_dir.exists():
-        for f in sorted(ctx_dir.glob("*.md")):
-            parts.append(f"=== {f.name} ===\n{f.read_text(encoding='utf-8')}")
-
-    # 3. System rule (journal to WIP — use absolute path since agent runs in irc.git clone)
-    wip_abs = str(WIP_DIR / prompt_filename)
-    sys_rule = (
-        f"SYSTEM RULE: Journal every step to {wip_abs} "
-        f"BEFORE doing it. Use: echo '<step>' >> {wip_abs}. "
-        f"Do NOT touch git. Do NOT move files. Do NOT run tests. "
-        f"When done, echo 'COMPLETE' >> {wip_abs} and exit."
-    )
-    parts.append(sys_rule)
-
-    # 4. WIP file content (the actual task)
-    if wip_path.exists():
-        parts.append(f"=== TASK: {prompt_filename} ===\n{wip_path.read_text(encoding='utf-8', errors='replace')}")
-
-    return "\n\n".join(parts).replace('\0', '')
-
-
-# ======================================================================
 # Agent spawning
 # ======================================================================
 
@@ -1006,17 +1015,24 @@ def _build_agent_cmd(agent_name, orders_path, clone_path):
     for var in ["CLAUDE_CODE_SESSION_ID", "CLAUDE_INVOCATION_ID", "CLAUDE_CODE_TASK_ID"]:
         env.pop(var, None)
 
-    # Load .env
+    # Load .env with ${VAR} expansion
     env_file = CSC_ROOT / ".env"
     if env_file.exists():
         try:
+            raw = {}
             for line in env_file.read_text(encoding='utf-8').splitlines():
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     k, v = line.split('=', 1)
                     k, v = k.strip(), v.strip().strip('"').strip("'")
-                    if k and k not in env:
-                        env[k] = v
+                    if k:
+                        raw[k] = v
+            for k, v in raw.items():
+                if v.startswith('${') and v.endswith('}'):
+                    ref = v[2:-1]
+                    v = raw.get(ref, env.get(ref, v))
+                if k not in env:
+                    env[k] = v
         except Exception:
             pass
 
@@ -1093,19 +1109,46 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log, c
     if not is_complete and wip.exists():
         mark_incomplete(wip)
 
+    # Unlock WIP before moving (allows S2S to sync final state)
+    file_ops = _get_file_ops()
+    lock_id = _read_lock_id(agent_name, prompt_filename)
+    if lock_id and file_ops:
+        wip_vpath = file_ops.path_to_vpath(wip)
+        if wip_vpath:
+            file_ops.unlock(wip_vpath, lock_id)
+            _ftp_announce(f"WO UNLOCK {prompt_filename} id={lock_id}")
+
     # Move WO to done or back to ready
     if is_complete:
         log(f"COMPLETE: {prompt_filename} -> done/")
+        _runtime(f"{prompt_filename} COMPLETE -> done/")
+        _ftp_announce(f"WO COMPLETE {prompt_filename} wip/ -> done/")
         DONE_DIR.mkdir(parents=True, exist_ok=True)
         dst = DONE_DIR / prompt_filename
         if wip.exists():
-            shutil.move(str(wip), str(dst))
+            if file_ops:
+                file_ops.rename(wip, dst)
+            else:
+                shutil.move(str(wip), str(dst))
         result = "done"
     else:
         log(f"INCOMPLETE: {prompt_filename} -> ready/")
+        _runtime(f"{prompt_filename} INCOMPLETE -> ready/. reassigning")
+        _ftp_announce(f"WO INCOMPLETE {prompt_filename} wip/ -> ready/")
         dst = READY_DIR / prompt_filename
         if wip.exists():
-            shutil.move(str(wip), str(dst))
+            if file_ops:
+                file_ops.rename(wip, dst)
+            else:
+                shutil.move(str(wip), str(dst))
+
+        # Notify PM of failure so it can escalate or flag for human review
+        try:
+            from csc_service.infra import pm
+            pm.mark_failed(prompt_filename)
+        except Exception as e:
+            log(f"WARNING: Could not notify PM of failure: {e}")
+
         result = "ready"
 
     # Move orders.md from queue/work/ to queue/out/
@@ -1140,14 +1183,13 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log, c
             else:
                 handle_push_failure(agent_name, Path(clone_path), error or "unknown")
         else:
-            # Rename to mark as consumed (don't delete, may have useful work)
+            # Delete the clone — task goes back to ready, no need to keep it
             try:
-                ts = int(time.time())
-                consumed = Path(clone_path).parent / f"repo-consumed-{ts}"
-                shutil.move(str(clone_path), str(consumed))
-                log(f"Archived clone to {consumed.name}")
+                task_dir = Path(clone_path).parent
+                shutil.rmtree(str(task_dir))
+                log(f"Deleted clone dir (incomplete/deferred): {task_dir.name}")
             except Exception as e:
-                log(f"WARNING: Could not archive clone: {e}", "WARN")
+                log(f"WARNING: Could not delete clone dir: {e}", "WARN")
 
     # Refresh maps and commit/push main repo
     refresh_maps()
@@ -1193,6 +1235,7 @@ def process_inbox():
     workorder_path = WIP_DIR / workorder_filename
 
     log(f"Processing workorder: {workorder_filename} for agent {agent_name}")
+    _runtime(f"found {workorder_filename} for {agent_name}. running")
 
     if not workorder_path.exists():
         log(f"Workorder file not found: {workorder_path}", "ERROR")
@@ -1277,10 +1320,14 @@ def process_inbox():
             ACTIVE_PROCS[pid] = proc
             write_agent_data(agent_name, pid, workorder_filename, agent_log)
             log(f"Agent spawned: PID={pid}")
+            _runtime(f"spawned {agent_name} PID={pid}")
+            _ftp_announce(f"WO RUNNING {workorder_filename} agent={agent_name} PID={pid}")
 
             # Wait for agent to finish (blocking)
             return_code = proc.wait()
             log(f"Agent exited: PID={pid}, return_code={return_code}")
+            _runtime(f"agent {agent_name} exited rc={return_code}")
+            _ftp_announce(f"WO FINISHED {workorder_filename} agent={agent_name} rc={return_code}")
 
     except Exception as e:
         log(f"ERROR: Failed to spawn agent: {e}", "ERROR")
@@ -1329,7 +1376,14 @@ def run_cycle(work_dir_arg=None):
         git_pull()
 
     # Process inbox
-    result = process_inbox()
+    try:
+        result = process_inbox()
+    except Exception as e:
+        log(f"ERROR: process_inbox() crashed: {e}", "ERROR")
+        import traceback
+        log(traceback.format_exc(), "ERROR")
+        log("Cycle end (error)")
+        return False
 
     if result is None:
         log("Cycle end (idle)")

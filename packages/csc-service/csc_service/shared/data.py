@@ -131,7 +131,7 @@ class Data(Log, ServerData):
             self.log(f"Error writing {path}: {e}")
             try:
                 tmp.unlink(missing_ok=True)
-            except Exception:
+            except OSError:
                 pass
             return False
 
@@ -249,6 +249,83 @@ class Data(Log, ServerData):
         if ok and not os.environ.get("CSC_QUIET"):
             print(f"Store data successful. Saved {len(self._storage)} items to '{self._connected_source}'.")
         return ok
+
+    # -----------------------------------------------------------------------
+    # Log file I/O (append-only files)
+    # -----------------------------------------------------------------------
+
+    def _append_log_line(self, path, line):
+        """Append a single line to a log file (append + fsync).
+
+        For append-only log files. No temp+rename needed.
+        Uses binary mode to write bare \\n (not \\r\\n on Windows),
+        keeping byte offsets consistent with _tail_log_file().
+        """
+        path = Path(path)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "ab") as f:
+                f.write((line + "\n").encode("utf-8"))
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            self.log(f"Error appending to {path}: {e}")
+
+    def _write_ftp_announce(self, line):
+        """Append a formatted line to logs/ftp_announce.log."""
+        from csc_service.shared.log import _get_logs_dir
+        log_dir = _get_logs_dir()
+        self._append_log_line(log_dir / "ftp_announce.log", line)
+
+    def _write_runtime(self, line):
+        """Append a formatted line to logs/runtime.log."""
+        from csc_service.shared.log import _get_logs_dir
+        log_dir = _get_logs_dir()
+        self._append_log_line(log_dir / "runtime.log", line)
+
+    def _tail_log_file(self, path, offset=0):
+        """Read new lines from a log file starting at byte offset.
+
+        Returns (lines: list[str], new_offset: int).
+        Handles: file not found ([], 0), truncated files (resets offset).
+
+        Uses binary mode so stat().st_size byte offsets match seek() exactly
+        (text mode on Windows translates CRLF, breaking offset alignment).
+        Only returns complete lines (ending with newline) -- partial lines
+        at EOF are held back until the next poll when they're complete.
+        """
+        path = Path(path)
+        try:
+            if not path.exists():
+                return [], 0
+            current_size = path.stat().st_size
+            if current_size < offset:
+                # File was truncated, reset
+                return [], current_size
+            if current_size == offset:
+                return [], offset
+            with open(path, "rb") as f:
+                f.seek(offset)
+                raw = f.read(current_size - offset)
+            # Only return complete lines (ending with \n)
+            # Hold partial last line for next poll
+            text = raw.decode("utf-8", errors="ignore")
+            if not text.endswith("\n"):
+                # Find last newline -- everything after it is incomplete
+                last_nl = text.rfind("\n")
+                if last_nl == -1:
+                    # No complete lines yet
+                    return [], offset
+                # Return only complete lines, advance offset past them
+                complete = text[:last_nl + 1]
+                new_offset = offset + len(complete.encode("utf-8"))
+                lines = complete.splitlines(keepends=False)
+                return [ln + "\n" for ln in lines], new_offset
+            lines = text.splitlines(keepends=False)
+            return [ln + "\n" for ln in lines], current_size
+        except Exception as e:
+            self.log(f"Error tailing {path}: {e}")
+            return [], offset
 
     # -----------------------------------------------------------------------
     # Misc

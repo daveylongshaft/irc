@@ -118,7 +118,7 @@ class Version( Data ):
         self.version_backup_dir = self.project_root_dir / "versions"
         try:
             self.version_backup_dir.mkdir( exist_ok=True )
-        except:
+        except OSError:
             if not os.environ.get("CSC_QUIET"):
                 print("exists")
 

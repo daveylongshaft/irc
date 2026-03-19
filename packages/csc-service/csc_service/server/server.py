@@ -217,66 +217,57 @@ class Server(Service):
             self._run_cleanup_once()
 
     def _botserv_log_monitor_loop(self):
-        """Background loop for BotServ log monitoring and echoing."""
+        """Background loop for BotServ log monitoring and echoing.
+
+        Uses self._tail_log_file() (from Data) instead of direct disk I/O.
+        """
         self.log("[BOTSERV] Log monitor loop started.")
-        # Store file pointers to read only new lines
-        # Key: (channel, botnick, log_file) -> last_size
+        # Key: (channel, botnick, log_file) -> byte offset
         file_state = {}
 
         while self._running:
             try:
                 botserv_data = self.load_botserv()
                 bots = botserv_data.get("bots", {})
-                
+
                 for key, bot in bots.items():
                     if not bot.get("logs_enabled") or not bot.get("logs"):
                         continue
-                    
+
                     chan_name = bot["channel"]
                     bot_nick = bot["botnick"]
-                    
+
                     for log_file in bot["logs"]:
-                        if not os.path.exists(log_file):
-                            continue
-                        
                         state_key = (chan_name, bot_nick, log_file)
-                        current_size = os.path.getsize(log_file)
-                        last_size = file_state.get(state_key)
-                        
-                        if last_size is None:
-                            # First time seeing this file, just record size
-                            file_state[state_key] = current_size
+                        last_offset = file_state.get(state_key)
+
+                        new_lines, new_offset = self._tail_log_file(
+                            log_file, last_offset or 0
+                        )
+
+                        if last_offset is None:
+                            # First time seeing this file, just record offset
+                            file_state[state_key] = new_offset
                             continue
-                        
-                        if current_size > last_size:
-                            # New data appended
-                            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-                                f.seek(last_size)
-                                new_lines = f.readlines()
-                            
-                            file_state[state_key] = current_size
-                            
-                            # Echo to channel
-                            if new_lines:
-                                prefix = f"{bot_nick}!bot@{SERVER_NAME}"
-                                filename = os.path.basename(log_file)
-                                for line in new_lines:
-                                    line = line.strip()
-                                    if not line:
-                                        continue
-                                    # Format: [filename] log line
-                                    text = f"[{filename}] {line}"
-                                    msg = f":{prefix} PRIVMSG {chan_name} :{text}\r\n"
-                                    self.broadcast_to_channel(chan_name, msg)
-                        elif current_size < last_size:
-                            # File truncated
-                            file_state[state_key] = current_size
+
+                        file_state[state_key] = new_offset
+
+                        # Echo new lines to channel
+                        if new_lines:
+                            prefix = f"{bot_nick}!bot@{SERVER_NAME}"
+                            filename = os.path.basename(log_file)
+                            for line in new_lines:
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                text = f"[{filename}] {line}"
+                                msg = f":{prefix} PRIVMSG {chan_name} :{text}\r\n"
+                                self.broadcast_to_channel(chan_name, msg)
 
             except Exception as e:
                 self.log(f"[BOTSERV ERROR] Log monitor error: {e}")
-                # self.log(traceback.format_exc())
-            
-            time.sleep(2) # Poll every 2 seconds
+
+            time.sleep(2)
 
     def _syslog_monitor_loop(self):
         """Background loop for monitoring syslog and echoing new lines to #syslog."""

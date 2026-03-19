@@ -50,38 +50,29 @@ jules: Jules = None
 # Agent roster and assignment policy
 # ---------------------------------------------------------------------------
 AGENTS = [
-    {"name": "claude", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
-    {"name": "codex", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
-    {"name": "gemini", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
+    # --- Free tier (use first) ---
     {"name": "gemini-2.5-flash", "role": "docs-and-tests",
      "good_for": ["docs", "test-fix", "validation"]},
     {"name": "gemini-2.5-pro", "role": "code",
      "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "pr-reviewer", "audit"]},
-    {"name": "haiku", "role": "code",
-     "good_for": ["feature", "simple-fix", "test-fix", "validation"]},
-    {"name": "jules", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
-    {"name": "opus", "role": "debug",
-     "good_for": ["debug", "push-fail", "audit"]},
+    {"name": "chatgpt", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "debug", "pr-review", "pr-reviewer", "audit"]},
+    # --- Paid tier (Anthropic, use only after free exhausted) ---
     {"name": "sonnet", "role": "code",
-     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug", "audit"]},
+     "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
+    {"name": "opus", "role": "debug",
+     "good_for": ["debug", "push-fail"]},
 ]
 
 # All agent names the PM is allowed to assign to
 VALID_AGENTS = {a["name"] for a in AGENTS}
 
 # Escalation path: current_agent -> next_agent
+# Free tier first (gemini, chatgpt), then paid (sonnet, opus)
 ESCALATION = {
-    "haiku": "claude",
-    "claude": "sonnet",
-    "codex": "sonnet",
-    "gemini": "gemini-2.5-pro",
     "gemini-2.5-flash": "gemini-2.5-pro",
-    "gemini-2.5-pro": "sonnet",
-    "jules": "sonnet",
+    "gemini-2.5-pro": "chatgpt",
+    "chatgpt": "sonnet",
     "sonnet": "opus",
     "opus": None,  # flag for human review
 }
@@ -273,8 +264,7 @@ def detect_agent_prefix(filename: str):
 
 
 def _read_frontmatter(filename: str) -> dict:
-    """Parse front-matter from a workorder. Returns dict of key→value (strings).
-    Supports both YAML format (---...---) and simple key: value format at file start.
+    """Parse YAML front-matter from a workorder. Returns dict of key→value (strings).
     Returns {} if no front-matter or file not found. Front-matter is always optional."""
     for search_dir in [READY_DIR, WIP_DIR]:
         if not search_dir:
@@ -283,28 +273,15 @@ def _read_frontmatter(filename: str) -> dict:
         if path.exists():
             try:
                 text = path.read_text(encoding='utf-8', errors='replace')
-                result = {}
-
-                # Try YAML format first (---...---)
                 if text.startswith('---'):
                     end = text.find('---', 3)
                     if end > 0:
+                        result = {}
                         for line in text[3:end].splitlines():
                             if ':' in line:
                                 k, _, v = line.partition(':')
                                 result[k.strip().lower()] = v.strip()
-                        if result:
-                            return result
-
-                # Fall back to simple key: value format at file start
-                for line in text.splitlines():
-                    if not line.strip():
-                        break  # stop at first blank line
-                    if ':' in line and not line.startswith('#'):
-                        k, _, v = line.partition(':')
-                        result[k.strip().lower()] = v.strip()
-                return result
-
+                        return result
             except Exception:
                 pass
     return {}
@@ -657,14 +634,17 @@ def mark_failed(filename: str):
 
 
 def _is_jules_task(workorder_path: str) -> bool:
-    """Check if workorder is suitable for Jules."""
+    """Check if workorder has explicit 'agent: jules' in frontmatter."""
     try:
-        content = Path(workorder_path).read_text(encoding='utf-8', errors='replace').lower()
-        jules_keywords = [
-            'bug', 'fix', 'refactor', 'test', 'documentation',
-            'feature', 'implement', 'debug'
-        ]
-        return any(kw in content for kw in jules_keywords)
+        content = Path(workorder_path).read_text(encoding='utf-8', errors='replace')
+        # Only match explicit frontmatter assignment, not keyword matching
+        for line in content.splitlines()[:10]:
+            stripped = line.strip().lower()
+            if stripped == 'agent: jules':
+                return True
+            if stripped == '---' and line != content.splitlines()[0]:
+                break  # end of frontmatter
+        return False
     except FileNotFoundError:
         return False
 
@@ -694,20 +674,23 @@ def assign_to_jules(workorder_path: str):
             'workorder': workorder_path,
             'assigned_at': time.time(),
         }
-        
+
         fname = Path(workorder_path).name
         state.setdefault('assignments', {})[fname] = {
             "agent": "jules",
             "status": "assigned",
+            "session_id": session_id,
             "timestamp": _ts(),
         }
         _save_state(state)
 
-        # Move to wip
-        wip_path = WIP_DIR / fname
-        Path(workorder_path).rename(wip_path)
+        # Do NOT move to wip/ -- Jules runs externally, no local PID.
+        # Queue worker would see orphaned WIP and move it back to ready.
+        # Instead, move to done/ since Jules handles the work via PR.
+        done_path = DONE_DIR / fname
+        Path(workorder_path).rename(done_path)
 
-        _log(f"Assigned to Jules: {fname} (session: {session_id})", "INFO")
+        _log(f"Assigned to Jules: {fname} -> done/ (session: {session_id})", "INFO")
     except Exception as e:
         _log(f"Jules assignment failed: {e}", "ERROR")
 

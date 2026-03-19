@@ -12,6 +12,22 @@ from csc_service.shared.utils import QueueDirectories, WIPJournal
 from csc_service.shared.platform import Platform
 from csc_service.shared.services import PROJECT_ROOT as _PROJECT_ROOT
 
+# Lazy singleton for FTP-aware file operations
+_file_ops_instance = None
+
+
+def _get_file_ops():
+    """Get the FtpFileOps singleton (lazy init, falls back to plain mode)."""
+    global _file_ops_instance
+    if _file_ops_instance is not None:
+        return _file_ops_instance
+    try:
+        from csc_service.ftpd.ftp_file_ops import FtpFileOps
+        _file_ops_instance = FtpFileOps()  # standalone fallback mode
+    except ImportError:
+        _file_ops_instance = None
+    return _file_ops_instance
+
 
 class Agent( Service ):
     """AI agent runner service.
@@ -511,11 +527,26 @@ class Agent( Service ):
 
         try:
             # Move the original prompt file to the new WIP location
-            shutil.move(str(prompt_path), str(wip_full_path))
+            file_ops = _get_file_ops()
+            if file_ops:
+                file_ops.rename(prompt_path, wip_full_path)
+                self.ftp_announce(f"WO ASSIGN {prompt_path.name} ready/ -> wip/")
+                # Lock the WIP file to suppress S2S sync during agent editing
+                wip_vpath = file_ops.path_to_vpath(wip_full_path)
+                lock_id = None
+                if wip_vpath:
+                    lock_id = file_ops.lock(wip_vpath)
+                    self.ftp_announce(f"WO LOCK {wip_full_path.name} id={lock_id}")
+            else:
+                shutil.move(str(prompt_path), str(wip_full_path))
+                lock_id = None
+                self.ftp_announce(f"WO ASSIGN {prompt_path.name} ready/ -> wip/")
             self.log(f"Moved '{prompt_path.name}' to '{wip_full_path.name}'")
-            
+
             # Create metadata for the workorder
             metadata = self._create_queue_metadata(selected, wip_filename, prompt_path)
+            if lock_id:
+                metadata["lock_id"] = lock_id
 
             # Write ONLY the metadata to the agent's queue/in/ (for tracking)
             # The actual workorder content is already in WIP_DIR and referenced by orders.md
@@ -525,8 +556,9 @@ class Agent( Service ):
             metadata_content = json.dumps(metadata, indent=4)
             self._write_text_file(queue_in_path / metadata_filename, metadata_content)
 
-            # Assemble orders.md from template + role/agent context
-            self._assemble_orders(selected, wip_filename)
+            # Generate orders.md from template via script
+            # This script creates queue/in/orders.md which points to the WIP file
+            self._run_generate_orders_md_script(selected, wip_filename)
 
             self.log(f"Queued '{wip_filename}' for {selected}")
             return f"Queued '{wip_filename}' for agent '{selected}'."
@@ -535,7 +567,16 @@ class Agent( Service ):
             # Attempt to move the WIP file back to ready/ if an error occurred after moving it
             if wip_full_path.exists() and prompt_path.parent != self.READY_DIR:
                 try:
-                    shutil.move(str(wip_full_path), str(self.READY_DIR / prompt_path.name))
+                    # Unlock before rollback rename
+                    if lock_id and file_ops:
+                        wip_vpath = file_ops.path_to_vpath(wip_full_path)
+                        if wip_vpath:
+                            file_ops.unlock(wip_vpath, lock_id)
+                    rollback_dst = self.READY_DIR / prompt_path.name
+                    if file_ops:
+                        file_ops.rename(wip_full_path, rollback_dst)
+                    else:
+                        shutil.move(str(wip_full_path), str(rollback_dst))
                     self.log(f"ERROR: Rolled back '{wip_full_path.name}' to ready/ due to failure.")
                 except Exception as rollback_e:
                     self.log(f"CRITICAL ERROR: Failed to rollback '{wip_full_path.name}': {rollback_e}")
@@ -569,36 +610,8 @@ class Agent( Service ):
         self._write_text_file(queue_in_path / metadata_filename, metadata_content)
         self.log(f"Wrote queued workorder metadata: {queue_in_path / metadata_filename}")
 
-    def _assemble_orders(self, agent_name: str, workorder_filename: str):
-        """Assemble orders.md from template + role/agent context.
-
-        Uses OrdersAssembler to read the orders.md-template, resolve @include
-        directives (role context, agent context, code maps, task content),
-        and write the fully assembled orders.md to the agent's queue/in/.
-
-        Per-agent template override: checks agents/<agent>/orders.md-template
-        first, falls back to agents/templates/orders.md-template.
-        """
-        try:
-            from .orders_assembler import OrdersAssembler
-
-            assembler = OrdersAssembler(self.PROJECT_ROOT)
-            role = assembler.extract_role(self.WIP_DIR / workorder_filename)
-            content = assembler.assemble(agent_name, workorder_filename, role)
-
-            queue_in_dir = Platform.get_agent_queue_dir(agent_name, "in")
-            queue_in_dir.mkdir(parents=True, exist_ok=True)
-            orders_path = queue_in_dir / "orders.md"
-            self._write_text_file(orders_path, content)
-            self.log(f"Assembled orders.md for {agent_name} role={role} ({len(content)} chars)")
-
-        except Exception as e:
-            self.log(f"ERROR: Failed to assemble orders.md: {e}", "ERROR")
-            import traceback
-            self.log(traceback.format_exc(), "ERROR")
-
-    def _DEPRECATED_run_generate_orders_md_script(self, agent_name: str, workorder_filename: str):
-        """DEPRECATED: Replaced by _assemble_orders(). Generate orders.md in agent's queue/in/ with cached context.
+    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str):
+        """Generate orders.md in agent's queue/in/ with cached context.
 
         Generates stable context files from tools/ (based on .lastrun), then
         concatenates them with pathspecs and the workorder for prompt caching.

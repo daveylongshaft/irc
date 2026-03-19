@@ -31,6 +31,7 @@ SERVICES & INTEGRATIONS
 - PR_REVIEW_POLICY.md - PR review and merge automation policy
 - GEMINI.md - Gemini API integration overview
 - GEMINI-TO-RUN-CLAUDE-API.md - Running Claude API via Gemini bridge
+- claude-relay.md - Cross-node AI consultation via mTLS TCP relay (port 9531)
 
 TESTING
 -------

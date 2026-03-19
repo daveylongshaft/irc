@@ -19,12 +19,9 @@ import json
 import os
 
 try:
-    from csc_service.server.service import Service
+    from csc_service.shared.service import Service
 except ImportError:
-    try:
-        from csc_service.server.service import Service
-    except ImportError:
-        from service import Service
+    from service import Service
 
 
 # Default path for wakewords storage

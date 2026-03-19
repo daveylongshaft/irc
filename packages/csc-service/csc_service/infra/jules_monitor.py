@@ -23,7 +23,7 @@ except ImportError:
 from csc_service.shared.data import Data
 
 
-JULES_API_BASE = "https://julius.googleapis.com/v1alpha"
+JULES_API_BASE = "https://jules.googleapis.com/v1alpha"
 
 
 class JulesMonitor(Data):
@@ -86,7 +86,7 @@ class JulesMonitor(Data):
                     line = line.strip()
                     if line.startswith("JULES_API_KEY="):
                         return line.split("=", 1)[1].strip().strip('"').strip("'")
-            except Exception:
+            except (IOError, OSError, ValueError):
                 pass
         return ""
 
