@@ -52,7 +52,18 @@ class EncryptedVFSStore:
 
     @staticmethod
     def _normalize(path: str | Path) -> str:
-        return "/" + str(path).replace("\\", "/").lstrip("/")
+        """Convert a VFS path to internal /dir/file format.
+
+        Accepts two styles:
+          :: style  — "logs::haven.ef6e::relay-ask.log"  →  /logs/haven.ef6e/relay-ask.log
+          / style   — "/logs/haven.ef6e/relay-ask.log"   →  /logs/haven.ef6e/relay-ask.log
+
+        Trailing :: (empty dir) becomes trailing /  →  /logs/haven.ef6e/
+        """
+        s = str(path)
+        if "::" in s:
+            s = s.replace("::", "/")
+        return "/" + s.replace("\\", "/").lstrip("/")
 
     def exists(self, path: str | Path) -> bool:
         return self._get_vfs().exists(self._normalize(path))

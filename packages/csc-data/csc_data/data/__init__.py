@@ -1,13 +1,19 @@
-"""Encrypted Data package implementation.
+"""Data layer: plaintext data store + encrypted VFS log store.
 
-This is the active Data layer. The previous plaintext implementation is kept in
-`csc_data.old_data` so operators can switch by renaming package directories if
-needed.
+During VFS testing, data files (channels, users, history, etc.) remain on the
+plain filesystem so the site stays stable. Only logs go into the encrypted VFS.
+
+VFS path syntax uses :: as the separator:
+    logs::haven.ef6e::runtime.log   →  /logs/haven.ef6e/runtime.log  (FAT internal)
+    logs::haven.ef6e::              →  /logs/haven.ef6e/  (directory prefix)
+
+Switch data to VFS later once the backend is proven stable.
 """
 
 from __future__ import annotations
 
 import os
+import socket
 import sys
 import time
 from pathlib import Path
@@ -17,7 +23,7 @@ from csc_data.old_data import Data as OldData
 
 
 class Data(OldData):
-    """Data implementation backed by enc-ext-vfs for logs + default data store."""
+    """Data backed by plaintext for data files, enc-ext-vfs for logs only."""
 
     def __init__(self):
         self._encrypted_store = None
@@ -34,56 +40,38 @@ class Data(OldData):
             print(message, file=sys.stderr)
 
     @staticmethod
-    def _vfs_data_path(filename: str) -> str:
-        return f"/data/{Path(filename).name}"
+    def _server_id() -> str:
+        """Stable node identifier for VFS log path prefixes.
+        Uses CSC_SERVER_ID env var, falls back to hostname."""
+        return os.environ.get("CSC_SERVER_ID") or socket.gethostname()
 
-    @staticmethod
-    def _vfs_log_path(filename: str) -> str:
-        return f"/logs/{Path(filename).name}"
+    def _vfs_log_path(self, filename: str) -> str:
+        """Return a :: VFS path for a log file scoped to this node.
+
+        Example:  "Server.log"  →  "logs::haven.ef6e::Server.log"
+        """
+        node = self._server_id()
+        name = Path(filename).name
+        return f"logs::{node}::{name}"
+
+    # ------------------------------------------------------------------
+    # Data reads/writes — plaintext only while VFS backend is under test
+    # ------------------------------------------------------------------
 
     def connect(self):
-        """Connect relative data files to encrypted VFS storage."""
-        if self.isDataConnected:
-            return
-
-        filename = self.source_filename
-        if os.path.isabs(filename):
-            return super().connect()
-
-        vfs_path = self._vfs_data_path(filename)
-        if os.environ.get("DEBUG"):
-            print(f"[{self.name}] Connecting to encrypted data source: {vfs_path}")
-        self._connected_source = vfs_path
-        try:
-            self._storage = self._vfs().read_json(vfs_path)
-        except Exception as exc:
-            self._safe_error(f"[{self.name}] ERROR reading encrypted data source {vfs_path}: {exc}")
-            self._storage = {}
-        self.isDataConnected = True
-        return True
+        """Always use plaintext storage for data files during VFS testing."""
+        return super().connect()
 
     def store_data(self):
-        """Flush the in-memory store to VFS for relative data files."""
-        if not self._connected_source:
-            self.log("Error: Not connected to a data source.", level="ERROR")
-            return
+        """Always use plaintext storage for data files during VFS testing."""
+        return super().store_data()
 
-        if os.path.isabs(self.source_filename):
-            return super().store_data()
-
-        try:
-            self._vfs().write_json(self._connected_source, self._storage)
-            if not os.environ.get("CSC_QUIET"):
-                print(
-                    f"Store data successful. Saved {len(self._storage)} items to encrypted '{self._connected_source}'."
-                )
-            return True
-        except Exception as exc:
-            self._safe_error(f"[{self.name}] ERROR writing encrypted data source {self._connected_source}: {exc}")
-            return False
+    # ------------------------------------------------------------------
+    # Logs — encrypted VFS only
+    # ------------------------------------------------------------------
 
     def log(self, message: str, level: str = "INFO"):
-        """Write log entries to enc-ext-vfs while preserving console output."""
+        """Write log entries to enc-ext-vfs; also print to console."""
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         class_name = self.__class__.__name__
         log_entry = f"[{timestamp}] [{class_name}] [{level}] {message}\n"
@@ -95,11 +83,12 @@ class Data(OldData):
             self._vfs().append_text(self._vfs_log_path(self.log_file), log_entry)
         except Exception as exc:
             if not os.environ.get("CSC_QUIET"):
-                print(f"CRITICAL: Failed to write encrypted log file '{self.log_file}': {exc}")
+                print(f"CRITICAL: Failed to write encrypted log '{self.log_file}': {exc}")
 
     def _write_runtime(self, line: str):
-        """Persist runtime feed lines in the encrypted VFS logs area."""
+        """Persist runtime feed lines to encrypted VFS logs."""
         try:
-            self._vfs().append_text("/logs/runtime.log", line + "\n")
+            node = self._server_id()
+            self._vfs().append_text(f"logs::{node}::runtime.log", line + "\n")
         except Exception:
             pass
