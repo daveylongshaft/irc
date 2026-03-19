@@ -161,7 +161,7 @@ class ControlHandler:
         """
         try:
             text = line.decode("utf-8", errors="ignore")
-        except:
+        except (UnicodeDecodeError, AttributeError):
             return
 
         msg = parse_irc_message(text)
@@ -635,6 +635,6 @@ class ControlHandler:
             if session.inbound:
                 try:
                     session.inbound.send_to_client(session.client_id, privmsg_line.encode("utf-8"))
-                except Exception as e:
+                except OSError:
                     # Silently ignore send errors
                     pass

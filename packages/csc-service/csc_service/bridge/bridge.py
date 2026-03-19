@@ -734,10 +734,6 @@ class Bridge:
         the _inbound_map dict. If the transport is not found (should never
         happen), the message is dropped and an error is logged.
 
-        Decryption is not implemented here (TODO comment in code). If encryption
-        is active, decryption must happen in _server_listener before calling
-        this method.
-
         Args:
             session: ClientSession with client routing information.
                 - session.inbound_name: String class name of the InboundTransport
@@ -807,10 +803,19 @@ class Bridge:
             "UnknownTransport"   | None              | Drop (error logged)
             ""                   | None              | Drop (error logged)
         """
-        # TODO: decrypt if session.encrypted and session.aes_key
         # Find the inbound transport for this session
         inbound = self._inbound_map.get(session.inbound_name)
         logger.debug(f"_forward_to_client: inbound_name={session.inbound_name}, inbound={inbound is not None}")
+
+        # If session has encryption enabled, decrypt server->client data
+        if getattr(session, 'encrypted', False) and getattr(session, 'aes_key', None):
+            if is_encrypted(data):
+                try:
+                    data = decrypt(session.aes_key, data)
+                except Exception as e:
+                    # Log decryption failure but forward raw data rather than dropping
+                    logger.error(f"Decryption failed for {session.session_id[:8]}: {e}")
+
         if inbound:
             try:
                 to_send = data
@@ -847,14 +852,11 @@ class Bridge:
         4. An exception occurs during recv() (e.g., socket closed)
 
         Encryption handling:
-        - If data is encrypted (is_encrypted(data) returns True):
-            - If session.encrypted and session.aes_key are set, decrypt the data
-            - Otherwise, log warning and drop the message
         - If data is plaintext and starts with "CRYPTOINIT DHREPLY":
             - Complete DH key exchange to derive shared AES key
             - Set session.encrypted = True and session.aes_key
             - Drop the handshake message (don't forward to client)
-        - Otherwise, forward the plaintext data to client
+        - Otherwise, forward data to _forward_to_client for potential decryption
 
         After successful recv(), session.touch() is called to update activity
         timestamp for keepalive and timeout tracking.
@@ -960,18 +962,8 @@ class Bridge:
                     if data:
                         session.touch()
 
-                        # Decryption / Handshake Logic
-                        if is_encrypted(data):
-                            if session.encrypted and session.aes_key:
-                                try:
-                                    data = decrypt(session.aes_key, data)
-                                except Exception as e:
-                                    logger.error(f"Decryption failed for {session.session_id[:8]}: {e}")
-                                    continue
-                            else:
-                                logger.warning(f"Received encrypted data for {session.session_id[:8]} but no key.")
-                                continue
-                        else:
+                        # Handshake Logic
+                        if not is_encrypted(data):
                             # Check for Handshake Reply
                             try:
                                 text = data.decode("utf-8", errors="ignore").strip()

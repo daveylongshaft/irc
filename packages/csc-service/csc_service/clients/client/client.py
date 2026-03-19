@@ -156,13 +156,13 @@ class Client(Network):
             if hasattr(self, '_listener_thread') and self._listener_thread:
                 try:
                     self._listener_thread.join(timeout=2.0)
-                except Exception:
+                except (RuntimeError, TimeoutError):
                     pass
 
             try:
                 if hasattr(self, 'sock') and self.sock:
                     self.sock.close()
-            except Exception:
+            except OSError:
                 pass
 
             # Reset listener thread reference

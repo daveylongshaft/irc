@@ -50,10 +50,14 @@ jules: Jules = None
 # Agent roster and assignment policy
 # ---------------------------------------------------------------------------
 AGENTS = [
+    # --- Free tier (use first) ---
     {"name": "gemini-2.5-flash", "role": "docs-and-tests",
      "good_for": ["docs", "test-fix", "validation"]},
     {"name": "gemini-2.5-pro", "role": "code",
      "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "pr-reviewer", "audit"]},
+    {"name": "chatgpt", "role": "code",
+     "good_for": ["feature", "refactor", "complex-fix", "debug", "pr-review", "pr-reviewer", "audit"]},
+    # --- Paid tier (Anthropic, use only after free exhausted) ---
     {"name": "sonnet", "role": "code",
      "good_for": ["feature", "refactor", "complex-fix", "architecture", "debug"]},
     {"name": "opus", "role": "debug",
@@ -64,9 +68,11 @@ AGENTS = [
 VALID_AGENTS = {a["name"] for a in AGENTS}
 
 # Escalation path: current_agent -> next_agent
+# Free tier first (gemini, chatgpt), then paid (sonnet, opus)
 ESCALATION = {
     "gemini-2.5-flash": "gemini-2.5-pro",
-    "gemini-2.5-pro": "sonnet",
+    "gemini-2.5-pro": "chatgpt",
+    "chatgpt": "sonnet",
     "sonnet": "opus",
     "opus": None,  # flag for human review
 }
@@ -628,14 +634,17 @@ def mark_failed(filename: str):
 
 
 def _is_jules_task(workorder_path: str) -> bool:
-    """Check if workorder is suitable for Jules."""
+    """Check if workorder has explicit 'agent: jules' in frontmatter."""
     try:
-        content = Path(workorder_path).read_text(encoding='utf-8', errors='replace').lower()
-        jules_keywords = [
-            'bug', 'fix', 'refactor', 'test', 'documentation',
-            'feature', 'implement', 'debug'
-        ]
-        return any(kw in content for kw in jules_keywords)
+        content = Path(workorder_path).read_text(encoding='utf-8', errors='replace')
+        # Only match explicit frontmatter assignment, not keyword matching
+        for line in content.splitlines()[:10]:
+            stripped = line.strip().lower()
+            if stripped == 'agent: jules':
+                return True
+            if stripped == '---' and line != content.splitlines()[0]:
+                break  # end of frontmatter
+        return False
     except FileNotFoundError:
         return False
 
@@ -665,20 +674,23 @@ def assign_to_jules(workorder_path: str):
             'workorder': workorder_path,
             'assigned_at': time.time(),
         }
-        
+
         fname = Path(workorder_path).name
         state.setdefault('assignments', {})[fname] = {
             "agent": "jules",
             "status": "assigned",
+            "session_id": session_id,
             "timestamp": _ts(),
         }
         _save_state(state)
 
-        # Move to wip
-        wip_path = WIP_DIR / fname
-        Path(workorder_path).rename(wip_path)
+        # Do NOT move to wip/ -- Jules runs externally, no local PID.
+        # Queue worker would see orphaned WIP and move it back to ready.
+        # Instead, move to done/ since Jules handles the work via PR.
+        done_path = DONE_DIR / fname
+        Path(workorder_path).rename(done_path)
 
-        _log(f"Assigned to Jules: {fname} (session: {session_id})", "INFO")
+        _log(f"Assigned to Jules: {fname} -> done/ (session: {session_id})", "INFO")
     except Exception as e:
         _log(f"Jules assignment failed: {e}", "ERROR")
 

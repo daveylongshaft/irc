@@ -269,12 +269,12 @@ class benchmark(Service):
                             # Clean up the WIP file
                             try:
                                 wip_file.unlink()
-                            except:
+                            except OSError:
                                 pass
                             # Clean up the queue prompt
                             try:
                                 queue_prompt.unlink()
-                            except:
+                            except OSError:
                                 pass
                             return f"Benchmark '{name}' completed in {duration:.2f}s\nResults archived"
                         else:
@@ -289,11 +289,11 @@ class benchmark(Service):
             # Clean up on timeout
             try:
                 wip_file.unlink()
-            except:
+            except OSError:
                 pass
             try:
                 queue_prompt.unlink()
-            except:
+            except OSError:
                 pass
 
             return f"Error: Benchmark timed out after {completion_timeout}s"

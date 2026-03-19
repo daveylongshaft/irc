@@ -12,3 +12,5 @@ build/
 .trash/
 packages/csc-service/csc_service/buffers/
 packages/csc-service/csc_service/bridge/Server_data.json
+
+vfs/

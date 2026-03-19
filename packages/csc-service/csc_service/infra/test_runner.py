@@ -80,7 +80,7 @@ def log(msg, level="INFO"):
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
         with open(RUNNER_LOG, "a", encoding="utf-8") as f:
             f.write(line + "\n")
-    except Exception:
+    except (IOError, OSError):
         pass
 
 

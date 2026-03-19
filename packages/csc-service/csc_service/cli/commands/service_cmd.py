@@ -1,5 +1,6 @@
 """Service lifecycle commands: restart, install, remove, cycle.
 
+UPDATED: Now installs 8 layered packages before enabling services.
 On Linux: uses systemctl (--user for in-proc services, system for server/bridge).
 On Windows: uses 'net start/stop' for system services.
 """
@@ -9,6 +10,47 @@ import subprocess
 import time
 
 IS_WINDOWS = os.name == 'nt'
+
+
+def _install_layered_packages():
+    """Install all 8 layered packages in dependency order."""
+    print("\n[Phase 1] Installing layered packages in dependency order...")
+    try:
+        from csc_service.installer.layer_packages import (
+            build_install_commands, resolve_repo_root
+        )
+    except ImportError as e:
+        print(f"ERROR: Could not import layer_packages: {e}")
+        print("Make sure PR #6 is merged (irc/packages/csc-service/csc_service/installer/layer_packages.py)")
+        return False
+
+    try:
+        from pathlib import Path
+        repo_root = resolve_repo_root()
+
+        # Get the package specs directly to build commands ourselves
+        from csc_service.installer.layer_packages import LAYER_PACKAGE_ORDER
+
+        for i, spec in enumerate(LAYER_PACKAGE_ORDER, 1):
+            package_dir = repo_root / spec.relative_dir
+            if not package_dir.exists():
+                print(f"  [{i}/8] {spec.distribution} ... SKIPPED (not found)")
+                continue
+
+            print(f"  [{i}/8] {spec.distribution} ...")
+            # Run pip directly as a list (no shell=True issues)
+            cmd = [sys.executable, "-m", "pip", "install", "-e", str(package_dir)]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"    FAILED: {result.stderr}")
+                return False
+            print(f"    OK")
+
+        print("[Phase 1] All packages installed successfully!")
+        return True
+    except Exception as e:
+        print(f"ERROR: Exception during package install: {e}")
+        return False
 
 def _run_hidden(cmd, **kwargs):
     """Run subprocess with hidden window on Windows."""
@@ -87,7 +129,7 @@ def _do_restart(service, force=False):
                 time.sleep(2)
             
             # Start via background process
-            from csc_service.shared.platform import Platform
+            from csc_platform import Platform
             print("Starting csc-service daemon...")
             try:
                 log_dir = Platform.PROJECT_ROOT / "logs"
@@ -143,7 +185,7 @@ def restart(args, config_manager):
 
 
 def install(args, config_manager):
-    """Enable and start services."""
+    """Install layered packages, then enable and start services."""
     if getattr(args, 'list_only', False):
         print("Services:")
         seen = set()
@@ -153,6 +195,13 @@ def install(args, config_manager):
                 print(f"  {unit:35s} ({scope})")
         return
 
+    # PHASE 1: Install all layered packages first
+    if not _install_layered_packages():
+        print("\nERROR: Failed to install layered packages. Aborting service installation.")
+        sys.exit(1)
+
+    # PHASE 2: Enable and start services
+    print("\n[Phase 2] Installing and starting services...")
     service = getattr(args, 'service', 'all') or 'all'
     targets = UNIT_MAP.items() if service == "all" else \
         [(service, UNIT_MAP[service])] if service in UNIT_MAP else []
@@ -164,7 +213,7 @@ def install(args, config_manager):
         seen.add(unit)
         if IS_WINDOWS:
             from csc_service.shared.platform_service_windows import WindowsServiceProvider, WindowsServiceDetector
-            from csc_service.shared.platform import Platform
+            from csc_platform import Platform
             
             svc_name = unit.replace(".service", "")
             win_svc_name = f"CSC-{svc_name.upper()}"
