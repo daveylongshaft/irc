@@ -22,14 +22,5 @@ csc-ctl      = "csc_service.cli.csc_ctl:main"
 csc-platform = "csc_service.shared.platform:_platform_cli"
 csc-webhook  = "csc_service.infra.webhook_listener:main"
 
-[project.scripts]
-csc-service  = "csc_service.main:main"
-csc-server   = "csc_service.server.main:main"
-csc-bridge   = "csc_service.bridge.main:main"
-csc-client   = "csc_service.clients.client.main:main"
-csc-ctl      = "csc_service.cli.csc_ctl:main"
-csc-platform = "csc_service.shared.platform:_platform_cli"
-csc-webhook  = "csc_service.infra.webhook_listener:main"
-
 [tool.setuptools.packages.find]
 where = ["."]

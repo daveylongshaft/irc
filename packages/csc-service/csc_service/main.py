@@ -267,11 +267,23 @@ def main():
             # Daemon main loop for infra services (smart backpressure)
             try:
                 from csc_service.shared.platform import Platform
+
+                def _killswitch_sleep(seconds):
+                    """Sleep in 20s chunks — checks SHUTDOWN file at most every 20s.
+                    In-memory flag is free; disk stat is not. 20s is plenty fast."""
+                    deadline = time.monotonic() + seconds
+                    while time.monotonic() < deadline:
+                        if (Platform.PROJECT_ROOT / "SHUTDOWN").exists():
+                            return
+                        time.sleep(min(20, deadline - time.monotonic()))
+
                 idle_cycles = 0
                 while True:
-                    # SHUTDOWN Kill Switch
+                    # I'm sorry Dave, I'm afraid I can do this.
                     if (Platform.PROJECT_ROOT / "SHUTDOWN").exists():
-                        print(f"[{ts()}] [csc-service] SHUTDOWN kill switch detected. Terminating immediately.")
+                        print(f"[{ts()}] [csc-service] SHUTDOWN kill switch detected. Going dark.")
+                        if srv:
+                            srv._running = False
                         sys.exit(0)
 
                     git_sync.pull()
@@ -344,7 +356,8 @@ def main():
                         idle_cycles += 1
                         if idle_cycles >= 3:
                             # 3+ idle cycles -> fall back to slow polling
-                            time.sleep(poll_interval)
+                            # Use _killswitch_sleep so SHUTDOWN wakes us immediately
+                            _killswitch_sleep(poll_interval)
                             idle_cycles = 0
                         # else: keep cycling fast for a few attempts
 

@@ -213,8 +213,12 @@ class Server(Service):
         """Periodic background loop to remove timed-out clients."""
         self.log("[CLEANUP] Periodic cleanup loop started.")
         while self._running:
-            time.sleep(30)  # Check every 30 seconds
-            self._run_cleanup_once()
+            for _ in range(30):
+                if not self._running:
+                    break
+                time.sleep(1)
+            if self._running:
+                self._run_cleanup_once()
 
     def _botserv_log_monitor_loop(self):
         """Background loop for BotServ log monitoring and echoing.
@@ -305,7 +309,10 @@ class Server(Service):
             except Exception as e:
                 self.log(f"[SYSLOG ERROR] Syslog monitor loop error: {e}")
 
-            time.sleep(60) # Poll every 60 seconds
+            for _ in range(60):  # poll every 60s but exit immediately on shutdown
+                if not self._running:
+                    break
+                time.sleep(1)
 
     def _run_cleanup_once(self):
         """Runs the client cleanup logic once."""
@@ -642,7 +649,12 @@ class Server(Service):
         print("Server has shut down.")
 
     def _wait_for_shutdown(self):
-        """Block the main thread until SIGTERM/SIGINT is received or SHUTDOWN file exists."""
+        """Block the main thread until SIGTERM/SIGINT is received or SHUTDOWN file exists.
+
+        Also watches for DISCONNECT file: drops all S2S links immediately and refuses
+        new ones until the file is removed. Both are hardcoded overrides — no config,
+        no poll delay, just the file and the consequence.
+        """
         stop_event = threading.Event()
 
         def _handle_signal(sig, frame):
@@ -654,18 +666,37 @@ class Server(Service):
             signal.signal(signal.SIGTERM, _handle_signal)
             signal.signal(signal.SIGINT, _handle_signal)
         except ValueError:
-            pass # signal only works in main thread
+            pass  # signal only works in main thread
 
         from csc_service.shared.platform import Platform
         shutdown_file = Platform.PROJECT_ROOT / "SHUTDOWN"
-        
+        disconnect_file = Platform.PROJECT_ROOT / "DISCONNECT"
+        _disconnect_active = False
+
         while not stop_event.is_set():
             if shutdown_file.exists():
                 self.log("[SHUTDOWN] Kill switch file detected. Terminating.")
                 self._running = False
                 break
-            # Poll with timeout to allow checking the file
-            stop_event.wait(timeout=1.0)
+
+            # DISCONNECT hardcoded override: drop all S2S links on appearance,
+            # refuse new ones until the file is gone.
+            if disconnect_file.exists() and not _disconnect_active:
+                _disconnect_active = True
+                if hasattr(self, 's2s_network'):
+                    self.log("[DISCONNECT] Kill switch active — dropping all S2S links.")
+                    with self.s2s_network._lock:
+                        for link in list(self.s2s_network._links.values()):
+                            try:
+                                link.close()
+                            except Exception:
+                                pass
+                        self.s2s_network._links.clear()
+            elif not disconnect_file.exists() and _disconnect_active:
+                _disconnect_active = False
+                self.log("[DISCONNECT] Kill switch removed — S2S links may resume.")
+
+            stop_event.wait(timeout=20.0)  # disk stat at most every 20s
 
     # ======================================================================
     # Helpers for Data layer

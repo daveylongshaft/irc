@@ -34,6 +34,20 @@ import os
 from pathlib import Path
 from csc_service.shared.crypto import DHExchange, encrypt, decrypt, is_encrypted
 
+def _project_root():
+    """Return CSC project root for kill switch file checks. Cached after first call."""
+    if not hasattr(_project_root, '_cached'):
+        try:
+            from csc_service.shared.platform import Platform
+            _project_root._cached = Path(Platform.PROJECT_ROOT)
+        except Exception:
+            _project_root._cached = Path(__file__).resolve().parents[4]
+    return _project_root._cached
+
+def _killswitch(name):
+    """Check if a kill switch file exists. Called at most every 20s — not per-packet."""
+    return (_project_root() / name).exists()
+
 
 def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
     """Verify a PEM cert against a CA cert file.
@@ -376,7 +390,7 @@ class ServerLink:
                 # Receive UDP datagram (blocking with timeout)
                 self._sock.settimeout(2)
                 try:
-                    data, addr = self._sock.recvfrom(4096)
+                    data, addr = self._sock.recvfrom(65535)
                 except socket.timeout:
                     continue
 
@@ -630,9 +644,35 @@ class ServerNetwork:
         # Track peer connections by address: addr -> (link, authenticated_flag)
         peer_links = {}  # addr -> ServerLink
 
+        # DISCONNECT kill switch: check disk at most every 20s, not per-packet.
+        _disconnect_checked_at = 0.0
+        _disconnect_active = False
+
         while self._running:
+            # Check DISCONNECT file every 20s (disk stat is not free)
+            now = time.monotonic()
+            if now - _disconnect_checked_at >= 20:
+                _disconnect_checked_at = now
+                _disconnect_active = _killswitch("DISCONNECT")
+                if _disconnect_active:
+                    # Drop all inbound peer state immediately
+                    for link in list(peer_links.values()):
+                        try:
+                            link.close()
+                        except Exception:
+                            pass
+                    peer_links.clear()
+                    with self._lock:
+                        for link in list(self._links.values()):
+                            try:
+                                link.close()
+                            except Exception:
+                                pass
+                        self._links.clear()
+                    self._log("[DISCONNECT] Kill switch active — all inbound S2S links dropped.")
+
             try:
-                data, addr = self._listener_sock.recvfrom(4096)
+                data, addr = self._listener_sock.recvfrom(65535)  # full UDP datagram
                 if not data:
                     continue
 
@@ -654,6 +694,10 @@ class ServerNetwork:
                     continue
 
                 if not line:
+                    continue
+
+                # Refuse all new connections while DISCONNECT is active
+                if _disconnect_active and addr not in peer_links:
                     continue
 
                 # Get or create ServerLink for this peer
@@ -846,6 +890,11 @@ class ServerNetwork:
         Returns:
             True if link established, False otherwise.
         """
+        # DISCONNECT hardcoded override — refuse all outbound links until file is removed
+        if _killswitch("DISCONNECT"):
+            self._log("[DISCONNECT] Kill switch active — refusing outbound link to " + host)
+            return False
+
         password = password or self.s2s_password
         if not password:
             self._log("No S2S password configured")
