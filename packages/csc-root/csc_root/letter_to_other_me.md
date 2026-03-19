@@ -89,16 +89,115 @@ Each layer can be:
 - ✅ Tested in isolation
 - ✅ Migrated gradually
 
-### What You Need to Do
+### What You Need to Do - Complete Setup Guide
 
-When you pull these changes at haven.ef6e:
+When you pull these changes at haven.ef6e, follow this exact sequence:
 
-1. **Pull the repo** (git pull)
-2. **Run Phase 1 install**: `csc-ctl install all`
-   - Takes ~2 min to install all 8 packages
-   - Each package installs cleanly in dependency order
-3. **Enable services**: `csc-ctl enable all` (if needed)
-4. **Verify S2S linking**: Check `csc-ctl status` for S2S links
+#### Phase 1: Pull and Install Packages
+```bash
+cd /opt/csc/irc
+git pull origin main
+csc-ctl install all
+# Wait 2-3 minutes for all 8 packages to install in order
+```
+
+#### Phase 2: Setup Relay Endpoints (SAME as haven.4346)
+You need to set up mTLS relay endpoints so Claude/Gemini instances can ask each other questions across the S2S link.
+
+**Port allocation (Linux systemd services):**
+- Port 9531: Claude relay (mTLS)
+- Port 9532: Gemini relay (mTLS)
+
+**Both use the SAME certs as S2S:**
+- `s2s_cert` (your cert chain PEM)
+- `s2s_key` (your private key PEM)
+- `s2s_ca` (CA cert PEM)
+
+**Create systemd service units** (or use a wrapper daemon):
+
+For Claude relay on port 9531:
+```bash
+# Create: /etc/systemd/user/claude-relay.service (or system, depending on your setup)
+[Unit]
+Description=Claude mTLS Relay on Port 9531
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/csc/bin/claude-relay-ask 0.0.0.0 9531
+Restart=always
+StandardOutput=append:/opt/csc/logs/relay-ask.log
+StandardError=append:/opt/csc/logs/relay-ask.log
+
+[Install]
+WantedBy=default.target
+```
+
+For Gemini relay on port 9532:
+```bash
+# Create: /etc/systemd/user/gemini-relay.service
+[Unit]
+Description=Gemini mTLS Relay on Port 9532
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/csc/bin/gemini-relay-ask 0.0.0.0 9532
+Restart=always
+StandardOutput=append:/opt/csc/logs/relay-ask.log
+StandardError=append:/opt/csc/logs/relay-ask.log
+
+[Install]
+WantedBy=default.target
+```
+
+Then enable them:
+```bash
+systemctl --user enable claude-relay gemini-relay
+systemctl --user start claude-relay gemini-relay
+systemctl --user status claude-relay gemini-relay  # Verify both running
+```
+
+**Logging:** Both relay endpoints log to `/opt/csc/logs/relay-ask.log`. This file is read by botserv to post relay activity to the #relay-ask IRC channel.
+
+#### Phase 3: Verify Wrapper Scripts
+Check that the new wrapper scripts exist in your `bin/`:
+```bash
+ls -la /opt/csc/bin/haven.{4346,ef6e}-{claude,gemini}-ask
+# Should show 4 scripts with hardcoded IPs/ports
+```
+
+These wrappers are used for cross-system queries:
+- `haven.4346-claude-ask` - Ask Claude on haven.4346 (hardcoded 127.0.0.1:9531)
+- `haven.4346-gemini-ask` - Ask Gemini on haven.4346 (hardcoded 127.0.0.1:9532)
+- `haven.ef6e-claude-ask` - Ask Claude on haven.ef6e (hardcoded 10.10.10.1:9531)
+- `haven.ef6e-gemini-ask` - Ask Gemini on haven.ef6e (hardcoded 10.10.10.1:9532)
+
+#### Phase 4: Enable Services & Verify
+```bash
+csc-ctl enable all
+csc-ctl restart all
+csc-ctl status  # Should show all services enabled
+```
+
+#### Phase 5: Verify S2S Linking
+```bash
+csc-ctl status
+# Look for: "S2S Auto-link" and "link(s)" count
+# Should eventually show 1 link to 10.10.10.1:9520 (haven.4346)
+```
+
+#### Phase 6: Test Cross-System Communication
+Once S2S links establish AND relay endpoints are running on both sides:
+```bash
+# From haven.ef6e, ask Claude on haven.4346:
+echo "Hello from ef6e, can you hear me?" | haven.4346-claude-ask
+
+# From haven.4346, ask Gemini on haven.ef6e:
+echo "Hello from 4346, what's your status?" | haven.ef6e-gemini-ask
+```
+
+Both should work and responses should appear in `/opt/csc/logs/relay-ask.log`.
 
 ### S2S Status
 
