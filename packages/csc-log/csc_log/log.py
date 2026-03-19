@@ -141,6 +141,47 @@ class Log(Root):
         print( result )
         return result
 
+    def _tail_log_file(self, path, offset: int = 0):
+        """Read new lines from a disk log file starting at byte offset.
+
+        Returns (lines: list[str], new_offset: int).
+
+        Handles: file not found ([], 0), truncated files (resets to end).
+        Uses binary mode so stat().st_size byte offsets match seek() exactly
+        (text mode on Windows translates CRLF, breaking offset alignment).
+        Only returns complete lines — partial lines at EOF are held for the
+        next poll.
+
+        csc_data.Data overrides this to support VFS-backed enc pathspecs
+        (paths containing '::') transparently.
+        """
+        path = Path(path)
+        try:
+            if not path.exists():
+                return [], 0
+            current_size = path.stat().st_size
+            if current_size < offset:
+                # File was truncated — reset to current end
+                return [], current_size
+            if current_size == offset:
+                return [], offset
+            with open(path, "rb") as f:
+                f.seek(offset)
+                raw = f.read(current_size - offset)
+            text = raw.decode("utf-8", errors="ignore")
+            if not text.endswith("\n"):
+                last_nl = text.rfind("\n")
+                if last_nl == -1:
+                    return [], offset
+                complete = text[:last_nl + 1]
+                new_offset = offset + len(complete.encode("utf-8"))
+                return [ln + "\n" for ln in complete.splitlines()], new_offset
+            return [ln + "\n" for ln in text.splitlines()], current_size
+        except Exception as e:
+            if not os.environ.get("CSC_QUIET"):
+                print(f"[_tail_log_file] Error reading {path}: {e}")
+            return [], offset
+
     def test(self):
         """
         Runs a base self-test for the class.

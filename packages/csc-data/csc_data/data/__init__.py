@@ -119,3 +119,50 @@ class Data(OldData):
             self.write_log("runtime.log", line + "\n")
         except Exception:
             pass
+
+    def _tail_log_file(self, path_or_enc, offset: int = 0):
+        """Read new lines from a log file starting at byte offset.
+
+        Transparent backend routing:
+          - If path_or_enc contains '::' → VFS enc pathspec, read from encrypted store.
+          - Otherwise → plain disk path, delegates to csc_log.Log._tail_log_file().
+
+        Returns (lines: list[str], new_offset: int).
+
+        VFS offset semantics: byte offset into the UTF-8-encoded full file content.
+        Offsets stay stable as long as the file only grows (append-only logs).
+        On truncation (new_size < offset) the offset resets to the new end.
+        """
+        if "::" in str(path_or_enc):
+            return self._tail_vfs_log(str(path_or_enc), offset)
+        return super()._tail_log_file(path_or_enc, offset)
+
+    def _tail_vfs_log(self, enc_pathspec: str, offset: int = 0):
+        """Tail an encrypted VFS log file by byte offset into its decoded content.
+
+        Returns (lines: list[str], new_offset: int).
+        """
+        try:
+            content = self._vfs().read_text(enc_pathspec)
+            if not content:
+                return [], 0
+            encoded = content.encode("utf-8")
+            total = len(encoded)
+            if total < offset:
+                # Truncated — reset to end
+                return [], total
+            if total == offset:
+                return [], offset
+            new_bytes = encoded[offset:]
+            text = new_bytes.decode("utf-8", errors="ignore")
+            if not text.endswith("\n"):
+                last_nl = text.rfind("\n")
+                if last_nl == -1:
+                    return [], offset
+                complete = text[:last_nl + 1]
+                new_offset = offset + len(complete.encode("utf-8"))
+                return [ln + "\n" for ln in complete.splitlines()], new_offset
+            return [ln + "\n" for ln in text.splitlines()], total
+        except Exception as e:
+            self._safe_error(f"[_tail_vfs_log] Error reading {enc_pathspec}: {e}")
+            return [], offset
