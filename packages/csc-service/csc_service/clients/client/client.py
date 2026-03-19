@@ -944,10 +944,15 @@ class Client(Network):
             self._client_file_handler.process_chunk(sender_nick, text)
 
     def _handle_notice_recv(self, parsed):
-        """Handle received NOTICE, including ISOP responses."""
+        """Handle received NOTICE, including ISOP responses and VFS protocol."""
         nick = parsed.prefix.split("!")[0] if parsed.prefix else "?"
         target = parsed.params[0] if parsed.params else "?"
         text = parsed.params[-1] if parsed.params else ""
+
+        # VFS protocol responses
+        if text.startswith("VFS "):
+            self._handle_vfs_notice(text)
+            return
 
         # Check for ISOP response: "ISOP <nick> YES/NO"
         if text.startswith("ISOP "):
@@ -977,6 +982,184 @@ class Client(Network):
             print(f"[{target}] *{nick}* {text}")
         else:
             print(f"[DM] *{nick}* {text}")
+
+    def _handle_vfs_notice(self, text: str):
+        """Handle VFS protocol NOTICEs from the server."""
+        import socket as _socket
+        import threading as _threading
+
+        if text.startswith("VFS PRET "):
+            # VFS PRET <ip> <port> <action>
+            parts = text.split()
+            if len(parts) < 4:
+                print(f"[VFS] Bad PRET: {text}")
+                return
+            ip, port, action = parts[2], int(parts[3]), parts[4] if len(parts) > 4 else "?"
+
+            if action == "ENCRYPT":
+                info = getattr(self, "_vfs_pending_upload", None)
+                if not info:
+                    print("[VFS] PRET ENCRYPT received but no pending upload.")
+                    return
+                local_path, vfspath = info
+                self._vfs_pending_upload = None
+
+                def _upload():
+                    try:
+                        with open(local_path, "rb") as f:
+                            data = f.read()
+                        s = _socket.create_connection((ip, port), timeout=30)
+                        s.sendall(data)
+                        s.close()
+                        print(f"[VFS] Sent {len(data)} bytes -> {vfspath}")
+                    except Exception as exc:
+                        print(f"[VFS] Upload failed: {exc}")
+                _threading.Thread(target=_upload, daemon=True).start()
+
+            elif action == "DECRYPT":
+                info = getattr(self, "_vfs_pending_download", None)
+                if not info:
+                    print("[VFS] PRET DECRYPT received but no pending download.")
+                    return
+                vfspath, local_path = info
+                self._vfs_pending_download = None
+
+                def _download():
+                    try:
+                        s = _socket.create_connection((ip, port), timeout=30)
+                        chunks = []
+                        while True:
+                            chunk = s.recv(65536)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        s.close()
+                        data = b"".join(chunks)
+                        with open(local_path, "wb") as f:
+                            f.write(data)
+                        print(f"[VFS] Received {len(data)} bytes -> {local_path}")
+                    except Exception as exc:
+                        print(f"[VFS] Download failed: {exc}")
+                _threading.Thread(target=_download, daemon=True).start()
+
+            elif action == "LIST":
+                def _list():
+                    try:
+                        s = _socket.create_connection((ip, port), timeout=30)
+                        chunks = []
+                        while True:
+                            chunk = s.recv(65536)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        s.close()
+                        listing = b"".join(chunks).decode("utf-8", errors="replace")
+                        print(f"[VFS] --- listing ---")
+                        print(listing)
+                        print(f"[VFS] --- end ---")
+                    except Exception as exc:
+                        print(f"[VFS] List failed: {exc}")
+                _threading.Thread(target=_list, daemon=True).start()
+
+            else:
+                print(f"[VFS] Unknown PRET action: {action}")
+
+        elif text.startswith("VFS CAT END"):
+            print("[VFS] --- end ---")
+
+        elif text.startswith("VFS CAT "):
+            print(text[8:])  # strip "VFS CAT "
+
+        elif text.startswith("VFS CWD "):
+            newpath = text[8:]
+            print(f"[VFS] cwd -> {newpath}")
+
+        elif text.startswith("VFS OK "):
+            print(f"[VFS] {text[7:]}")
+
+        elif text.startswith("VFS ERR "):
+            print(f"[VFS ERROR] {text[8:]}")
+
+        else:
+            print(f"[VFS] {text}")
+
+    def _vfs_command(self, args: str):
+        """Handle /vfs subcommands.
+
+        /vfs list [pathspec]            — list VFS at pathspec
+        /vfs cwd <pathspec>             — change working prefix
+        /vfs encrypt <local> <vfspath>  — upload+encrypt local file to VFS
+        /vfs decrypt <vfspath> <local>  — download+decrypt VFS file to local
+        /vfs cat <pathspec>             — print text file inline
+        /vfs rnfr <pathspec>            — stage a rename-from
+        /vfs rnto <pathspec>            — complete rename-to
+        /vfs del <pathspec>             — delete encrypted file
+        """
+        parts = args.split() if args else []
+        sub = parts[0].lower() if parts else "help"
+        rest = parts[1:]
+
+        if sub in ("list", "ls"):
+            pathspec = rest[0] if rest else ""
+            super().send(f"VFS LIST {pathspec}\r\n" if pathspec else "VFS LIST\r\n")
+
+        elif sub == "cwd":
+            if not rest:
+                print("Usage: /vfs cwd <pathspec>")
+                return
+            super().send(f"VFS CWD {rest[0]}\r\n")
+
+        elif sub in ("encrypt", "put", "up"):
+            if len(rest) < 2:
+                print("Usage: /vfs encrypt <local_file> <vfs::path::file>")
+                return
+            self._vfs_pending_upload = (rest[0], rest[1])
+            super().send(f"VFS ENCRYPT {rest[1]}\r\n")
+
+        elif sub in ("decrypt", "get", "dl"):
+            if len(rest) < 2:
+                print("Usage: /vfs decrypt <vfs::path::file> <local_file>")
+                return
+            self._vfs_pending_download = (rest[0], rest[1])
+            super().send(f"VFS DECRYPT {rest[0]}\r\n")
+
+        elif sub == "cat":
+            if not rest:
+                print("Usage: /vfs cat <pathspec>")
+                return
+            super().send(f"VFS CAT {rest[0]}\r\n")
+
+        elif sub == "rnfr":
+            if not rest:
+                print("Usage: /vfs rnfr <pathspec>")
+                return
+            super().send(f"VFS RNFR {rest[0]}\r\n")
+
+        elif sub == "rnto":
+            if not rest:
+                print("Usage: /vfs rnto <pathspec>")
+                return
+            super().send(f"VFS RNTO {rest[0]}\r\n")
+
+        elif sub in ("del", "rm", "delete"):
+            if not rest:
+                print("Usage: /vfs del <pathspec>")
+                return
+            super().send(f"VFS DEL {rest[0]}\r\n")
+
+        else:
+            print(
+                "VFS commands:\n"
+                "  /vfs list [path]              — list encrypted FS\n"
+                "  /vfs cwd <path>               — set working prefix\n"
+                "  /vfs encrypt <local> <vpath>  — upload+encrypt file\n"
+                "  /vfs decrypt <vpath> <local>  — download+decrypt file\n"
+                "  /vfs cat <vpath>              — read text file inline\n"
+                "  /vfs rnfr <vpath>             — stage rename-from\n"
+                "  /vfs rnto <vpath>             — complete rename-to\n"
+                "  /vfs del <vpath>              — delete file\n"
+                "  Aliases: ls=list, put/up=encrypt, get/dl=decrypt, rm=del"
+            )
 
     def handle_server_message(self, msg: str):
         """Legacy handler — prints messages received from the server."""
@@ -1125,6 +1308,8 @@ class Client(Network):
                 self._handle_status_command()
             elif command == "/ping":
                 self._handle_ping_command()
+            elif command == "/vfs":
+                self._vfs_command(args)
             elif command == "/quote" or command == "/raw":
                 if args:
                     self._last_message_sent = f"{args}\r\n"

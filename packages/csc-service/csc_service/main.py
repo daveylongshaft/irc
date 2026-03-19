@@ -238,9 +238,10 @@ def main():
                             ftpd_slave = FtpSlave(ftpd_cfg)
                             ftpd_slave.start()
                             print(f"[{ts()}] [csc-service] Started FTP slave (master={ftpd_cfg.master_host}:{ftpd_cfg.master_control_port})")
-                            # Wire announce callback for FTP slave
+                            # Wire announce callback for FTP slave; store ref for VFS sync
                             if srv:
                                 ftpd_slave.set_announce_callback(srv.ftp_announce)
+                                srv._ftpd_slave = ftpd_slave
                             # Wire S2S bridge for peer-to-peer file sync
                             if hasattr(srv, 's2s_network'):
                                 try:

@@ -29,6 +29,7 @@ from csc_service.server.handlers import (
     ChanServMixin,
     BotServMixin,
     UtilityMixin,
+    VFSMixin,
 )
 
 # Valid IRC nick: letter or special first char, then letters/digits/specials
@@ -46,6 +47,7 @@ class MessageHandler(
     ChanServMixin,
     BotServMixin,
     UtilityMixin,
+    VFSMixin,
 ):
     """
     Handles all incoming UDP messages from clients, acting as the central router
@@ -250,6 +252,7 @@ class MessageHandler(
             "DELINK":      self._handle_delink,
             "LOCALCONFIG": self._handle_localconfig,
             "HELP":        self._handle_help,
+            "VFS":         self._handle_vfs,
         }
 
         if command in post_reg_commands:

@@ -12,6 +12,7 @@ from csc_service.server.handlers.nickserv import NickServMixin
 from csc_service.server.handlers.chanserv import ChanServMixin
 from csc_service.server.handlers.botserv import BotServMixin
 from csc_service.server.handlers.utility import UtilityMixin
+from csc_service.server.handlers.vfs import VFSMixin
 
 __all__ = [
     "RegistrationMixin",
@@ -24,4 +25,5 @@ __all__ = [
     "ChanServMixin",
     "BotServMixin",
     "UtilityMixin",
+    "VFSMixin",
 ]
