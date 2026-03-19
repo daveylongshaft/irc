@@ -43,7 +43,7 @@ def _runtime(msg):
         log_dir.mkdir(parents=True, exist_ok=True)
         with open(log_dir / "runtime.log", "a", encoding="utf-8") as f:
             f.write(f"[{ts}] [codex] {msg}\n")
-    except (IOError, OSError):
+    except Exception:
         pass
 
 

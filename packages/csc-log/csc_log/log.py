@@ -2,7 +2,7 @@ import os
 import time
 import inspect
 from pathlib import Path
-from csc_service.shared.root import Root
+from csc_root import Root
 
 
 def _get_logs_dir() -> Path:

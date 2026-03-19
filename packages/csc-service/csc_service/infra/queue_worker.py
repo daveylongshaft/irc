@@ -46,36 +46,6 @@ from csc_service.shared.agent_executor import AgentExecutor
 from csc_service.shared.api_key_manager import APIKeyManager
 from csc_service.shared.service import Service
 
-# Lazy singleton for FTP-aware file operations
-_file_ops_instance = None
-
-
-def _get_file_ops():
-    """Get the FtpFileOps singleton (lazy init, falls back to plain mode)."""
-    global _file_ops_instance
-    if _file_ops_instance is not None:
-        return _file_ops_instance
-    try:
-        from csc_service.ftpd.ftp_file_ops import FtpFileOps
-        _file_ops_instance = FtpFileOps()  # standalone fallback mode
-    except ImportError:
-        _file_ops_instance = None
-    return _file_ops_instance
-
-
-def _read_lock_id(agent_name, prompt_filename):
-    """Read lock_id from queue metadata JSON if it exists."""
-    stem = Path(prompt_filename).stem
-    for dir_type in ("work", "in"):
-        meta_path = agent_queue_dir(agent_name, dir_type) / f"{stem}.json"
-        if meta_path.exists():
-            try:
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                return meta.get("lock_id")
-            except Exception:
-                pass
-    return None
-
 # --- Configuration ---
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -645,22 +615,8 @@ def _runtime(msg):
         ts = time.strftime("%H:%M:%S")
         log_dir = CSC_ROOT / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        with open(log_dir / "runtime.log", "ab") as f:
-            f.write(f"[{ts}] [Q] {msg}\n".encode("utf-8"))
-    except Exception:
-        pass
-
-
-def _ftp_announce(msg):
-    """Write to ftp_announce.log for #ftp IRC feed."""
-    if not CSC_ROOT:
-        return
-    try:
-        ts = time.strftime("%H:%M:%S")
-        log_dir = CSC_ROOT / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        with open(log_dir / "ftp_announce.log", "ab") as f:
-            f.write(f"[{ts}] [Q] {msg}\n".encode("utf-8"))
+        with open(log_dir / "runtime.log", "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] [Q] {msg}\n")
     except Exception:
         pass
 
@@ -675,23 +631,14 @@ def load_env():
     if not env_file.exists():
         return
     try:
-        # Two-pass: first load literal values, then resolve ${VAR} references
-        raw = {}
         for line in env_file.read_text(encoding='utf-8').splitlines():
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
                 k, v = line.split('=', 1)
                 k = k.strip()
                 v = v.strip().strip('"').strip("'")
-                if k:
-                    raw[k] = v
-        # Resolve ${VAR} references
-        for k, v in raw.items():
-            if v.startswith('${') and v.endswith('}'):
-                ref = v[2:-1]
-                v = raw.get(ref, os.environ.get(ref, v))
-            if k not in os.environ:
-                os.environ[k] = v
+                if k and k not in os.environ:
+                    os.environ[k] = v
     except Exception:
         pass
 
@@ -1015,24 +962,17 @@ def _build_agent_cmd(agent_name, orders_path, clone_path):
     for var in ["CLAUDE_CODE_SESSION_ID", "CLAUDE_INVOCATION_ID", "CLAUDE_CODE_TASK_ID"]:
         env.pop(var, None)
 
-    # Load .env with ${VAR} expansion
+    # Load .env
     env_file = CSC_ROOT / ".env"
     if env_file.exists():
         try:
-            raw = {}
             for line in env_file.read_text(encoding='utf-8').splitlines():
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     k, v = line.split('=', 1)
                     k, v = k.strip(), v.strip().strip('"').strip("'")
-                    if k:
-                        raw[k] = v
-            for k, v in raw.items():
-                if v.startswith('${') and v.endswith('}'):
-                    ref = v[2:-1]
-                    v = raw.get(ref, env.get(ref, v))
-                if k not in env:
-                    env[k] = v
+                    if k and k not in env:
+                        env[k] = v
         except Exception:
             pass
 
@@ -1109,46 +1049,21 @@ def process_finished_work(agent_name, prompt_filename, return_code, agent_log, c
     if not is_complete and wip.exists():
         mark_incomplete(wip)
 
-    # Unlock WIP before moving (allows S2S to sync final state)
-    file_ops = _get_file_ops()
-    lock_id = _read_lock_id(agent_name, prompt_filename)
-    if lock_id and file_ops:
-        wip_vpath = file_ops.path_to_vpath(wip)
-        if wip_vpath:
-            file_ops.unlock(wip_vpath, lock_id)
-            _ftp_announce(f"WO UNLOCK {prompt_filename} id={lock_id}")
-
     # Move WO to done or back to ready
     if is_complete:
         log(f"COMPLETE: {prompt_filename} -> done/")
         _runtime(f"{prompt_filename} COMPLETE -> done/")
-        _ftp_announce(f"WO COMPLETE {prompt_filename} wip/ -> done/")
         DONE_DIR.mkdir(parents=True, exist_ok=True)
         dst = DONE_DIR / prompt_filename
         if wip.exists():
-            if file_ops:
-                file_ops.rename(wip, dst)
-            else:
-                shutil.move(str(wip), str(dst))
+            shutil.move(str(wip), str(dst))
         result = "done"
     else:
         log(f"INCOMPLETE: {prompt_filename} -> ready/")
         _runtime(f"{prompt_filename} INCOMPLETE -> ready/. reassigning")
-        _ftp_announce(f"WO INCOMPLETE {prompt_filename} wip/ -> ready/")
         dst = READY_DIR / prompt_filename
         if wip.exists():
-            if file_ops:
-                file_ops.rename(wip, dst)
-            else:
-                shutil.move(str(wip), str(dst))
-
-        # Notify PM of failure so it can escalate or flag for human review
-        try:
-            from csc_service.infra import pm
-            pm.mark_failed(prompt_filename)
-        except Exception as e:
-            log(f"WARNING: Could not notify PM of failure: {e}")
-
+            shutil.move(str(wip), str(dst))
         result = "ready"
 
     # Move orders.md from queue/work/ to queue/out/
@@ -1321,13 +1236,11 @@ def process_inbox():
             write_agent_data(agent_name, pid, workorder_filename, agent_log)
             log(f"Agent spawned: PID={pid}")
             _runtime(f"spawned {agent_name} PID={pid}")
-            _ftp_announce(f"WO RUNNING {workorder_filename} agent={agent_name} PID={pid}")
 
             # Wait for agent to finish (blocking)
             return_code = proc.wait()
             log(f"Agent exited: PID={pid}, return_code={return_code}")
             _runtime(f"agent {agent_name} exited rc={return_code}")
-            _ftp_announce(f"WO FINISHED {workorder_filename} agent={agent_name} rc={return_code}")
 
     except Exception as e:
         log(f"ERROR: Failed to spawn agent: {e}", "ERROR")

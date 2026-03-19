@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csc-server-core"
+version = "0.1.0"
+description = "Independent Server layer package for the CSC inheritance chain."
+requires-python = ">=3.8"
+dependencies = [
+    "csc-service-base>=0.1.0",
+    "csc-service>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

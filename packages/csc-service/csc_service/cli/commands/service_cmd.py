@@ -119,7 +119,10 @@ def _do_restart(service, force=False):
                 time.sleep(2)
             
             # Start via background process
-            from csc_platform import Platform
+            try:
+                from csc_platform import Platform
+            except ImportError:
+                from csc_service.shared.platform import Platform
             print("Starting csc-service daemon...")
             try:
                 log_dir = Platform.PROJECT_ROOT / "logs"
