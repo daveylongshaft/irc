@@ -1,0 +1,3 @@
+# CSC Contributions
+
+- 2026-03-19: GPT-5.2-Codex — split layered CSC packages, added installer planning helpers, and integrated enc-ext-vfs-backed csc-data with old_data rollback support.

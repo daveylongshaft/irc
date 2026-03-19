@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csc-data"
+version = "0.1.0"
+description = "Independent Data layer package for the CSC inheritance chain."
+requires-python = ">=3.8"
+dependencies = [
+    "csc-log>=0.1.0",
+    "csc-service>=0.1.0",
+    "jsonschema>=4",
+    "enc-ext-vfs @ git+https://github.com/daveylongshaft/enc-ext-vfs.git",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
