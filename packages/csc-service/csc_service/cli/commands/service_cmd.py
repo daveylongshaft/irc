@@ -25,12 +25,22 @@ def _install_layered_packages():
         return False
 
     try:
+        from pathlib import Path
         repo_root = resolve_repo_root()
-        commands = build_install_commands(repo_root, python_executable=sys.executable, editable=True)
 
-        for i, cmd in enumerate(commands, 1):
-            print(f"  [{i}/8] pip install ...")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        # Get the package specs directly to build commands ourselves
+        from csc_service.installer.layer_packages import LAYER_PACKAGE_ORDER
+
+        for i, spec in enumerate(LAYER_PACKAGE_ORDER, 1):
+            package_dir = repo_root / spec.relative_dir
+            if not package_dir.exists():
+                print(f"  [{i}/8] {spec.distribution} ... SKIPPED (not found)")
+                continue
+
+            print(f"  [{i}/8] {spec.distribution} ...")
+            # Run pip directly as a list (no shell=True issues)
+            cmd = [sys.executable, "-m", "pip", "install", "-e", str(package_dir)]
+            result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"    FAILED: {result.stderr}")
                 return False
