@@ -129,10 +129,7 @@ def _do_restart(service, force=False):
                 time.sleep(2)
             
             # Start via background process
-            try:
-                from csc_platform import Platform
-            except ImportError:
-                from csc_service.shared.platform import Platform
+            from csc_platform import Platform
             print("Starting csc-service daemon...")
             try:
                 log_dir = Platform.PROJECT_ROOT / "logs"
@@ -216,10 +213,7 @@ def install(args, config_manager):
         seen.add(unit)
         if IS_WINDOWS:
             from csc_service.shared.platform_service_windows import WindowsServiceProvider, WindowsServiceDetector
-            try:
-                from csc_platform import Platform
-            except ImportError:
-                from csc_service.shared.platform import Platform
+            from csc_platform import Platform
             
             svc_name = unit.replace(".service", "")
             win_svc_name = f"CSC-{svc_name.upper()}"
