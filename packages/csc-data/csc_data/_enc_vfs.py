@@ -52,18 +52,16 @@ class EncryptedVFSStore:
 
     @staticmethod
     def _normalize(path: str | Path) -> str:
-        """Convert a VFS path to internal /dir/file format.
+        """Return the enc pathspec as-is.
 
-        Accepts two styles:
-          :: style  — "logs::haven.ef6e::relay-ask.log"  →  /logs/haven.ef6e/relay-ask.log
-          / style   — "/logs/haven.ef6e/relay-ask.log"   →  /logs/haven.ef6e/relay-ask.log
-
-        Trailing :: (empty dir) becomes trailing /  →  /logs/haven.ef6e/
+        :: is the native CSC encrypted filesystem separator — not a Unix path,
+        not a Windows path, just a FAT key.  The FAT is a flat map:
+            enc_pathspec  →  block_address (00/11/22/33-44-55-66-77)
+        No conversion needed or wanted.  logs::haven.ef6e::relay-ask.log stays
+        exactly that.  The block store on disk uses hex addresses; the separator
+        in the pathspec is purely for human readability and FAT prefix lookups.
         """
-        s = str(path)
-        if "::" in s:
-            s = s.replace("::", "/")
-        return "/" + s.replace("\\", "/").lstrip("/")
+        return str(path).strip()
 
     def exists(self, path: str | Path) -> bool:
         return self._get_vfs().exists(self._normalize(path))
