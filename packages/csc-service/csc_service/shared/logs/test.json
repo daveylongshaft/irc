@@ -1,0 +1,3 @@
+{"timestamp": "2026-03-17T07:24:44.448078Z", "level": "INFO", "logger": "test", "message": "Info message", "operation": "TEST", "user": "alice", "result": "OK", "taskName": null}
+{"timestamp": "2026-03-17T07:24:44.449658Z", "level": "WARNING", "logger": "test", "message": "Warning message", "operation": "FILE_UPLOAD", "user": "bob", "result": "BLOCKED", "taskName": null}
+{"timestamp": "2026-03-17T07:24:44.449752Z", "level": "ERROR", "logger": "test", "message": "Error message", "operation": "JOIN", "channel": "#test", "result": "ERROR", "taskName": null}
