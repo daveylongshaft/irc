@@ -35,6 +35,9 @@ def main():
     work_dir = csc_root
     poll_interval = 60
 
+    # Set CSC_HOME for S2S cert loading and other components that need it
+    os.environ['CSC_HOME'] = str(csc_root)
+
     # Initialize Platform layer first - this sets up CSC_ETC, CSC_LOGS, etc.
     from csc_service.shared.platform import Platform
     plat = Platform()

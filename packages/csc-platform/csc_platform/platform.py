@@ -76,6 +76,60 @@ def _parse_size(size_str):
         return 0
 
 
+def _load_env_file():
+    """Load .env file from CSC_ROOT and export to environment at module import time.
+
+    Called once when module loads, before any class instantiation.
+    Ensures all child classes have access to environment variables.
+    """
+    try:
+        # Find CSC_ROOT (project root with csc-service.json)
+        csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')
+        if not csc_root:
+            _p = Path(__file__).resolve().parent
+            for _ in range(10):
+                if (_p / "csc-service.json").exists():
+                    csc_root = str(_p)
+                    break
+                _p = _p.parent
+                if _p == _p.parent:
+                    break
+
+        if not csc_root:
+            return
+
+        env_file = Path(csc_root) / ".env"
+        if not env_file.exists():
+            return
+
+        # Parse and export .env file
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                # Export to environment (only if not already set)
+                if key not in os.environ:
+                    os.environ[key] = value
+    except Exception:
+        # Silently fail - .env is optional
+        pass
+
+
+# Load .env file when module is imported, before any class instantiation
+_load_env_file()
+
+
 class Platform(Version):
     """
     Extends Version with system capability detection and persistence.
@@ -916,7 +970,9 @@ class Platform(Version):
                 f.flush()
                 os.fsync(f.fileno())
             tmp.replace(filepath)
-            self.log(f"[Platform] Persisted inventory to {filepath}")
+            # Only log if DEBUG mode enabled - reduces spam in normal operation
+            if os.environ.get('CSC_DEBUG'):
+                self.log(f"[Platform] Persisted inventory to {filepath}")
         except Exception as e:
             self.log(f"[Platform] Failed to persist platform.json: {e}")
 

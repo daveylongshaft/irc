@@ -117,6 +117,7 @@ Known Issues:
     - Keepalive interval per-instance, not per-client
 """
 
+import os
 import socket
 import time
 import random
@@ -151,7 +152,8 @@ class Network( Platform ):
         self.clients = {}
         self.keepalive_interval = random.randint( 60, 120 )
         #print(f"{self.name}->",end=None)
-        self.log( f"[Network] Initialized for {self.server_addr} (keepalive every {self.keepalive_interval}s)" )
+        if os.environ.get('CSC_DEBUG'):
+            self.log( f"[Network] Initialized for {self.server_addr} (keepalive every {self.keepalive_interval}s)" )
 
     def _network_listener(self):
         """

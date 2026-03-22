@@ -99,6 +99,17 @@ class Server(Service):
         self.syslog_thread = threading.Thread(target=self._syslog_monitor_loop, daemon=True)
         self.syslog_thread.start()
 
+        # Set CSC_HOME for S2S config loading (needed for standalone server)
+        if not os.environ.get('CSC_HOME'):
+            # Find project root (look for csc-service.json)
+            csc_root = Path(__file__).resolve().parent
+            while csc_root.parent != csc_root:  # until root directory
+                if (csc_root / "csc-service.json").exists():
+                    break
+                csc_root = csc_root.parent
+            os.environ['CSC_HOME'] = str(csc_root)
+            self.log(f"[S2S] Set CSC_HOME={csc_root}")
+
         # Restore server state from disk
         self.restore_all(self)
 
@@ -120,6 +131,9 @@ class Server(Service):
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)
         self.s2s_network.start_listener()
+
+        # Start S2S auto-linking thread (maintains links to configured peers)
+        self._start_s2s_autolink()
 
     @property
     def client_registry(self):
@@ -219,6 +233,81 @@ class Server(Service):
                 time.sleep(1)
             if self._running:
                 self._run_cleanup_once()
+
+    def _start_s2s_autolink(self):
+        """Initialize and start the S2S auto-linking thread."""
+        # Load s2s_peers from csc-service.json
+        try:
+            csc_root = Path(os.environ.get('CSC_HOME', '')) or Path(__file__).resolve().parents[6]
+            cfg_path = csc_root / "csc-service.json"
+            if not cfg_path.exists():
+                return
+            import json as _json
+            config = _json.loads(cfg_path.read_text())
+            s2s_peers = config.get("s2s_peers", [])
+            if not s2s_peers:
+                return  # No peers configured
+        except Exception as e:
+            self.log(f"[S2S] Could not load s2s_peers from config: {e}")
+            return
+
+        autolink_thread = threading.Thread(
+            target=self._s2s_autolink_loop,
+            args=(s2s_peers,),
+            daemon=True
+        )
+        autolink_thread.start()
+        self.log(f"[S2S] Started auto-link thread ({len(s2s_peers)} peer(s))")
+
+    def _s2s_autolink_loop(self, peers):
+        """Background thread: maintain S2S links to configured peers."""
+        time.sleep(10)  # let server and S2S listener fully start
+        csc_root = Path(__file__).resolve().parents[4]
+        disconnect_file = csc_root / "DISCONNECT"
+
+        while self._running:
+            try:
+                # Check for DISCONNECT killswitch
+                if disconnect_file.exists():
+                    # DISCONNECT file present — drop all links, wait
+                    for link in list(self.s2s_network._links.values()):
+                        link.close()
+                    self.s2s_network._links.clear()
+                    self.log("[S2S] DISCONNECT file detected — all links dropped")
+                    while disconnect_file.exists() and self._running:
+                        time.sleep(5)
+                    if self._running:
+                        self.log("[S2S] DISCONNECT file removed — resuming auto-link")
+                    continue
+
+                # Check each configured peer
+                for peer in peers:
+                    if not self._running:
+                        break
+                    host = peer.get("host", "")
+                    port = peer.get("port", 9520)
+                    if not host:
+                        continue
+
+                    # Check if already linked to this peer
+                    already_linked = False
+                    for sid, link in self.s2s_network._links.items():
+                        if link._connected and link.remote_host == host:
+                            already_linked = True
+                            break
+
+                    if not already_linked:
+                        self.log(f"[S2S] Auto-linking to {host}:{port}...")
+                        self.s2s_network.link_to(host, port)
+
+            except Exception as e:
+                self.log(f"[S2S] Auto-link error: {e}")
+
+            # Wait before next attempt
+            for _ in range(30):
+                if not self._running:
+                    break
+                time.sleep(1)
 
     def _botserv_log_monitor_loop(self):
         """Background loop for BotServ log monitoring and echoing.

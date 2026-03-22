@@ -146,7 +146,7 @@ class OperMixin:
         """KILL <nick> [:<reason>] -- requires oper 'kill' flag."""
         try:
             nick = self._get_nick(addr)
-            if not self.server.oper_has_flag(nick, "kill"):
+            if not self.server.oper_has_flag(nick, "k"):
                 self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
                                    "KILL :Permission Denied- You do not have the kill flag")
                 return
@@ -183,7 +183,7 @@ class OperMixin:
         """CONNECT <host> <port> [password] -- Initiate S2S link."""
         try:
             nick = self._get_nick(addr)
-            if not self.server.oper_has_flag(nick, "connect"):
+            if not self.server.oper_has_flag(nick, "c"):
                 self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
                                    "Permission Denied- You do not have the connect flag")
                 return
@@ -227,7 +227,7 @@ class OperMixin:
         """SQUIT <server_id> [:<reason>] -- Drop an S2S link."""
         try:
             nick = self._get_nick(addr)
-            if not self.server.oper_has_flag(nick, "squit"):
+            if not self.server.oper_has_flag(nick, "q"):
                 self._send_numeric(addr, ERR_NOPRIVILEGES, nick,
                                    "Permission Denied- You do not have the squit flag")
                 return

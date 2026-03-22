@@ -205,7 +205,8 @@ class Agent( Service ):
             self.put_data( "current_log", None, flush=False )
             self.put_data( "started_at", None )
 
-        self.log( "Agent service initialized." )
+        if os.environ.get('CSC_DEBUG'):
+            self.log( "Agent service initialized." )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -530,17 +531,20 @@ class Agent( Service ):
             file_ops = _get_file_ops()
             if file_ops:
                 file_ops.rename(prompt_path, wip_full_path)
-                self.ftp_announce(f"WO ASSIGN {prompt_path.name} ready/ -> wip/")
+                if hasattr(self, 'ftp_announce'):
+                    self.ftp_announce(f"WO ASSIGN {prompt_path.name} ready/ -> wip/")
                 # Lock the WIP file to suppress S2S sync during agent editing
                 wip_vpath = file_ops.path_to_vpath(wip_full_path)
                 lock_id = None
                 if wip_vpath:
                     lock_id = file_ops.lock(wip_vpath)
-                    self.ftp_announce(f"WO LOCK {wip_full_path.name} id={lock_id}")
+                    if hasattr(self, 'ftp_announce'):
+                        self.ftp_announce(f"WO LOCK {wip_full_path.name} id={lock_id}")
             else:
                 shutil.move(str(prompt_path), str(wip_full_path))
                 lock_id = None
-                self.ftp_announce(f"WO ASSIGN {prompt_path.name} ready/ -> wip/")
+                if hasattr(self, 'ftp_announce'):
+                    self.ftp_announce(f"WO ASSIGN {prompt_path.name} ready/ -> wip/")
             self.log(f"Moved '{prompt_path.name}' to '{wip_full_path.name}'")
 
             # Create metadata for the workorder
