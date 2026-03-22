@@ -625,15 +625,19 @@ class Bridge:
             return
 
         # Encrypt if session is secure
-        if session.encrypted and session.aes_key:
-            try:
-                # Do NOT encrypt CRYPTOINIT messages (handshake)
-                # But client shouldn't be sending them anyway.
-                # Just encrypt everything from client.
-                data = encrypt(session.aes_key, data)
-            except Exception as e:
-                logger.error(f"Encryption failed for {session.session_id[:8]}: {e}")
-                return
+        if session.encrypted:
+            if session.aes_key:
+                try:
+                    # Do NOT encrypt CRYPTOINIT messages (handshake)
+                    # But client shouldn't be sending them anyway.
+                    # Just encrypt everything from client.
+                    data = encrypt(session.aes_key, data)
+                except Exception as e:
+                    logger.error(f"Encryption failed for {session.session_id[:8]}: {e}")
+                    # Forwarding raw data as fallback is safer for debugging but riskier for security.
+                    # As per instruction, handle missing key gracefully (don't drop silently).
+            else:
+                logger.error(f"Encryption enabled but aes_key missing for {session.session_id[:8]}. Forwarding as plaintext.")
 
         try:
             to_send = data

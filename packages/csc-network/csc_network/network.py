@@ -117,7 +117,6 @@ Known Issues:
     - Keepalive interval per-instance, not per-client
 """
 
-import os
 import socket
 import time
 import random
@@ -151,9 +150,9 @@ class Network( Platform ):
         self.last_keepalive = time.time()
         self.clients = {}
         self.keepalive_interval = random.randint( 60, 120 )
+        self._start_time = time.time()
         #print(f"{self.name}->",end=None)
-        if os.environ.get('CSC_DEBUG'):
-            self.log( f"[Network] Initialized for {self.server_addr} (keepalive every {self.keepalive_interval}s)" )
+        self.log( f"[Network] Initialized for {self.server_addr} (keepalive every {self.keepalive_interval}s)" )
 
     def _network_listener(self):
         """
@@ -310,16 +309,16 @@ class Network( Platform ):
 
     def connected_for(self):
         """
-        A placeholder method for subclasses to override.
+        Returns the duration since the network object was initialized.
 
-        - What it does: Intended to be overridden by subclasses to return the
-          duration of the current connection in seconds.
+        - What it does: Calculates the difference between the current time and
+          the time the network object was created.
         - Arguments: None.
         - What calls it: May be called by status reporting or monitoring systems.
-        - What it calls: None.
-        - Returns: A float representing seconds connected (0.0 in base implementation).
+        - What it calls: `time.time()`.
+        - Returns: A float representing seconds since initialization.
         """
-        return 0.0
+        return time.time() - self._start_time
 
 
 if __name__ == '__main__':

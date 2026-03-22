@@ -8,7 +8,7 @@ import time
 import traceback
 import subprocess
 from pathlib import Path
-from .service import Service
+from csc_service_base import Service
 from .server_message_handler import MessageHandler
 from .server_file_handler import FileHandler
 from csc_service.shared.channel import ChannelManager
@@ -120,7 +120,7 @@ class Server(Service):
         self._run_cleanup_once()
 
         # Check S2S certificate before starting federation
-        from csc_service.shared.platform import Platform
+        from csc_platform import Platform
         s2s_ok, s2s_reason = Platform.check_s2s_cert()
         if not s2s_ok:
             self.log(f"[S2S] Certificate check failed: {s2s_reason} — S2S listener will start without TLS")
@@ -757,7 +757,7 @@ class Server(Service):
         except ValueError:
             pass  # signal only works in main thread
 
-        from csc_service.shared.platform import Platform
+        from csc_platform import Platform
         shutdown_file = Platform.PROJECT_ROOT / "SHUTDOWN"
         disconnect_file = Platform.PROJECT_ROOT / "DISCONNECT"
         _disconnect_active = False

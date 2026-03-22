@@ -1,0 +1,92 @@
+CSC-PLATFORM SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-platform/csc_platform.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-platform/csc_platform.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-platform/csc_platform.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-platform/csc_platform.egg-info/requires.txt ──
+# csc-version>=0.1.0
+
+── irc/packages/csc-platform/csc_platform.egg-info/top_level.txt ──
+# csc_platform
+
+── irc/packages/csc-platform/csc_platform/__init__.py ──
+# Independent Platform layer package for the CSC inheritance chain.
+
+── irc/packages/csc-platform/csc_platform/platform.py ──
+# Platform detection layer for the CSC shared package.
+  class _platform:  # Thin shim replacing stdlib platform module to avoid name collision.
+    def machine()
+    def processor()
+    def system()
+    def release()
+    def version()
+    def python_version()
+  class Platform(Version):  # Extends Version with system capability detection and persistence.
+    def __init__(self)
+    def configure_install_mode(self, install_at_startup=False, install_as_needed=False)  # Configure install mode after construction (called by entry points).
+    def _detect_all(self)  # Run all detection routines and populate self.platform_data.
+    def _detect_hardware(self)  # Detect CPU, RAM, disk, architecture.
+    def _detect_cpu_speed(self)  # Detect current/max CPU speed in MHz.
+    def _detect_os(self)  # Detect OS type, version, distribution.
+    def _detect_virtualization(self)  # Detect if running in a VM, container, WSL, or cloud.
+    def _detect_geography(self)  # Detect timezone and locale-based geography.
+    def _detect_time(self)  # Check system time accuracy.
+    def _detect_network(self)  # Detect hostname and IP addresses safely using passive shell commands.
+    def _run_version_cmd(self, binary, args=None)  # Run a command and return version string or None.
+    def _detect_software(self)  # Detect installed software tools and their versions.
+    def _detect_docker(self)  # Detect Docker availability, daemon status, and resources.
+    def _detect_ai_agents(self)  # Detect which AI CLI tools are available in PATH.
+    def _assess_resources(self)  # Assess whether this box can handle Docker + AI workloads.
+    def _detect_runtime(self)  # Detect runtime directories (temp root, agent work base) in both Windows and Linux notations.
+    def agent_temp_root(self)  # Get system temp directory path.
+    def agent_work_base(self)  # Get CSC agent work base directory path.
+    def run_dir(self) -> Path  # Return the absolute path to the run/ directory (PROJECT_ROOT/tmp/run), creating it if needed.
+    def get_etc_dir(cls) -> Path  # Return the persistent config directory (PROJECT_ROOT/etc), creating it if needed.
+    def get_logs_dir(cls) -> Path  # Return the logs directory (PROJECT_ROOT/logs), creating it if needed.
+    def get_tools_dir(cls) -> Path  # Return the tools/ code maps directory (irc/docs/tools), creating it if needed.
+    def get_docs_dir(cls) -> Path  # Return the documentation directory (irc/docs), creating it if needed.
+    def get_wo_dir(cls) -> Path  # Return the workorder pool directory (ops/wo).
+    def get_wip_dir(cls) -> Path  # Return the work-in-progress directory (ops/wo/wip).
+    def get_agents_dir(cls) -> Path  # Return the agents definition/queue directory (ops/agents).
+    def get_agent_context_dir(cls, agent_name: str) -> Path  # Return the context directory for an agent (ops/agents/<name>/context).
+    def get_agent_queue_dir(cls, agent_name: str, queue_type: str='in') -> Path  # Return the queue directory for an agent.
+    def get_roles_dir(cls, role_name: str=None) -> Path  # Return the roles directory or a specific role's directory.
+    def get_tools_lastrun_file(cls) -> Path  # Return the path to tools/.lastrun timestamp file.
+    def get_agent_clone_base(cls) -> Path  # Return the base directory for agent clones (tmp/clones).
+    def get_agent_clone_dir(cls, agent_name: str, wo_stem: str, ts: int) -> Path  # Return the isolated clone directory for an agent+workorder.
+    def get_pki_dir(cls) -> Path  # Return the PKI/EasyRSA directory (etc/easy-rsa).
+    def get_abs_etc_path(self, components) -> str  # Return absolute path under etc/ (platform-native separators).
+    def _get_platform_json_path(self)  # Get the path for platform.json (in etc/).
+    def _persist_platform(self)  # Write platform data to platform.json atomically.
+    def _install_background_services(self)  # Install background service scripts (queue-worker, test-runner) when install-at-startup flag is active.
+    def _setup_windows_services(self)  # Setup Windows Task Scheduler for background services.
+    def _setup_unix_services(self)  # Setup Linux/macOS cron entries for background services.
+    def _setup_android_services(self)  # Setup Android/Termux services (requires manual cron or SystemD user service).
+    def load_platform_json(path=None)  # Load platform.json from disk. Static method for use by services.
+    def get_server_shortname(cls) -> str  # Return this server's unique shortname, generating and persisting it on first call.
+    def has_tool(self, tool_name)  # Check if a software tool is installed.
+    def has_docker(self)  # Check if Docker is usable.
+    def matches_platform(self, required_platforms)  # Check if this system matches one of the required platforms.
+    def has_min_ram(self, min_ram_str)  # Check if system meets minimum RAM requirement.
+    def check_requirements(self, requires=None, platform_list=None, min_ram=None)  # Check if this system satisfies all requirements.
+    def check_s2s_cert(cls, config=None)  # Check the S2S TLS certificate status.
+    def get_backup_dir(cls) -> Path  # Return the backup directory (PROJECT_ROOT/backup), creating it if needed.
+    def refresh_platform(self)  # Re-run all detection and persist.
+    def get_abs_root_path(self, components)  # Return absolute path from PROJECT_ROOT.
+    def get_abs_root_path_forward_slashes(self, components)  # Return absolute path from PROJECT_ROOT with forward slashes (agent-friendly).
+    def get_abs_tmp_path(self, components)  # Return absolute path from TMP directory (PROJECT_ROOT/tmp).
+    def store_path(self, name, path_type, components)  # Store a path reference in platform.json for later retrieval.
+    def load_path(self, name)  # Retrieve a stored path reference.
+    def export_env_paths(self)  # Export critical paths as environment variables.
+  def _parse_size(size_str)  # Parse a human-readable size string to bytes.
+  def _load_env_file()  # Load .env file from CSC_ROOT and export to environment at module import time.
+  def _platform_cli(args=None)  # CLI entry point: csc-platform [subcommand]
+
+── irc/packages/csc-platform/pyproject.toml ──
+# [build-system]

@@ -1,10 +1,9 @@
-import os
 import socket
 import time
 import random
 import threading
 import queue
-from csc_service.shared.platform import Platform
+from csc_platform import Platform
 
 
 class Network( Platform ):
@@ -33,8 +32,7 @@ class Network( Platform ):
         self.clients = {}
         self.keepalive_interval = random.randint( 60, 120 )
         #print(f"{self.name}->",end=None)
-        if os.environ.get('CSC_DEBUG'):
-            self.log( f"[Network] Initialized for {self.server_addr} (keepalive every {self.keepalive_interval}s)" )
+        self.log( f"[Network] Initialized for {self.server_addr} (keepalive every {self.keepalive_interval}s)" )
 
     def _network_listener(self):
         """

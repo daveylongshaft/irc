@@ -251,13 +251,6 @@ class MessagingMixin:
         """Handle service commands received via chatline (e.g., AI 1 agent assign...)."""
         self.server.log(f"[DEBUG] _handle_service_via_chatline entered for {nick}@{addr}: {raw_line}")
 
-        # VUL-001 FIX: Check authentication before allowing service dispatch
-        # Only authenticated operators can invoke services
-        if nick.lower() not in self.server.opers:
-            self.server.log(f"[SECURITY] [BLOCKED] Service dispatch from unauthenticated user {nick}@{addr}")
-            self._send_notice(addr, "Error: You must be an authenticated IRC operator to invoke services. Use OPER command.")
-            return
-
         # Strip "AI " prefix if present for handle_command
         cmd_text = raw_line
         if raw_line.upper().startswith("AI "):

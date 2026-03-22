@@ -1,0 +1,58 @@
+CSC-SERVER-CORE SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-server-core/csc_server_core.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-server-core/csc_server_core.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-server-core/csc_server_core.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-server-core/csc_server_core.egg-info/requires.txt ──
+# csc-service-base>=0.1.0
+
+── irc/packages/csc-server-core/csc_server_core.egg-info/top_level.txt ──
+# csc_server_core
+
+── irc/packages/csc-server-core/csc_server_core/__init__.py ──
+# Independent Server layer package for the CSC inheritance chain.
+
+── irc/packages/csc-server-core/csc_server_core/server.py ──
+  class Server(Service):  # The main UDP server for handling clients, commands, and file operations.
+    def __init__(self, host='0.0.0.0', port=9525, timeout=120)  # Initializes the Server.
+    def client_registry(self)  # Dynamic property that reads client registry from disk.
+    def oper_credentials(self)  # Dynamic property: returns olines dict (v2) for backward compat callers.
+    def opers(self)  # Set of lowercase nicks currently holding any oper status.
+    def active_opers_info(self)  # Dynamic property: returns {nick_lower: {nick, oper_name, flags, class}}.
+    def protect_local_opers(self)  # Whether remote opers without O flag can KILL local opers.
+    def _oper_has_flag(self, nick, flag)  # Return True if nick is an active oper with the given flag.
+    def oper_has_flag(self, nick, flag)  # Public alias for _oper_has_flag (used by message handler).
+    def get_olines(self)  # Return the olines configuration dict.
+    def is_local_oper(self, nick)  # Local oper: any oper flag (o, O, a, A).
+    def is_global_oper(self, nick)  # Global oper: O flag.
+    def is_server_admin(self, nick)  # Server admin: a or A flag.
+    def is_net_admin(self, nick)  # Network admin: A flag.
+    def wakewords(self)  # Dynamic property that reads wakewords from disk on every access.
+    def sync_from_disk(self)  # Reload state from disk ONLY if files have changed.
+    def _cleanup_loop(self)  # Periodic background loop to remove timed-out clients.
+    def _botserv_log_monitor_loop(self)  # Background loop for BotServ log monitoring and echoing.
+    def _syslog_monitor_loop(self)  # Background loop for monitoring syslog and echoing new lines to #syslog.
+    def _run_cleanup_once(self)  # Runs the client cleanup logic once.
+    def _thread_worker(self, data, addr)  # Worker thread to process each incoming packet.
+    def sock_send(self, data, addr)  # Override sock_send to encrypt data if a key is established for addr.
+    def _network_loop(self)  # Background loop for processing all incoming network messages.
+    def broadcast(self, message, exclude=None)  # Sends a message to all active clients.
+    def broadcast_to_channel(self, channel_name, message, exclude=None)  # Send a message to all members of a channel.
+    def send_to_nick(self, nick, message)  # Send a message to a specific nick by looking up their address.
+    def send_wallops(self, message)  # Send a WALLOPS message to all connected IRC operators.
+    def old_broadcast(self, message, exclude=None)  # Sends a message to all active client addresses.
+    def sync_persistent_clients(self)  # Writes the in-memory client registry back to persistent storage.
+    def _persist_session_data(self)  # Persist current session data to separate JSON files atomically.
+    def run(self)  # Starts the server's main network loop and the terminal interface.
+    def _wait_for_shutdown(self)  # Block the main thread until SIGTERM/SIGINT is received or SHUTDOWN file exists.
+    def get_data(self, key)  # Wrapper for persistent data retrieval.
+    def put_data(self, key, value)  # Wrapper for persistent data writes.
+
+── irc/packages/csc-server-core/pyproject.toml ──
+# [build-system]

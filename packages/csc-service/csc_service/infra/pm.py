@@ -51,9 +51,9 @@ jules: Jules = None
 # ---------------------------------------------------------------------------
 AGENTS = [
     # --- Free tier (use first) ---
-    {"name": "gemini-3-flash", "role": "docs-and-tests",
+    {"name": "gemini-2.5-flash", "role": "docs-and-tests",
      "good_for": ["docs", "test-fix", "validation"]},
-    {"name": "gemini-3-pro", "role": "code",
+    {"name": "gemini-2.5-pro", "role": "code",
      "good_for": ["feature", "refactor", "simple-fix", "complex-fix", "pr-review", "pr-reviewer", "audit"]},
     {"name": "chatgpt", "role": "code",
      "good_for": ["feature", "refactor", "complex-fix", "debug", "pr-review", "pr-reviewer", "audit"]},
@@ -70,8 +70,8 @@ VALID_AGENTS = {a["name"] for a in AGENTS}
 # Escalation path: current_agent -> next_agent
 # Free tier first (gemini, chatgpt), then paid (sonnet, opus)
 ESCALATION = {
-    "gemini-3-flash": "gemini-3-pro",
-    "gemini-3-pro": "chatgpt",
+    "gemini-2.5-flash": "gemini-2.5-pro",
+    "gemini-2.5-pro": "chatgpt",
     "chatgpt": "sonnet",
     "sonnet": "opus",
     "opus": None,  # flag for human review
@@ -328,7 +328,7 @@ def pick_agent(category: str, filename: str = "", state_entry: dict = None) -> s
     for agent in AGENTS:
         if category in agent["good_for"]:
             return agent["name"]
-    return "gemini-3-pro"
+    return "gemini-2.5-pro"
 
 
 # ======================================================================
@@ -887,28 +887,18 @@ def run_cycle() -> list:
             assign_to_jules(str(wo_file))
             return [(fname, "jules")]
 
-        preferred_agent = pick_agent(category, fname, entry if entry else None)
+        agent_name = pick_agent(category, fname, entry if entry else None)
 
         try:
             # Use agent_service directly (cross-platform, no subprocess)
             from csc_service.shared.services.agent_service import Agent as AgentService
             _agent_svc = AgentService(None)
 
-            # Find available agent: try preferred, then escalation chain
-            agent_name = preferred_agent
-            attempts_left = 5
-            while attempts_left > 0 and agent_name:
-                sel_result = _agent_svc.select(agent_name)
-                if "Unknown" not in sel_result and "not installed" not in sel_result:
-                    break  # Agent is available
-                agent_name = ESCALATION.get(agent_name)
-                attempts_left -= 1
-
-            if not agent_name or attempts_left == 0:
-                _log(f"No available agents (preferred: {preferred_agent})", "WARN")
+            sel_result = _agent_svc.select(agent_name)
+            if "Unknown" in sel_result or "not installed" in sel_result:
+                _log(f"Failed to select agent {agent_name}: {sel_result}", "WARN")
                 continue
 
-            # Now assign the workorder to the selected agent
             assign_result = _agent_svc.assign(fname)
             if "Cannot assign" in assign_result or "not found" in assign_result:
                 _log(f"Failed to assign {fname}: {assign_result}", "WARN")

@@ -1,7 +1,7 @@
 import os
 import json
 import threading
-from csc_service.shared.log import Log
+from csc_log import Log
 
 class Data(Log):
     """
@@ -10,6 +10,13 @@ class Data(Log):
     This class provides methods for persistent data storage and retrieval
     using simple JSON text files as a backend.
     """
+
+    @property
+    def storage(self):
+        """
+        Returns the in-memory data storage dictionary.
+        """
+        return self._storage
 
     def __init__(self):
         """
@@ -80,7 +87,7 @@ class Data(Log):
         if not self._connected_source:
             self.log( "Error: Not connected to a data source. Use connect() first." )
             return
-        self._storage[key] = value
+        self.storage[key] = value
 
         if flush: self.store_data()
         return True
@@ -101,8 +108,7 @@ class Data(Log):
         except IOError as e:
             self.log( f"Error: Could not save data to {self._connected_source}. Error: {e}" )
 
-        if os.environ.get('CSC_DEBUG'):
-            print( f"Store data successful. saved {len( self._storage )} items to '{source_filename}'." )
+        print( f"Store data successful. saved {len( self._storage )} items to '{source_filename}'." )
         return True
 
     def get_data(self, key: str):
@@ -147,4 +153,3 @@ class Data(Log):
 if __name__ == '__main__':
     data = Data()
     data.run()
-

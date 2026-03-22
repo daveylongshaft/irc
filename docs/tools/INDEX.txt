@@ -1,12 +1,18 @@
 CSC CODE MAP - TABLE OF CONTENTS
 ==================================================
 
-  agents.txt - 211 files
-  automations.txt - 12 files
   bridge.txt - 20 files
-  client.txt - 22 files
-  core.txt - 7 files
-  other.txt - 2482 files
-  server.txt - 19 files
-  sm.txt - 25 files
-  workorders.txt - 85 files
+  client.txt - 25 files
+  csc-data.txt - 10 files
+  csc-log.txt - 8 files
+  csc-network.txt - 8 files
+  csc-platform.txt - 8 files
+  csc-root.txt - 9 files
+  csc-server-core.txt - 8 files
+  csc-service.txt - 180 files
+  csc-service-base.txt - 8 files
+  csc-version.txt - 8 files
+  infra.txt - 13 files
+  other.txt - 8334 files
+  server.txt - 32 files
+  services.txt - 26 files

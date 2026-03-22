@@ -1,0 +1,72 @@
+CSC-DATA SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-data/csc_data.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-data/csc_data.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-data/csc_data.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-data/csc_data.egg-info/requires.txt ──
+# csc-log>=0.1.0
+
+── irc/packages/csc-data/csc_data.egg-info/top_level.txt ──
+# csc_data
+
+── irc/packages/csc-data/csc_data/__init__.py ──
+
+── irc/packages/csc-data/csc_data/_enc_vfs.py ──
+# Encrypted VFS helpers for the csc-data package.
+  class EncryptedVFSStore:  # Tiny adapter around enc-ext-vfs for CSC log/data usage.
+    def __init__(self, csc_root: Path | None=None)
+    def _get_vfs(self)
+    def _normalize(path: str | Path) -> str  # Return the enc pathspec as-is.
+    def exists(self, path: str | Path) -> bool
+    def read_bytes(self, path: str | Path) -> bytes
+    def write_bytes(self, path: str | Path, data: bytes, mime_type: str='application/octet-stream') -> None
+    def read_text(self, path: str | Path) -> str
+    def write_text(self, path: str | Path, data: str) -> None
+    def append_text(self, path: str | Path, text: str) -> None
+    def read_json(self, path: str | Path) -> dict
+    def write_json(self, path: str | Path, data: dict) -> None
+  def find_csc_root(start: Path | None=None) -> Path  # Walk up from `start` (or cwd/this file) until `.csc_root` is found.
+  def get_vfs_store(csc_root: Path | None=None) -> EncryptedVFSStore
+
+── irc/packages/csc-data/csc_data/data/__init__.py ──
+# Data layer: plaintext data store + encrypted VFS log store.
+  class Data(OldData):  # Data backed by plaintext for data files, enc-ext-vfs for logs only.
+    def __init__(self)
+    def _vfs(self)
+    def _safe_error(message: str)
+    def _server_shortname(self) -> str  # Read server short name from csc_root/server_name (cached).
+    def connect(self)  # Always use plaintext storage for data files during VFS testing.
+    def store_data(self)  # Always use plaintext storage for data files during VFS testing.
+    def write_log(self, log_filename: str, log_text: str, requester: str | None=None) -> None  # Append log_text to an encrypted VFS log file.
+    def log(self, message: str, level: str='INFO')  # Write a structured log entry to plain filesystem (not VFS).
+    def _write_runtime(self, line: str)  # Persist runtime feed lines to plain filesystem (not VFS).
+    def _tail_log_file(self, path_or_enc, offset: int=0)  # Read new lines from a log file starting at byte offset.
+    def _tail_vfs_log(self, enc_pathspec: str, offset: int=0)  # Tail an encrypted VFS log file by byte offset into its decoded content.
+
+── irc/packages/csc-data/csc_data/old_data/__init__.py ──
+# Persistent data storage module for the CSC shared package.
+  class Data(Log, ServerData):  # Extends Log + ServerData.  Provides all file-backed persistence.
+    def __init__(self)
+    def _read_json_file(self, path: Path) -> dict  # Read a JSON file from disk.  Returns {} on missing or error.
+    def _write_json_file(self, path: Path, data: dict) -> bool  # Atomically write data as JSON (temp -> fsync -> rename).
+    def _read_text_file(self, path: Path) -> str  # Read a text file from disk. Returns "" on missing or error.
+    def _write_text_file(self, path: Path, data: str) -> bool  # Atomically write text file (temp -> fsync -> rename).
+    def _get_etc_dir(self) -> Path  # Return the etc/ directory via Platform (handles all OS path formats).
+    def _get_run_dir(self) -> Path  # Return the runtime temp directory.
+    def connect(self)  # Connect to source_filename.  No-op if already connected.
+    def init_data(self, source_filename='default')  # Switch the connected data file.  Resets in-memory store.
+    def get_data(self, key: str, default=None)  # Read a key from the in-memory store.
+    def put_data(self, key: str, value, flush=True)  # Write a key to the store and optionally flush to disk.
+    def store_data(self)  # Flush the in-memory store to disk.
+    def run(self)
+  def _get_run_dir() -> Path  # Runtime state directory -- cleared each process start.
+  def _get_etc_dir_static() -> Path  # Resolve etc/ without a class instance: CSC_ETC env -> walk up -> cwd/etc.
+
+── irc/packages/csc-data/pyproject.toml ──
+# [build-system]

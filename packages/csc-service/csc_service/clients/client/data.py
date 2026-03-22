@@ -101,8 +101,7 @@ class Data(Log):
         except IOError as e:
             self.log( f"Error: Could not save data to {self._connected_source}. Error: {e}" )
 
-        if os.environ.get('CSC_DEBUG'):
-            print( f"Store data successful. saved {len( self._storage )} items to '{source_filename}'." )
+        print( f"Store data successful. saved {len( self._storage )} items to '{source_filename}'." )
         return True
 
     def get_data(self, key: str):

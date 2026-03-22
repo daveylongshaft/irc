@@ -1,0 +1,2288 @@
+CSC-SERVICE SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-service/csc_service.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-service/csc_service.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-service/csc_service.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-service/csc_service.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-service/csc_service.egg-info/requires.txt ──
+
+── irc/packages/csc-service/csc_service.egg-info/top_level.txt ──
+# csc_service
+
+── irc/packages/csc-service/csc_service/__init__.py ──
+# CSC Service Package - Multi-AI orchestration platform services.
+
+── irc/packages/csc-service/csc_service/bridge/__init__.py ──
+# CSC Bridge - IRC protocol bridge proxy for CSC ecosystem
+
+── irc/packages/csc-service/csc_service/bridge/bridge.py ──
+# Core bridge orchestrator -- bridges inbound clients to the CSC server.
+  class Bridge:  # Bridges multiple inbound transports to an outbound transport.
+    def __init__(self, inbound_transports: List[InboundTransport], outbound_transport: Optional[OutboundTransport], session_timeout: int=300, encrypt: bool=False, normalize_mode: Optional[str]=None, daemon_mode: bool=False)  # Initialize the bridge with transports and configuration.
+    def start(self)  # Start all transports and background threads.
+    def stop(self)  # Stop all transports, destroy all sessions, and clean up.
+    def _on_client_data(self, data: bytes, client_id: ClientID, inbound: InboundTransport)  # Callback invoked by inbound transports when data arrives from a client.
+    def _create_session(self, client_id: ClientID, inbound: InboundTransport) -> Optional[ClientSession]  # Create a new session for a client.
+    def _handle_disconnect(self, client_id: ClientID)  # Handle a client disconnect event.
+    def _destroy_session(self, session: ClientSession)  # Clean up and destroy a session, closing server connection gracefully.
+    def _sniff_nick(self, session: ClientSession, data: bytes)  # Extract and store the nick from NICK commands in client data.
+    def _forward_to_server(self, session: ClientSession, data: bytes)  # Forward client data to the CSC server with encryption and normalization.
+    def _handle_control_command(self, session: ClientSession, data: bytes)  # Delegate control command handling to the session's control handler.
+    def _forward_to_client(self, session: ClientSession, data: bytes)  # Forward server data back to the client with optional normalization.
+    def _server_listener(self, session: ClientSession)  # Poll server for responses and forward to client (per-session thread).
+    def _keepalive_loop(self)  # Send periodic keepalive PING to idle sessions (background thread).
+    def _cleanup_loop(self)  # Remove sessions that have been idle longer than session_timeout.
+    def session_count(self) -> int  # Return the number of active sessions.
+    def list_sessions(self) -> List[dict]  # Return a list of summary dicts for all active sessions.
+    def get_lobby_sessions(self) -> List[ClientSession]  # Return a list of all sessions currently in the LOBBY state.
+
+── irc/packages/csc-service/csc_service/bridge/bridge_config.example.json ──
+# {
+
+── irc/packages/csc-service/csc_service/bridge/config-local.json ──
+# {
+
+── irc/packages/csc-service/csc_service/bridge/config-remote.json ──
+# {
+
+── irc/packages/csc-service/csc_service/bridge/config.json ──
+# {
+
+── irc/packages/csc-service/csc_service/bridge/control_handler.py ──
+# Control Plane for the Bridge Daemon.
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_ISUPPORT = '005'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_NICKNAMEINUSE = '433'
+  MOTD_TEXT = "\nWelcome to the CSC Bridge Daemon!\n---------------------------------------...
+  class ControlHandler:  # Handles IRC protocol logic for clients in the LOBBY state.
+    def __init__(self, session, bridge)  # Initializes the control handler, storing references to session and bridge, and setting up authentication state.
+    def handle_line(self, line: bytes)  # Processes a raw line from the client, handling authentication, keepalive, and control commands.
+    def _handle_command(self, text)  # Parses and executes /trans commands including connect, history, fav (favorite), and menu.
+    def _subcmd_connect(self, args)  # Handler for 'connect' subcommand.
+    def _subcmd_history(self, args)  # Handler for 'history' subcommand.
+    def _subcmd_fav(self, args)  # Handler for 'fav' subcommand.
+    def _subcmd_menu(self, args)  # Handler for 'menu' subcommand.
+    def _do_connect(self, conn_str)  # Parse connection string and establish upstream connection.
+    def _try_auth(self)  # Attempts authentication once both nick and username are provided, validating against BridgeData.
+    def _send_welcome(self)  # Sends the full IRC welcome sequence including 001-005 and MOTD to the authenticated client.
+    def _send_numeric(self, numeric, text)  # Send a numeric IRC reply to the current client.
+    def send_notice(self, text)  # Send an IRC NOTICE message to the current client.
+    def _send_raw(self, line)  # Send a raw IRC line to the client over the inbound transport.
+    def _broadcast_lobby_message(self, message: str)  # Broadcast a chat message to all other clients in the lobby.
+
+── irc/packages/csc-service/csc_service/bridge/data_bridge.py ──
+# Data persistence for the Bridge Daemon.
+  class BridgeData(Data):  # - What it does: Manages persistent storage for the Bridge Daemon, including
+    def __init__(self)  # Initializes BridgeData by loading bridge_data.json and ensuring the "users" key exists.
+    def create_user(self, username, password)  # Creates a new user account with salted password hash, empty history, favorites, and settings.
+    def validate_user(self, username, password)  # Validates user credentials by comparing the provided password's salted hash against the stored hash.
+    def add_history(self, username, conn_str)  # Adds a connection string to the user's history list, moving it to the top if already present.
+    def get_history(self, username) -> List[str]  # Retrieve the connection history for a user.
+    def set_favorite(self, username, alias, conn_str)  # Stores a connection string under an alias in the user's favorites dictionary.
+    def get_favorite(self, username, alias) -> Optional[str]  # Retrieves a connection string from the user's favorites by alias.
+    def get_favorites(self, username) -> Dict[str, str]  # Retrieves all favorites for a user as a dictionary mapping alias to connection string.
+    def _hash_password(self, password, salt)  # Generates a SHA256 hash of the password concatenated with the salt.
+
+── irc/packages/csc-service/csc_service/bridge/irc.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_WHOISUSER = '311'
+  RPL_WHOISSERVER = '312'
+  RPL_WHOISOPERATOR = '313'
+  RPL_ENDOFWHOIS = '318'
+  RPL_WHOWASUSER = '314'
+  RPL_ENDOFWHOWAS = '369'
+  ERR_WASNOSUCHNICK = '406'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  RPL_UMODEIS = '221'
+  RPL_AWAY = '301'
+  RPL_UNAWAY = '305'
+  RPL_NOWAWAY = '306'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_NOPRIVILEGES = '481'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_UMODEUNKNOWNFLAG = '501'
+  ERR_USERSDONTMATCH = '502'
+  ERR_CHANNELISFULL = '471'
+  ERR_UNKNOWNMODE = '472'
+  ERR_INVITEONLYCHAN = '473'
+  ERR_BADCHANNELKEY = '475'
+  RPL_INVITING = '341'
+  RPL_WHOISCHANNELS = '319'
+  RPL_BANLIST = '367'
+  RPL_ENDOFBANLIST = '368'
+  ERR_BANNEDFROMCHAN = '474'
+  ERR_BANLISTFULL = '478'
+  class IRCMessage:  # Represents a parsed IRC message conforming to RFC 1459/2812 wire format.
+  def parse_irc_message(line: str) -> IRCMessage  # Parses an IRC wire-format line into structured IRCMessage components.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Builds an IRC wire-format string from message components.
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Builds an IRC server numeric reply in standard format.
+
+── irc/packages/csc-service/csc_service/bridge/irc_constants.py ──
+# IRC protocol constants for CSC/RFC normalization.
+  RFC_COMMANDS = {'NICK', 'USER', 'PASS', 'OPER', 'QUIT', 'JOIN', 'PART', 'MODE', 'TOPIC', 'NA...
+  CSC_COMMANDS = {'ISOP', 'BUFFER', 'AI', 'IDENT', 'RENAME', 'CRYPTOINIT'}
+  CSC_TO_RFC_MAP = {'IDENT': 'NICK', 'RENAME': 'NICK'}
+  CSC_ISUPPORT_TOKENS = ['CHANTYPES=#', 'PREFIX=(ov)@+', 'CHANMODES=b,k,l,imnpst', 'NETWORK=CSC-Netwo...
+
+── irc/packages/csc-service/csc_service/bridge/irc_normalizer.py ──
+# Protocol normalization layer for the CSC bridge.
+  class IrcNormalizer:  # Handles stateful normalization of IRC messages between dialects.
+    def __init__(self, mode: str)  # Initializes the normalizer with the specified mode and sets up state tracking for registration progress.
+    def normalize_client_to_server(self, block: str, session) -> Optional[str]  # Normalizes a block of text from client to server, splitting on CR-LF and processing each line.
+    def _normalize_client_line(self, line: str, session) -> Optional[str]  # Normalizes a single IRC line from the client based on the configured mode.
+    def normalize_server_to_client(self, block: str, session) -> Optional[str]  # Normalizes a block of text from server to client, splitting on CR-LF and processing each line.
+    def _normalize_server_line(self, line: str, session) -> Optional[str]  # Normalizes a single IRC line from the server based on the configured mode.
+    def _handle_cap_ls(self, session, msg)  # Handler for CAP LS and CAP LIST subcommands.
+    def _handle_cap_req(self, session, msg)  # Handler for CAP REQ subcommand.
+    def _handle_cap_end(self, session, msg)  # Handler for CAP END subcommand.
+    def _send_notice(self, session, text: str)  # Sends a local NOTICE message to the client using the session's inbound transport.
+    def _send_numeric(self, session, numeric: str, target: str, text: str)  # Sends a local numeric reply to the client using the session's inbound transport.
+    def _send_raw_to_client(self, session, raw_line: str)  # Send raw data back to the client using session.inbound.
+
+── irc/packages/csc-service/csc_service/bridge/irc_utils.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_ISUPPORT = '005'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_UNKNOWNCOMMAND = '421'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_SASLFAIL = '904'
+  class IRCMessage:  # Represents a parsed IRC message conforming to RFC 1459/2812 wire format.
+  def parse_irc_message(line: str) -> IRCMessage  # Parses an IRC wire-format line into structured IRCMessage components.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Builds an IRC wire-format string from message components.
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Builds an IRC server numeric reply in standard format.
+
+── irc/packages/csc-service/csc_service/bridge/main.py ──
+# CSC Bridge Daemon - Entry Point
+  class BridgeLog(Log):
+    def __init__(self)
+  def main()  # Load configuration, create transports, start bridge, and block indefinitely.
+
+── irc/packages/csc-service/csc_service/bridge/session.py ──
+# Client session tracking for the bridge proxy.
+  class ClientSession:  # Tracks state for a single proxied client connection.
+    def touch(self)  # Update last_activity to the current time.
+    def age(self) -> float  # Return the number of seconds since this session was created.
+    def idle(self) -> float  # Return the number of seconds since the last activity on this session.
+
+── irc/packages/csc-service/csc_service/bridge/transports/__init__.py ──
+
+── irc/packages/csc-service/csc_service/bridge/transports/base.py ──
+# Abstract base classes for inbound and outbound transports.
+  class InboundTransport(ABC):  # Accepts connections/datagrams from clients and delivers data to the bridge.
+    def start(self, on_data: Callable[[bytes, ClientID], None]) -> None  # Start listening for client connections/datagrams.
+    def send_to_client(self, client_id: ClientID, data: bytes) -> None  # Send data back to a specific connected client.
+    def stop(self) -> None  # Stop listening, close all client connections, and release resources.
+    def remove_client(self, client_id: ClientID) -> None  # Clean up resources for a specific disconnected client.
+  class OutboundTransport(ABC):  # Sends data upstream to the CSC server on behalf of proxied clients.
+    def create_upstream(self, session_id: str) -> UpstreamHandle  # Create a new upstream connection/socket for a client session.
+    def send(self, handle: UpstreamHandle, data: bytes) -> None  # Send data to the CSC server through a session's upstream handle.
+    def recv(self, handle: UpstreamHandle, timeout: float=1.0) -> Optional[bytes]  # Receive data from the CSC server on a session's upstream handle.
+    def close(self, handle: UpstreamHandle) -> None  # Close an upstream handle and release its resources.
+
+── irc/packages/csc-service/csc_service/bridge/transports/tcp_inbound.py ──
+# TCP inbound transport -- listens for standard IRC clients over TCP.
+  class TCPClientID:  # Identifier for a TCP client connection.
+    def __init__(self, conn: socket.socket, addr: tuple, conn_id: int)  # Initialize a TCP client identifier.
+    def __hash__(self)  # Hash based on connection ID for use as dictionary key.
+    def __eq__(self, other)  # Compare equality based on connection ID.
+    def __repr__(self)  # Return a human-readable representation for logging.
+  class TCPInbound(InboundTransport):  # Accepts TCP connections from IRC clients, line-buffers on \r\n.
+    def __init__(self, host: str='127.0.0.1', port: int=6667)  # Initialize the TCP inbound transport.
+    def start(self, on_data: Callable[[bytes, ClientID], None]) -> None  # Bind the server socket, start listening, and launch the accept thread.
+    def _accept_loop(self)  # Accept loop running on the accept thread.
+    def _handle_client(self, client_id: TCPClientID)  # Read IRC lines from a TCP client, delivering each complete line.
+    def send_to_client(self, client_id: ClientID, data: bytes) -> None  # Send data to a specific connected TCP client.
+    def remove_client(self, client_id: ClientID) -> None  # Remove a client connection and close its socket.
+    def _cleanup_client(self, client_id: TCPClientID)  # Remove a client from tracking and close its socket.
+    def stop(self) -> None  # Stop accepting connections, close all clients, and shut down.
+
+── irc/packages/csc-service/csc_service/bridge/transports/tcp_outbound.py ──
+# TCP outbound transport -- sends data upstream to the CSC server via TCP.
+  class TCPUpstreamHandle:  # Wraps a single TCP connection dedicated to one client session.
+    def __init__(self, sock: socket.socket, server_addr: tuple)  # Initialize the upstream handle with a connected socket.
+    def close(self)  # Close the underlying TCP connection.
+  class TCPOutbound(OutboundTransport):  # Creates per-session TCP connections for forwarding traffic to the CSC server.
+    def __init__(self, server_host: str='127.0.0.1', server_port: int=9525)  # Initialize the TCP outbound transport with the target server address.
+    def create_upstream(self, session_id: str) -> TCPUpstreamHandle  # Establish a new TCP connection to the server for a client session.
+    def send(self, handle: TCPUpstreamHandle, data: bytes) -> None  # Send data to the CSC server through a session's TCP connection.
+    def recv(self, handle: TCPUpstreamHandle, timeout: float=1.0) -> Optional[bytes]  # Receive data from the CSC server on a session's TCP connection.
+    def close(self, handle: TCPUpstreamHandle) -> None  # Close an upstream TCP connection and remove it from tracking.
+
+── irc/packages/csc-service/csc_service/bridge/transports/udp_inbound.py ──
+# UDP inbound transport -- listens for CSC client datagrams.
+  class UDPInbound(InboundTransport):  # Accepts UDP datagrams from CSC clients on a single bound socket.
+    def __init__(self, host: str='127.0.0.1', port: int=9526)  # Initialize the UDP inbound transport.
+    def start(self, on_data: Callable[[bytes, ClientID], None]) -> None  # Bind the socket and start the background listener thread.
+    def _listen_loop(self)  # Main receive loop running on the listener thread.
+    def send_to_client(self, client_id: ClientID, data: bytes) -> None  # Send a datagram back to a specific CSC client.
+    def remove_client(self, client_id: ClientID) -> None  # Remove a client from internal tracking.
+    def stop(self) -> None  # Stop the listener thread and close the UDP socket.
+
+── irc/packages/csc-service/csc_service/bridge/transports/udp_outbound.py ──
+# UDP outbound transport -- sends data upstream to the CSC server.
+  class UDPUpstreamHandle:  # Wraps a single UDP socket dedicated to one client session.
+    def __init__(self, sock: socket.socket, server_addr: tuple)  # Initialize the upstream handle with a socket and server address.
+    def close(self)  # Close the underlying UDP socket.
+  class UDPOutbound(OutboundTransport):  # Creates per-session UDP sockets for forwarding traffic to the CSC server.
+    def __init__(self, server_host: str='127.0.0.1', server_port: int=9525)  # Initialize the UDP outbound transport with the target server address.
+    def create_upstream(self, session_id: str) -> UDPUpstreamHandle  # Create a new UDP upstream socket for a client session.
+    def send(self, handle: UDPUpstreamHandle, data: bytes) -> None  # Send a datagram to the CSC server through a session's upstream socket.
+    def recv(self, handle: UDPUpstreamHandle, timeout: float=1.0) -> Optional[bytes]  # Receive a datagram from the CSC server on a session's upstream socket.
+    def close(self, handle: UDPUpstreamHandle) -> None  # Close an upstream handle and remove it from internal tracking.
+
+── irc/packages/csc-service/csc_service/buffers/chan_crosslink.log ──
+# [2026-03-19 14:35:25] :alice_local PRIVMSG #crosslink :S2S test message from alice
+
+── irc/packages/csc-service/csc_service/buffers/chan_general.log ──
+# [2026-03-12 16:19:51] :testbot4083 PRIVMSG #general :Hello from test client
+
+── irc/packages/csc-service/csc_service/buffers/chan_runtime.log ──
+# [2026-03-17 17:39:34] :davey PRIVMSG #runtime :ai do agent status
+
+── irc/packages/csc-service/csc_service/buffers/chan_s2s_test.log ──
+# [2026-03-19 14:33:05] :alice_local PRIVMSG #s2s_test :Hello from haven.4346 Alice!
+
+── irc/packages/csc-service/csc_service/buffers/chan_t.log ──
+# [2026-03-13 06:12:30] :test_5482 PRIVMSG #t :AI do help
+
+── irc/packages/csc-service/csc_service/buffers/chan_test.log ──
+# [2026-03-13 06:10:35] :bot_20376 PRIVMSG #test :AI do help
+
+── irc/packages/csc-service/csc_service/cli/__init__.py ──
+
+── irc/packages/csc-service/csc_service/cli/commands/__init__.py ──
+
+── irc/packages/csc-service/csc_service/cli/commands/codex_cmd.py ──
+# Codex Cloud commands: submit, status, list, apply, diff.
+  def _find_codex_bin()  # Find the codex CLI binary path (cross-platform).
+  def _run_codex(args, timeout=60, cwd=None)  # Run codex CLI command, return (stdout, stderr, returncode).
+  def _get_csc_root()  # Find CSC project root.
+  def _get_codex_env(config_manager)  # Get the Codex environment label from config.
+  def _get_tracking()  # Load codex task tracking file.
+  def _save_tracking(data)  # Save codex task tracking file.
+  def codex_submit(args, config_manager)  # Submit a workorder to Codex Cloud.
+  def codex_status(args, config_manager)  # Show status of Codex Cloud tasks (tracked ones).
+  def codex_list(args, config_manager)  # List all Codex Cloud tasks (from cloud API).
+  def codex_apply(args, config_manager)  # Apply diffs from a completed Codex Cloud task.
+  def codex_diff(args, config_manager)  # Show the diff for a Codex Cloud task.
+  def codex_login(args, config_manager)  # Check Codex login status or trigger login.
+
+── irc/packages/csc-service/csc_service/cli/commands/config_cmd.py ──
+# Config commands: config get/set, enable, disable, set, dump, import.
+  SERVICE_KEY_MAP = {'queue-worker': 'enable_queue_worker', 'test-runner': 'enable_test_runner', ...
+  def _resolve_key(service, setting)  # Resolve a service+setting to a config key.
+  def enable(args, config_manager)  # Enable a service.
+  def disable(args, config_manager)  # Disable a service.
+  def config(args, config_manager)  # Get or set a config value.
+  def set_value(args, config_manager)  # Set a top-level config value (shorthand).
+  def dump(args, config_manager)  # Export config to stdout as JSON.
+  def import_cmd(args, config_manager)  # Import config from stdin JSON.
+  def _parse_value(s)  # Parse a string value to int, float, bool, or string.
+
+── irc/packages/csc-service/csc_service/cli/commands/pki_cmd.py ──
+# PKI CLI commands: enroll, cert status.
+  def _run_hidden(cmd, **kwargs)  # Run subprocess with hidden window on Windows.
+  def _get_openssl_cmd()  # Return path to openssl executable.
+  def _get_server_shortname()  # Read the server shortname from server_name file or hostname.
+  def _generate_key_and_csr(shortname)  # Generate a private key and CSR using openssl subprocess.
+  def enroll(args, config_manager)  # Enroll this server for a TLS certificate.
+  def cert_status(args, config_manager)  # Show local certificate status.
+
+── irc/packages/csc-service/csc_service/cli/commands/service_cmd.py ──
+# Service lifecycle commands: restart, install, remove, cycle.
+  IS_WINDOWS = os.name == 'nt'
+  UNIT_MAP = {'csc-service': ('csc-service.service', 'user'), 'queue-worker': ('csc-servic...
+  def _install_layered_packages()  # Install all 8 layered packages in dependency order.
+  def _run_hidden(cmd, **kwargs)  # Run subprocess with hidden window on Windows.
+  def _systemctl(scope, *args)
+  def _sc_run(svc_name, action)
+  def _taskkill(pid, force=False)  # Kill a process on Windows.
+  def _do_restart(service, force=False)
+  def restart(args, config_manager)
+  def install(args, config_manager)  # Install layered packages, then enable and start services.
+  def remove(args, config_manager)  # Disable and stop services.
+  def cycle(args, config_manager)  # Run one processing cycle for an in-proc subsystem.
+
+── irc/packages/csc-service/csc_service/cli/commands/status_cmd.py ──
+# Status commands: status, show.
+  IS_WINDOWS = os.name == 'nt'
+  INPROC_SERVICES = {'enable_queue_worker': 'queue-worker', 'enable_test_runner': 'test-runner', ...
+  UNIT_SERVICES = {'server': ('csc-server.service', 'user', 'enable_server'), 'bridge': ('csc-b...
+  PARENT_UNIT = ('csc-service.service', 'user')
+  def _is_pid_alive(pid)  # Check if a process is running.
+  def _get_csc_service_pid()  # Read PID from run/csc-service.pid if it exists and is alive.
+  def _systemd_active(unit, scope='user')  # Return 'active', 'inactive', 'failed', or 'unknown'.
+  def _systemd_pid(unit, scope='user')  # Return MainPID for a systemd unit, or PID from file on Windows.
+  def _windows_service_state(svc_name)
+  def _ss_ports_for_pid(pid)  # Return list of (proto, local_addr) tuples for a PID using ss.
+  def _server_stats()  # Read server state files and return a dict of stats.
+  def _net_info_server(state)  # Return port and stats lines for csc-server.
+  def _net_info_bridge(state)  # Return port info lines for csc-bridge.
+  def _fifo_clients()  # Scan /proc for running csc-client --fifo processes.
+  def status(args, config_manager)  # Show service status — real runtime state from systemd.
+  def _do_status(args, config_manager)
+  def _show_service_status(service, cfg)  # Show status for a single named service.
+  def show(args, config_manager)  # Display service configuration details.
+
+── irc/packages/csc-service/csc_service/cli/csc_ctl.py ──
+# csc-ctl: Cross-platform CLI for managing CSC services.
+  def main()
+
+── irc/packages/csc-service/csc_service/clients/chatgpt/chatgpt.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/clients/claude/claude.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/clients/client/__init__.py ──
+# CSC Human Client module.
+
+── irc/packages/csc-service/csc_service/clients/client/aliases.py ──
+  class Aliases:  # Manages command aliases for the client.
+    def __init__(self, Client)  # Initializes the Aliases class.
+    def add_alias(self, alias_string)  # Adds a new alias or updates an existing one.
+    def remove_alias(self, alias_name)  # Removes an existing alias.
+    def list_aliases(self)  # Returns a formatted string of all defined aliases.
+    def expand_aliases_in_string(self, command_string)  # Repeatedly finds and expands all occurrences of aliases within a
+    def _expand_aliases_single_pass(self, command_string)  # Performs a single pass of alias expansion on a command string.
+    def _count_template_args(self, template)  # Counts the number of unique positional arguments ($1, $2, etc.) and
+    def _expand_single_alias(self, template, args)  # Expands a single alias template with the provided arguments.
+
+── irc/packages/csc-service/csc_service/clients/client/client.py ──
+  class Client(Network):  # UDP client with IRC protocol support, identity, macros, aliases, and text-file uploads.
+    def __init__(self, config_path=None, input_file=None, output_file=None)  # Initializes the instance.
+    def _load_config(self)  # Loads client configuration from JSON, creating defaults as needed.
+    def _save_config(self)  # Saves all client data back to config file.
+    def _disconnect_gracefully(self)  # Send QUIT and close connection.
+    def _connect_to_server(self, host, port)  # Establish new server connection and re-register.
+    def _configure_translator(self, host, port)  # Configure translator proxy and reconnect.
+    def _disable_translator(self)  # Disable translator and connect directly to server.
+    def _add_to_server_history(self, host, port)  # Add server to history (max 3 entries).
+    def _handle_server_command(self, args: str)  # /server <host> [port]
+    def _handle_reconnect_command(self)  # /reconnect
+    def _handle_disconnect_command(self)  # /disconnect
+    def _handle_translator_command(self, args: str)  # /translator <host> <port>  - Configure translator proxy
+    def _handle_status_command(self)  # /status
+    def _handle_ping_command(self)  # /ping
+    def identify(self)  # Send IRC registration sequence: NICK + USER.
+    def _write_to_output(self, text)  # Write text to output_file if set, always also print to stdout.
+    def run(self, interactive=True)  # Starts listener thread and handles input.
+    def _is_fifo(self)  # Return True if input_file is a POSIX FIFO.
+    def _input_loop_file(self)  # Input loop for --infile / --fifo mode.
+    def _input_loop(self)  # Handles blocking user input in a separate thread.
+    def _handle_server_message_data(self, msg_data)  # Decodes and routes a message received from the server.
+    def _handle_irc_line(self, line)  # Parse and handle a single IRC line from the server.
+    def _handle_numeric(self, parsed)  # Handle IRC numeric replies.
+    def _is_authorized(self, nick, channel=None)  # Check if a nick is authorized to command this client.
+    def _handle_privmsg_recv(self, parsed)  # Handle received PRIVMSG, including nick-prefixed command execution.
+    def _handle_local_file_session_line(self, sender_nick, text, target)  # Handle a line during an active local file upload session.
+    def _handle_notice_recv(self, parsed)  # Handle received NOTICE, including ISOP responses and VFS protocol.
+    def _handle_vfs_notice(self, text: str)  # Handle VFS protocol NOTICEs from the server.
+    def _vfs_command(self, args: str)  # Handle /vfs subcommands.
+    def handle_server_message(self, msg: str)  # Legacy handler — prints messages received from the server.
+    def process_command(self, cmd: str)  # Processes user commands with alias/macro expansion.
+    def print_local_help(self)  # Displays available client-side commands.
+    def send_file(self, filepath: str)  # Sends a text file to the server as PRIVMSG to current channel.
+
+── irc/packages/csc-service/csc_service/clients/client/client_file_handler.py ──
+  class ClientFileHandler:  # Handles file uploads sent TO this client from other users.
+    def __init__(self, client)
+    def has_active_session(self, nick)
+    def start_session(self, addr_or_nick, line)  # Begins a new upload session from a <begin file="..."> or <append file="..."> tag.
+    def process_chunk(self, addr_or_nick, line)  # Buffers a line of text for an active upload session.
+    def complete_session(self, addr_or_nick)  # Completes the session, versions if needed, and writes to disk.
+    def abort_session(self, addr_or_nick)  # Aborts an in-progress upload session.
+
+── irc/packages/csc-service/csc_service/clients/client/client_service_handler.py ──
+  class ClientServiceHandler:  # Handles local service execution for the client.
+    def __init__(self, client)
+    def execute(self, cmd_text, nick)  # Parses and executes an AI command locally.
+    def _handle_builtin(self, method, args)  # Handles core built-in services.
+    def _handle_plugin(self, plugin_name_raw, method_name, args)  # Mirror of server/service.py dynamic loading logic.
+    def get_help(self)
+
+── irc/packages/csc-service/csc_service/clients/client/data.py ──
+  class Data(Log):  # Extends the log class.
+    def __init__(self)  # Initializes the Data class.
+    def connect(self)  # Connects to a data source file.
+    def put_data(self, key: str, value, flush=True)  # Stores a key-value pair and saves the entire data store to file.
+    def store_data(self)  # Persists the current data to the storage backend.
+    def get_data(self, key: str)  # Retrieves a value from the in-memory data store.
+    def init_data(self, source_filename='default')  # Initializes or re-initializes the data object for a subclass instance.
+    def run(self)  # Main execution method.
+
+── irc/packages/csc-service/csc_service/clients/client/irc.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_CHANOPRIVSNEEDED = '482'
+  class IRCMessage:  # Parsed IRC message.
+  def parse_irc_message(line: str) -> IRCMessage  # Parse an IRC wire-format line into an IRCMessage.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Build an IRC wire-format string (without trailing \r\n).
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Build a numeric reply line.
+
+── irc/packages/csc-service/csc_service/clients/client/log.py ──
+  class Log(Root):  # Extends the root class.
+    def __init__(self, server=None)  # Initializes the Log class.
+    def log(self, message: str)  # Logs a message to the central project log file and prints to console.
+    def help(self)  # Displays base help information for the class.
+    def test(self)  # Runs a base self-test for the class.
+
+── irc/packages/csc-service/csc_service/clients/client/macros.py ──
+  class Macros(Log):  # Manages command macros for the client.
+    def __init__(self, data_object)  # Initializes the Macros class.
+    def add_macro(self, macro_string)  # Adds a new macro or updates an existing one.
+    def remove_macro(self, macro_name)  # Removes an existing macro.
+    def list_macros(self)  # Returns a formatted string of all defined macros.
+    def expand_macro(self, command_name)  # Expands a macro into a sequence of command strings.
+
+── irc/packages/csc-service/csc_service/clients/client/main.py ──
+  def main()
+
+── irc/packages/csc-service/csc_service/clients/client/network.py ──
+  class Network(Version):
+    def __init__(self, host='127.0.0.1', port=9525, name='network')  # Initializes the Network class.
+    def _network_listener(self)  # Listens for all incoming data and filters keepalives.
+    def start_listener(self)  # Starts the background network listener thread.
+    def get_message(self)  # Gets one message tuple (bytes, addr) from the buffer.
+    def send(self, message)  # Send a message to the server, encoding if necessary.
+    def sock_send(self, data, addr)  # Sends data in chunks, handling both string and bytes types safely.
+    def maybe_send_keepalive(self)  # Sends a periodic keep-alive packet silently.
+    def close(self)  # Cleanly close the network socket and stop the listener thread.
+    def connected_for(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-service/csc_service/clients/client/root.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  class Root:  # The first and lowest class in the project's inheritance hierarchy.
+    def __init__(self)  # Initializes the Root class.
+    def get_command_keyword(self)  # Returns the system command keyword.
+    def run(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-service/csc_service/clients/client/secret.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  def get_gemini_api_key()  # Retrieves the Gemini API key.
+  def get_claude_api_key()  # Retrieves the Claude API key.
+  def get_known_core_files()  # Returns a list of known core files.
+  def load_initial_core_file_context() -> str  # Loads content of key core files to provide initial context to Gemini.
+  def get_system_instructions(initial_file_context: str) -> str  # Returns the system instructions.
+
+── irc/packages/csc-service/csc_service/clients/client/version.py ──
+  class Version(Data):  # Extends the Data class.
+    def __init__(self)  # Initializes the Version class.
+    def get_version_dir_for_file(self, filepath: str) -> Path  # Generates a unique version history directory for a given file.
+    def _get_version_info(self, file_backup_dir: Path) -> dict  # Reads version metadata from the 'versions.json' file for a specific file.
+    def _write_version_info(self, file_backup_dir: Path, version_info: dict)  # Writes updated version info back to the metadata file.
+    def restore_version(self, filepath: str, version: str='latest')  # Restores a file to a specific version from its backup history.
+    def create_new_version(self, filepath: str)  # Creates a new, sequentially numbered version of a file.
+
+── irc/packages/csc-service/csc_service/clients/dmrbot/dmrbot.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/clients/gemini/gemini.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/clients/jules/__init__.py ──
+
+── irc/packages/csc-service/csc_service/clients/jules/config.py ──
+# Jules configuration - reads from csc-service.json.
+  class JulesConfig:  # Jules configuration loaded from csc-service.json.
+    def __init__(self, config_path=None)
+    def enabled(self)
+    def api_key_path(self)
+    def max_concurrent_sessions(self)
+    def auto_approve_plans(self)
+    def github_repo(self)
+    def github_branch(self)
+
+── irc/packages/csc-service/csc_service/clients/jules/jules.py ──
+# Jules client for workorder execution via Jules REST API.
+  JULES_API_BASE = 'https://jules.googleapis.com/v1alpha'
+  class Jules(Log):  # Jules API client for autonomous coding tasks via REST API.
+    def __init__(self)
+    def _load_api_key(self) -> str  # Load Jules API key from config file.
+    def _api_headers(self) -> dict  # Build API request headers.
+    def submit_workorder(self, workorder_path: str, repo_url: str) -> str  # Submit workorder to Jules via REST API, return session ID.
+    def _create_session(self, prompt: str, repo_url: str) -> str  # Create Jules session via REST API.
+    def check_status(self, session_id: str) -> dict  # Check session status via REST API.
+    def list_sessions(self) -> list  # List all sessions via REST API.
+    def get_results(self, session_id: str) -> dict  # Get session activities/results via REST API.
+    def approve_plan(self, session_id: str) -> bool  # Approve a pending plan via REST API.
+    def send_message(self, session_id: str, message: str) -> bool  # Send a message to an active session.
+    def cancel_session(self, session_id: str) -> bool  # Cancel active session (not directly supported, send cancel message).
+
+── irc/packages/csc-service/csc_service/clients/julius/__init__.py ──
+
+── irc/packages/csc-service/csc_service/clients/julius/julius.py ──
+# Julius client — queue/check Jules plans for autonomous plan-review.
+  class Julius(Data):  # Client for queuing and checking Jules plan review decisions.
+    def __init__(self, csc_root: str=None) -> None  # Initialize Julius client with paths.
+    def _initialize_paths(self, csc_root: str=None) -> None  # Resolve CSC root and plan-review queue directories.
+    def submit_plan_for_review(self, session_id: str, plan_content: str) -> bool  # Queue a Jules plan for review by the plan-review agent.
+    def check_plan_approval(self, session_id: str) -> dict | None  # Check if a plan has been reviewed and return the decision.
+
+── irc/packages/csc-service/csc_service/config.py ──
+  class ConfigManager:
+    def __init__(self, config_file=None)
+    def _resolve_config_path(self, config_file)
+    def load_config(self)
+    def save_config(self)
+    def get_value(self, key)
+    def set_value(self, key, value)
+    def get_service_config(self, service_name)
+    def get_all_services_config(self)
+
+── irc/packages/csc-service/csc_service/ftpd/__init__.py ──
+# csc-ftpd: Distributed FTP daemon (drftpd-style).
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_authorizer.py ──
+# pyftpdlib authorizer: authenticates FTP clients from ftpd_users.json.
+  class FtpAuthorizer(DummyAuthorizer):  # Authenticates FTP clients from a JSON users file.
+    def __init__(self, users_path, default_home='/')  # Initialize the authorizer.
+    def load_users(self)  # (Re)load users from the JSON file.
+    def validate_authentication(self, username, password, handler)  # Override to provide better error messages.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_config.py ──
+# FTP daemon configuration loader.
+  class FtpConfig:  # Load/validate ftpd config from csc-service.json.
+    def __init__(self, config_dict=None, csc_root=None)  # Initialize from a dict or by loading from disk.
+    def _find_csc_root(self)  # Find project root: CSC_HOME env, then cwd, then walk up.
+    def _load_from_disk(self)  # Load the ftpd section from csc-service.json.
+    def _load_tls_paths(self)  # Load S2S TLS cert paths from csc-service.json (top-level keys).
+    def is_master(self)
+    def is_slave(self)
+    def passive_range(self)  # Return (low, high) tuple for passive port range.
+    def has_tls(self)  # Check if TLS certs are configured.
+    def validate(self)  # Validate config. Returns (ok, reason).
+    def __repr__(self)
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_data_server.py ──
+# TCP data server for S2S file transfers.
+  TRANSFER_BUFSIZE = 65536
+  CONNECT_TIMEOUT = 10
+  ACCEPT_TIMEOUT = 60
+  DATA_PORT_BASE = 9541
+  class FtpDataServer:  # TCP data channel for a single file transfer.
+    def __init__(self, serve_root, bind_host='0.0.0.0')
+    def _alloc_port(self)  # Allocate the next available data port.
+    def vpath_to_local(self, vpath)  # Convert virtual path to local filesystem path.
+    def serve_file(self, vpath, callback_port=None)  # Open a TCP listener and wait for one connection to pull the file.
+    def pull_file(self, vpath, source_host, source_port)  # Connect to a remote source and pull a file.
+    def push_file(self, vpath, target_host, target_port)  # Connect OUT to a receiver's listener and push a file.
+    def accept_and_recv(self, vpath, callback_port=None)  # Open a TCP listener and wait for source to connect and push file.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_file_ops.py ──
+# High-level file operations that integrate with FTP slave and S2S bridge.
+  class FtpFileOps:  # File operations with FTP slave + S2S bridge integration.
+    def __init__(self, slave=None, bridge=None, announce=None)
+    def rename(self, old_path, new_path)  # Rename a file and notify S2S peers.
+    def lock(self, vpath, lock_id=None, ttl=7200)  # Lock a file to suppress sync during edits.
+    def unlock(self, vpath, lock_id)  # Unlock a file, allowing sync to resume.
+    def path_to_vpath(self, path)  # Convert an absolute path to a virtual path relative to serve_root.
+    def _file_md5(path, chunk_size=65536)  # Compute MD5 hash of a file.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_handler.py ──
+# pyftpdlib FTPHandler subclass for the master.
+  RELAY_BUFSIZE = 65536
+  class FtpHandler(FTPHandler):  # FTP handler with slave-routed transfers.
+    def ftp_RETR(self, file)  # Handle RETR: download a file from a slave.
+    def ftp_STOR(self, file, mode='w')  # Handle STOR: upload a file to a slave.
+    def ftp_DELE(self, path)  # Handle DELE: delete a file from all slaves that hold it.
+    def ftp_RNFR(self, path)  # Handle RNFR: rename-from (first half of two-step rename).
+    def ftp_RNTO(self, path)  # Handle RNTO: rename-to (second half of two-step rename).
+    def ftp_SIZE(self, path)  # Handle SIZE: return file size from index.
+    def ftp_MDTM(self, path)  # Handle MDTM: return file modification time from index.
+    def _resolve_vpath(self, ftppath)  # Resolve an FTP path to a virtual path.
+    def _create_relay_listener(self)  # Create a TCP listener socket for relay on the passive port range.
+    def _open_data_channel(self)  # Open the pyftpdlib data channel to the FTP client.
+    def _close_data_channel(self)  # Close the pyftpdlib data channel.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_master.py ──
+# Master FTP daemon.
+  class FtpMaster:  # Master daemon: TLS listener for slaves + pyftpdlib FTP server.
+    def __init__(self, config)  # Initialize the master.
+    def start(self)  # Start both the slave listener and FTP server in daemon threads.
+    def stop(self)  # Signal shutdown.
+    def get_slave(self, slave_id)  # Get a slave connection by ID.
+    def pick_slave_for_upload(self)  # Pick the best slave for an upload (most free disk space).
+    def on_slave_disconnect(self, slave_id)  # Called when a slave disconnects.
+    def on_transfer_complete(self, transfer_id, slave_id, success, nbytes, error)  # Called when a slave reports transfer completion.
+    def _run_slave_listener(self)  # Accept TLS connections from slaves on the control port.
+    def _handle_slave_connect(self, raw_conn, addr, ctx)  # Handle a new slave connection: TLS handshake + REGISTER.
+    def _run_ftp_server(self)  # Run the pyftpdlib FTP server for clients.
+    def _build_ssl_context(self)  # Build SSL context for slave listener (mTLS).
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_master_index.py ──
+# Virtual file index for the FTP master.
+  class FtpMasterIndex:  # Virtual file index: maps vpath -> slave(s) + file metadata.
+    def __init__(self, index_path)  # Initialize the index.
+    def _load(self)  # Load index from disk if it exists.
+    def _persist(self)  # Atomically write index to disk (temp + rename).
+    def update_from_inventory(self, slave_id, files)  # Replace all entries for a slave with a full inventory.
+    def apply_delta(self, slave_id, added=None, removed=None, modified=None)  # Apply incremental inventory changes for a slave.
+    def rename_entry(self, old_vpath, new_vpath)  # Atomically rename an index entry from old_vpath to new_vpath.
+    def remove_slave(self, slave_id)  # Remove all entries for a disconnected slave.
+    def lookup(self, vpath)  # Look up which slave(s) hold a file.
+    def pick_slave(self, vpath)  # Pick the best slave for a file download (most recent mtime).
+    def list_dir(self, vdir)  # List files and subdirectories under a virtual directory.
+    def all_paths(self)  # Return all virtual paths in the index.
+    def _normalize_path(path)  # Normalize a virtual path: ensure leading /, no trailing /, forward slashes.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_protocol.py ──
+# Master-slave JSON-over-TLS wire protocol.
+  class FtpProtocol:  # Wire protocol constants and serialization for master-slave comms.
+    def encode(cmd, **kwargs)  # Encode a protocol message as newline-terminated bytes.
+    def decode(data)  # Decode a single protocol message from bytes or str.
+    def make_register(slave_id, serve_root, capacity_bytes)  # Build a REGISTER message.
+    def make_register_ack(accepted, master_id, reason='')  # Build a REGISTER_ACK message.
+    def make_inventory(files)  # Build an INVENTORY message.
+    def make_inventory_delta(added=None, removed=None, modified=None)  # Build an INVENTORY_DELTA message.
+    def make_heartbeat(disk_free, active_transfers, load_avg)  # Build a HEARTBEAT message.
+    def make_transfer_complete(transfer_id, bytes_transferred, success, error='')  # Build a TRANSFER_COMPLETE message.
+    def make_send_file(transfer_id, path, client_host, client_port)  # Build a SEND_FILE command (master -> slave, for RETR).
+    def make_recv_file(transfer_id, path, client_host, client_port)  # Build a RECV_FILE command (master -> slave, for STOR).
+    def make_mirror_file(transfer_id, path, target_slave_id, target_host)  # Build a MIRROR_FILE command (master -> slave, for FXP).
+    def make_delete_file(path)  # Build a DELETE_FILE command.
+    def make_rename_file(path, new_path)  # Build a RENAME_FILE command.
+    def make_lock_file(path, lock_id, ttl)  # Build a LOCK_FILE command.
+    def make_unlock_file(path, lock_id)  # Build an UNLOCK_FILE command.
+    def make_inventory_request()  # Build an INVENTORY_REQUEST command.
+    def recv_line(sock)  # Read one newline-terminated message from a socket.
+    def send_msg(sock, data)  # Send pre-encoded message bytes over a socket.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_s2s_bridge.py ──
+# Bridge between FTPD and S2S for slave-to-slave file sync.
+  DEDUP_TTL = 300
+  INVENTORY_CHUNK_SIZE = 500
+  _BUILTIN_EXCLUDES = ['.git/**', '.gitignore', '.gitmodules', '.trash/**', '.claude/**', '**/*.pyc...
+  class FtpS2sBridge:  # Bridge between the local FTPD slave and the S2S network.
+    def __init__(self, slave, s2s_network, advertise_host=None)  # Initialize the bridge.
+    def _detect_host(self)  # Detect the local IP to advertise to peers.
+    def _load_manifest(self)  # Load the manifest from disk, or return empty dict.
+    def _save_manifest(self)  # Atomic-write the manifest to disk (tmp + rename).
+    def _update_manifest(self, vpath, md5, size, mtime)  # Update a single entry in the manifest and persist.
+    def _is_seen(self, md5, vpath)  # Check if we already have this exact file version.
+    def _mark_seen(self, md5, vpath)  # Record that we have this file version.
+    def _prune_seen(self)  # Remove expired entries from seen set.
+    def notify_file_changed(self, vpath, size, md5)  # Called when a local file is created or modified.
+    def notify_files_changed(self, file_infos)  # Batch notify for multiple file changes.
+    def handle_syncfile(self, link, rest)  # Handle incoming SYNCFILE: try to pull the file via TCP.
+    def handle_rsyncfile(self, link, rest)  # Handle incoming RSYNCFILE: receiver wants us to push the file.
+    def handle_syncfile_ack(self, link, rest)  # Handle incoming SYNCFILE_ACK: transfer confirmed.
+    def _request_reverse(self, xfer_id, vpath, size, md5)  # Open a listener and send RSYNCFILE asking source to push.
+    def _cascade(self, vpath, size, md5)  # Re-broadcast SYNCFILE so further peers can pull from us.
+    def send_inventory(self, link)  # Send our manifest to a peer as chunked SYNCINVENTORY messages.
+    def handle_syncinventory(self, link, rest)  # Handle incoming SYNCINVENTORY: reassemble chunks, then reconcile.
+    def _reconcile(self, link, remote_entries)  # Compare remote inventory against local manifest, pull newer files.
+    def _request_file_from_peer(self, link, vpath, size, md5)  # Request a specific file from a peer via SYNCFILE mechanism.
+    def notify_file_renamed(self, old_vpath, new_vpath, size, md5, mtime)  # Broadcast SYNCRENAME to all peers after a local rename.
+    def handle_syncrename(self, link, rest)  # Handle incoming SYNCRENAME: rename local file atomically.
+    def lock_file(self, vpath, lock_id, ttl=7200)  # Lock a file on the local slave.
+    def unlock_file(self, vpath, lock_id)  # Unlock a file on the local slave.
+    def cleanup(self)  # Prune expired dedup entries and stale pending transfers.
+  def _load_s2s_ignore(serve_root)  # Load ignore patterns from .s2s-ignore in serve_root.
+  def _is_excluded(vpath, patterns)  # Check if a virtual path matches any exclude pattern.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_slave.py ──
+# Slave FTP daemon.
+  class FtpSlave:  # Slave daemon: TLS connection to master, inventory, fs watcher, heartbeat.
+    def __init__(self, config)  # Initialize the slave.
+    def start(self)  # Start the slave in daemon threads (connect + heartbeat + watcher).
+    def stop(self)  # Signal shutdown.
+    def send_to_master(self, data)  # Send a pre-encoded protocol message to the master.
+    def schedule_inventory_delta(self)  # Signal that a filesystem change needs to be reported.
+    def set_s2s_bridge(self, bridge)  # Attach an FtpS2sBridge for peer-to-peer file sync.
+    def set_announce_callback(self, cb)  # Set a callback for announcing FTP operations to IRC.
+    def _run_connection(self)  # Main connection loop: connect, register, process commands.
+    def _connect_and_register(self)  # Establish TLS connection to master and send REGISTER.
+    def _command_loop(self)  # Process commands from master until disconnect.
+    def _handle_command(self, msg)  # Dispatch a command from the master.
+    def _send_inventory(self)  # Scan serve_root and send full inventory to master.
+    def _scan_files(self)  # Scan serve_root and return list of file metadata dicts.
+    def _file_md5(path, chunk_size=65536)  # Compute MD5 hash of a file.
+    def _run_heartbeat(self)  # Send periodic heartbeat to master.
+    def _run_fs_watcher(self)  # Watch serve_root for changes and send inventory deltas.
+    def _build_snapshot(self, root)  # Build a {vpath: file_info} snapshot of serve_root.
+    def lock_file(self, vpath, lock_id, ttl=7200)  # Lock a file to suppress sync during edits.
+    def unlock_file(self, vpath, lock_id)  # Unlock a file, allowing sync to resume.
+    def is_locked(self, vpath)  # Check if a file is currently locked (with TTL expiry cleanup).
+    def _get_slave_id(self)  # Determine slave ID from Platform or hostname.
+    def _get_disk_capacity(self)  # Get total disk capacity of serve_root in bytes.
+    def _get_disk_free(self)  # Get free disk space of serve_root in bytes.
+    def _get_load_avg(self)  # Get system load average (1-minute).
+    def _build_ssl_context(self)  # Build SSL context for connecting to master (mTLS).
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_slave_connection.py ──
+# Master-side representation of one connected slave.
+  class FtpSlaveConnection:  # Master-side: represents one connected slave.
+    def __init__(self, sock, addr, slave_id, master)  # Initialize a slave connection.
+    def start(self)  # Start the background reader thread for this slave.
+    def _read_loop(self)  # Continuously read protocol messages from the slave.
+    def _handle_message(self, msg)  # Dispatch an incoming protocol message from the slave.
+    def send_command(self, data)  # Send a pre-encoded command to this slave.
+    def request_inventory(self)  # Ask this slave to send a full inventory rescan.
+    def send_file(self, transfer_id, path, client_host, client_port)  # Instruct the slave to send (RETR) a file.
+    def recv_file(self, transfer_id, path, client_host, client_port)  # Instruct the slave to receive (STOR) a file.
+    def mirror_file(self, transfer_id, path, target_slave_id, target_host)  # Instruct the slave to mirror a file to another slave.
+    def delete_file(self, path)  # Instruct the slave to delete a file.
+    def rename_file(self, path, new_path)  # Instruct the slave to rename a file.
+    def lock_file(self, path, lock_id, ttl)  # Instruct the slave to lock a file.
+    def unlock_file(self, path, lock_id)  # Instruct the slave to unlock a file.
+    def disconnect(self)  # Close the connection and clean up.
+    def uptime(self)
+    def __repr__(self)
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_slave_transfer.py ──
+# Slave-side data transfer handler.
+  TRANSFER_BUFSIZE = 65536
+  class FtpSlaveTransfer:  # Slave-side: handles individual data transfers.
+    def __init__(self, slave)  # Initialize the transfer handler.
+    def active_count(self)  # Number of currently active transfers.
+    def handle_send_file(self, transfer_id, path, client_host, client_port)  # Handle SEND_FILE: read local file, stream to relay.
+    def handle_recv_file(self, transfer_id, path, client_host, client_port)  # Handle RECV_FILE: receive data from relay, write to local disk.
+    def _do_send(self, transfer_id, vpath, relay_host, relay_port)  # Send a local file to the master relay socket.
+    def _do_recv(self, transfer_id, vpath, relay_host, relay_port)  # Receive a file from the master relay socket and write to disk.
+    def _finish_transfer(self, transfer_id, total, success, error)  # Report transfer completion to master and clean up.
+    def _vpath_to_local(self, vpath)  # Convert a virtual path to a local filesystem path.
+    def delete_file(self, vpath)  # Delete a local file by virtual path.
+    def rename_file(self, vpath, new_vpath)  # Rename a local file by virtual path.
+
+── irc/packages/csc-service/csc_service/ftpd/ftp_virtual_fs.py ──
+# pyftpdlib AbstractedFS: presents merged namespace from FtpMasterIndex.
+  class FtpVirtualFs(AbstractedFS):  # Virtual filesystem backed by FtpMasterIndex.
+    def __init__(self, root, cmd_channel)  # Initialize the virtual FS.
+    def root(self)
+    def root(self, value)
+    def cwd(self)
+    def cwd(self, path)
+    def ftp2fs(self, ftppath)  # Convert FTP path to internal virtual path.
+    def fs2ftp(self, fspath)  # Convert internal path back to FTP path.
+    def validpath(self, path)  # Check if path is valid (always True in virtual FS).
+    def isfile(self, path)  # Check if virtual path is a file.
+    def isdir(self, path)  # Check if virtual path is a directory.
+    def islink(self, path)
+    def lexists(self, path)
+    def getsize(self, path)  # Get file size from index metadata.
+    def getmtime(self, path)  # Get file modification time from index metadata.
+    def chdir(self, path)  # Change current working directory.
+    def mkdir(self, path)  # Directories are implicit in virtual FS -- no-op.
+    def rmdir(self, path)  # Cannot remove virtual directories directly.
+    def remove(self, path)  # Remove is handled via slave dispatch, not here.
+    def rename(self, src, dst)  # Rename not supported in virtual FS.
+    def chmod(self, path, mode)
+    def stat(self, path)  # Return a stat-like object for the virtual path.
+    def lstat(self, path)
+    def listdir(self, path)  # List directory contents.
+    def listdirinfo(self, path)  # List directory with full info (for LIST command).
+    def format_list(self, basedir, listing, ignore_err=True)  # Yield directory listing lines for LIST command (Unix ls -l style).
+    def format_mlsx(self, basedir, listing, perms, facts, ignore_err=True)  # Yield directory listing lines for MLSD/MLST commands.
+    def open(self, filename, mode)  # Open is intercepted by FtpHandler -- should not reach here.
+    def _resolve(self, path)  # Resolve a path relative to cwd.
+    def _normalize(path)  # Normalize a virtual path.
+  class _VirtualStat:  # Minimal stat-like object for virtual files.
+    def __init__(self, size=0, mtime=0, is_dir=False)
+    def __getitem__(self, idx)  # Support tuple-style access (os.stat_result compatibility).
+
+── irc/packages/csc-service/csc_service/infra/codex_monitor.py ──
+# Codex Monitor — submit workorders to OpenAI Codex Cloud and track results.
+  def _log(msg, level='INFO')  # Print timestamped log message.
+  def _runtime(msg)  # Write to runtime.log for #runtime IRC feed.
+  def setup(csc_root=None)  # Initialize module paths.
+  def _load_tracking()  # Load task tracking data from disk.
+  def _save_tracking(data)  # Save task tracking data to disk.
+  def _find_codex_bin()  # Find the codex CLI binary path.
+  def _run_codex_cmd(args, timeout=60)  # Run a codex CLI command, return (stdout, stderr, returncode).
+  def submit_workorder(workorder_filename)  # Submit a workorder to Codex Cloud.
+  def _parse_task_id(output)  # Extract task ID from codex cloud exec output.
+  def poll_tasks()  # Poll Codex Cloud for task status updates.
+  def _git_run(args, cwd=None)  # Run a git command, return (stdout, stderr, returncode).
+  def _commit_and_push(workorder_filename, task_id)  # Commit applied diffs and push to origin.
+  def handle_completed_task(task_id)  # Handle a completed Codex task — apply diffs, commit, push, move WO to done.
+  def handle_failed_task(task_id)  # Handle a failed Codex task — move workorder back to ready.
+  def run_cycle(work_dir=None)  # Entry point called by service main loop.
+
+── irc/packages/csc-service/csc_service/infra/git_sync.py ──
+# Git sync: pull before cycle, push after changes.
+  WORK_DIR = None
+  def setup(work_dir: Path)
+  def _git(*args)  # Run a git command in WORK_DIR. Returns (ok, output).
+  def pull()  # Pull latest changes. Returns True on success.
+  def push_if_changed()  # Stage workorders + logs, commit and push if there are changes.
+
+── irc/packages/csc-service/csc_service/infra/jules_monitor.py ──
+# Jules Monitoring & Approval Service — automated feedback loop.
+  JULES_API_BASE = 'https://jules.googleapis.com/v1alpha'
+  class JulesMonitor(Data):  # Monitor Jules sessions, validate plans, send feedback autonomously.
+    def __init__(self, csc_root: str=None)  # Initialize JulesMonitor with paths and API config.
+    def _initialize_paths(self, csc_root: str=None) -> None  # Resolve CSC root directory.
+    def _load_api_key(self) -> str  # Load Jules API key from environment or .env file.
+    def _load_config(self) -> None  # Load Jules config from csc-service.json.
+    def _api_headers(self) -> dict  # Build API request headers.
+    def _list_sessions(self) -> list  # GET /v1alpha/sessions — list all active sessions.
+    def _get_session(self, session_id: str) -> dict  # GET /v1alpha/sessions/{session_id} — fetch session details.
+    def _send_feedback(self, session_id: str, decision: dict) -> bool  # POST /v1alpha/sessions/{session_id}:sendMessage — send feedback.
+    def _validate_plan(self, plan: str, session: dict) -> dict  # Check plan text against CSC coding standards.
+    def _handle_awaiting_feedback(self, session: dict) -> None  # Process a session in AWAITING_USER_FEEDBACK state.
+    def _monitor_execution(self, session: dict) -> None  # Track IN_PROGRESS / EXECUTING sessions.
+    def _handle_completion(self, session: dict) -> None  # Process a completed session — log results, extract PR URL.
+    def _handle_failure(self, session: dict) -> None  # Process a failed session — log error.
+    def run_cycle(self) -> None  # Poll Jules sessions and handle each based on state.
+  def run_cycle(csc_root: str=None) -> None  # Entry point called by service main loop.
+
+── irc/packages/csc-service/csc_service/infra/plan_review.py ──
+# Autonomous plan review agent service.
+  class PlanReviewer(Data):  # Review Jules plans autonomously using an AI subprocess.
+    def __init__(self, csc_root: str=None) -> None  # Initialize PlanReviewer with paths.
+    def _initialize_paths(self, csc_root: str=None) -> None  # Resolve CSC root and queue directories.
+    def _ensure_dirs(self) -> None  # Create queue directories if they do not exist.
+    def _load_state(self) -> dict  # Load agent metrics from state.json.
+    def _save_state(self, state: dict) -> None  # Persist agent metrics to state.json.
+    def _parse_decision(self, ai_output: str) -> dict  # Extract approval decision JSON from AI output.
+    def _review_plan(self, plan_file: Path) -> None  # Review a single plan file and write decision to queue/out/.
+    def run_cycle(self) -> None  # Poll queue/in/ for pending plans and review each one.
+  def run_cycle(csc_root: str=None) -> None  # Entry point called by service main loop.
+
+── irc/packages/csc-service/csc_service/infra/pm.py ──
+# Project Manager: rule-based workorder classification, assignment, and lifecycle.
+  WORK_DIR = None
+  STATE_FILE = None
+  AGENTS_DIR = None
+  READY_DIR = None
+  WIP_DIR = None
+  DONE_DIR = None
+  AGENTS = [{'name': 'gemini-2.5-flash', 'role': 'docs-and-tests', 'good_for': ['docs', ...
+  VALID_AGENTS = {a['name'] for a in AGENTS}
+  ESCALATION = {'gemini-2.5-flash': 'gemini-2.5-pro', 'gemini-2.5-pro': 'chatgpt', 'chatgpt'...
+  MAX_ATTEMPTS = 3
+  ORPHAN_TIMEOUT_SECS = 120
+  VALID_CATEGORIES = {'push-fail', 'test-fix', 'simple-fix', 'docs', 'audit', 'debug', 'refactor',...
+  VALID_PRIORITIES = {'P0', 'P1', 'P2', 'P3'}
+  PRIORITY_ORDER = {'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3}
+  def _ts()
+  def _log(msg, level='INFO')
+  def setup(work_dir: Path)
+  def _load_state() -> dict  # Load PM state from disk.
+  def _save_state(state: dict)
+  def classify(filename: str) -> str  # Classify workorder. Front-matter 'role:' wins; filename patterns are fallback.
+  def prioritize(filename: str) -> str  # Assign priority tier based on filename pattern.
+  def detect_agent_prefix(filename: str)  # Check if filename starts with an agent name (human override).
+  def _read_frontmatter(filename: str) -> dict  # Parse YAML front-matter from a workorder. Returns dict of key→value (strings).
+  def _read_frontmatter_agent(filename: str) -> str  # Read the 'agent:' field from front-matter. Returns '' if absent.
+  def pick_agent(category: str, filename: str='', state_entry: dict=None) -> str  # Pick agent, respecting: front-matter > filename prefix > escalation > policy default.
+  def _pid_alive(pid: int) -> bool  # Check if a process is still running.
+  def _clean_stale_queue_entry(queue_dir: Path, label: str)  # Remove all files from a queue directory (stale cleanup).
+  def is_queue_busy() -> bool  # Check if any agent currently has work in progress.
+  def recover_orphaned_wip() -> list  # Find WIP files that have no matching queue entry and recover them.
+  def cleanup_stale_state(state: dict) -> dict  # Remove state entries for workorders that no longer exist anywhere.
+  def create_fix_workorder(title: str, description: str)  # Create a workorder in ready/ for a problem the PM detected but can't fix.
+  def mark_completed(filename: str)  # Mark a workorder as completed in PM state.
+  def mark_failed(filename: str)  # Record a failure for a workorder that bounced back to ready/.
+  def _is_jules_task(workorder_path: str) -> bool  # Check if workorder has explicit 'agent: jules' in frontmatter.
+  def jules_available() -> bool  # Check if Jules has capacity.
+  def assign_to_jules(workorder_path: str)  # Assign workorder to Jules.
+  def _monitor_jules_sessions()  # Check on active Jules sessions, retrieve results.
+  def monitor_julius_plans() -> None  # Check pending Jules plans and forward approval decisions.
+  def run_cycle() -> list  # One PM cycle. Assigns at most ONE workorder.
+
+── irc/packages/csc-service/csc_service/infra/pr_review.py ──
+# PR Review & Auto-Merge Agent - integrated into service polling loop.
+  class PRReviewer(Data):
+    def __init__(self, csc_root=None)
+    def _initialize_paths(self, csc_root=None)
+    def run_cycle(self)  # Run PR review cycle by calling autonomous bash script.
+  def run_cycle(csc_root=None)  # Entry point called by service main loop.
+
+── irc/packages/csc-service/csc_service/infra/queue_worker.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/infra/queue_worker.py ──
+# Queue Worker: Full lifecycle manager for AI agent prompt execution.
+  SCRIPT_DIR = Path(__file__).resolve().parent
+  CSC_ROOT = None
+  AGENTS_DIR = None
+  PROMPTS_BASE = None
+  READY_DIR = None
+  WIP_DIR = None
+  DONE_DIR = None
+  LOGS_DIR = None
+  AGENT_DATA_FILE = None
+  PENDING_FILE = None
+  AGENT_EXECUTOR = None
+  API_KEY_MGR = None
+  QUEUE_LOG = None
+  STALE_FILE = None
+  STALE_THRESHOLD = 10
+  AGENT_MAX_TOTAL_RUNTIME_SECONDS = 3600
+  ACTIVE_PROCS = {}
+  IS_WINDOWS = os.name == 'nt'
+  KNOWN_AGENTS = {'claude', 'claude-batch', 'haiku', 'sonnet', 'opus', 'gemini', 'gemini-2.5-f...
+  LOCAL_AGENTS = {'qwen', 'deepseek', 'codellama'}
+  DMR_ENDPOINT = 'http://localhost:12434/engines/v1'
+  def _initialize_paths(work_dir_arg=None)
+  def get_agent_temp_repo(agent_name)  # Get the agent's temp repo path: CSC_ROOT/tmp/<agent>/repo.
+  def _get_irc_remote()  # Derive irc.git remote URL from csc.git origin (swap /csc.git -> /irc.git).
+  def ensure_agent_temp_repo(agent_name)  # Ensure agent's temp repo exists and is a valid git clone of irc.git.
+  def create_agent_temp_repo(agent_name, wo_stem)  # Create a unique temp repo for this agent+WO combination.
+  def git_pull_in_repo(repo_path, label='')  # Run git pull in the specified repo path.
+  def defer_git_sync() -> bool  # When enabled, skip per-workorder git sync and defer to batch orchestrator.
+  def git_commit_push_in_repo(repo_path, message, label='')  # Stage all, commit, push in the specified repo path.
+  def handle_push_success(agent_repo)  # Delete agent temp repo after successful push.
+  def handle_push_failure(agent_name, agent_repo, error_msg)  # Create push-fail workorder when git push fails.
+  def agent_queue_dir(agent_name, dir_type)  # Return path to an agent's queue directory (in, work, out).
+  def write_agent_data(agent_name, pid, prompt_filename, log_path)  # Write agent tracking data through Data() hierarchy so `agent status` works.
+  def clear_agent_data()  # Clear agent tracking data through Data() hierarchy after agent finishes.
+  def load_pending_list()  # Load the pending work list through Data() hierarchy. Returns [] if empty.
+  def save_pending_list(items)  # Save the pending work list through Data() hierarchy.
+  def scan_pending_work()  # Scan all agents' queue/in/ directories for orders.md files.
+  def log(msg, level='INFO')
+  def _runtime(msg)  # Write to runtime.log for #runtime IRC feed.
+  def load_env()  # Load .env file into os.environ (don't override existing).
+  def git_pull()
+  def git_commit_push(message)  # Stage all, commit with message, push.
+  def refresh_maps()  # Run refresh-maps --quick before committing.
+  def is_pid_alive(pid)  # Check if a process is still running using Popen.poll().
+  def is_complete_marker(content: str) -> bool  # Check if content ends with COMPLETE marker on its own line.
+  def mark_incomplete(wip_path) -> None  # Add INCOMPLETE marker to a workorder file if not already marked.
+  def find_cagent()  # Find the cagent binary.
+  def get_wip_summary(prompt_filename, max_lines=15)  # Get last N lines of WIP file for commit message.
+  def get_wip_size(prompt_filename)  # Get WIP file size in bytes, or -1 if missing.
+  def get_agent_started_at()  # Get the started_at timestamp from agent_data.json.
+  def get_agent_current_log_path()  # Get the path to the agent's current log file from agent_data.json.
+  def load_stale_state()
+  def save_stale_state(state)
+  def _inject_template_vars(orders_content, agent_name, clone_rel_path, wip_rel_path)  # Replace template placeholders in orders.md content.
+  def _build_agent_cmd(agent_name, orders_path, clone_path)  # Build the command to spawn an agent.
+  def process_finished_work(agent_name, prompt_filename, return_code, agent_log, clone_path)  # Process a finished workorder.
+  def process_inbox()  # Process one workorder from the pending work list (FIFO).
+  def _cycle_pm()  # Trigger a PM cycle to process completed workorders.
+  def run_cycle(work_dir_arg=None)  # Run one complete queue-worker cycle (event-driven).
+  def main()
+
+── irc/packages/csc-service/csc_service/infra/test_runner.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/infra/test_runner.py ──
+# Test Runner: Polls for tests missing logs and runs them automatically.
+  SCRIPT_DIR = Path(__file__).resolve().parent
+  IRC_ROOT = _p
+  CSC_ROOT = IRC_ROOT.parent
+  POLL_INTERVAL = 60
+  TEST_DIR = IRC_ROOT / 'tests'
+  LOG_DIR = TEST_DIR / 'logs'
+  TEMPLATE = TEST_DIR / 'prompt_template.md'
+  PLATFORM_TEMPLATE = TEST_DIR / 'platform_skip_template.md'
+  PROMPT_DIR = CSC_ROOT / 'ops' / 'wo' / 'ready'
+  LOGS_DIR = CSC_ROOT / 'ops' / 'logs'
+  RUNNER_LOG = LOGS_DIR / 'test-runner.log'
+  def _setup_work_root(irc_root)  # Redirect all paths to an isolated irc clone.
+  def log(msg, level='INFO')
+  def _fill_template(template_path, replacements)
+  def find_test_files()
+  def run_one_test(test_file)  # Run a single test. Returns: skipped | passed | failed | platform_skip | error
+  def run_cycle(work_dir_arg=None)  # Run one polling cycle. Called from main.py loop.
+  def _generate_fix_prompt(basename, failed_lines)
+  def _generate_platform_prompt(basename, skip_lines)
+  def main()
+
+── irc/packages/csc-service/csc_service/infra/webhook_listener.py ──
+# GitHub Webhook Listener for csc-csc-agent PR review automation.
+  CSC_ROOT = Path(os.environ.get('CSC_ROOT', str(_find_csc_root())))
+  class WebhookHandler(BaseHTTPRequestHandler):  # Minimal HTTP handler for GitHub webhook deliveries.
+    def log_message(self, fmt, *args)
+    def do_POST(self)
+    def do_GET(self)
+    def _respond(self, code: int, body: str) -> None
+  class WebhookServer:  # Wraps HTTPServer with config loading and graceful shutdown.
+    def __init__(self, host: str='127.0.0.1', port: int=5000)
+    def start(self) -> None
+    def stop(self) -> None
+  def _find_csc_root() -> Path  # Walk up from this file to find the project root (contains CLAUDE.md).
+  def _load_env(csc_root: Path) -> None  # Load .env file from csc_root if it exists (simple KEY=VALUE parser).
+  def _get_webhook_secret() -> bytes
+  def _verify_signature(payload: bytes, sig_header: str, secret: bytes) -> bool  # Return True if the X-Hub-Signature-256 header matches the payload HMAC.
+  def _trigger_pr_review(repo: str, pr_number: int, branch: str, pr_url: str) -> None  # Spawn bin/pr-review-agent.sh in a background thread.
+  def main() -> None
+
+── irc/packages/csc-service/csc_service/infra/wo_sync_client.py ──
+# wo_sync_client.py — Slave-side sync client for ops/wo/.
+  class WoSyncClient:  # Slave-side sync client: compares filelist hash, downloads deltas.
+    def __init__(self, wo_dir: str, ftp_master_host: str, ftp_master_port: int=9521, ftp_user: str='csc-node', ftp_password: str='', poll_interval_s: int=30)
+    def sync(self) -> bool  # Perform one sync cycle.  Returns True if files were updated.
+    def run(self) -> None  # Run continuously, syncing every poll_interval_s.  Blocks.
+    def stop(self) -> None  # Signal run() to exit on next iteration.
+    def _connect(self) -> ftplib.FTP_TLS
+    def _fetch_remote_hash(self, ftp: ftplib.FTP_TLS) -> Optional[str]  # Download wo/.filelist.hash from master.  Returns hash string or None.
+    def _fetch_remote_listing(self, ftp: ftplib.FTP_TLS) -> Dict[str, Tuple[int, str]]  # Return {rel_path: (size, mtime_str)} from master's wo/ directory.
+    def _parse_list_line(self, line: str, prefix: str, listing: Dict[str, Tuple[int, str]]) -> None  # Parse one LIST line and recurse into subdirectories (not implemented here
+    def _fetch_mlsd_listing(self, ftp: ftplib.FTP_TLS, remote_dir: str='wo') -> Dict[str, int]  # Return {rel_path: size} using MLSD (RFC 3659), recursing into subdirs.
+    def _download_file(self, ftp: ftplib.FTP_TLS, rel_path: str) -> None  # Download wo/<rel_path> from master into local wo_dir.
+    def _local_sizes(self) -> Dict[str, int]  # Return {rel_path: size} for all local files under wo_dir.
+    def _do_sync(self, ftp: ftplib.FTP_TLS) -> bool  # Core sync logic.  Returns True if any files were downloaded.
+
+── irc/packages/csc-service/csc_service/infra/wo_watcher.py ──
+# wo_watcher.py — Filesystem watcher for ops/wo/.
+  class WoWatcher:  # Monitors ops/wo/ and pushes changes through the FTP master.
+    def __init__(self, wo_dir: str, ftp_master_host: str, ftp_master_port: int=9521, ftp_user: str='csc-node', ftp_password: str='', debounce_ms: int=500, poll_interval_s: int=5, on_change_hook: Optional[Callable[[str], None]]=None)
+    def start(self) -> None  # Start watching. Blocks until stop() is called.
+    def stop(self) -> None  # Signal the watcher to stop.
+    def on_change(self, changed_path: str) -> None  # Called when any file in ops/wo/ changes.  Schedules debounced push.
+    def on_delete(self, deleted_path: str) -> None  # Called when a file is deleted from ops/wo/.
+    def _reschedule_debounce(self) -> None  # (Re-)schedule the debounce timer.  Must be called with self._lock held.
+    def _flush(self) -> None  # Push accumulated changes to the FTP master.
+    def _start_inotify(self) -> None  # Use inotify_simple if available, else fall back to poll.
+    def _run_inotify_simple(self, inotify_simple) -> None  # Block on inotify events until stop() is called.
+    def _start_watchdog_or_poll(self) -> None  # Use watchdog if available, otherwise fall back to polling.
+    def _build_snapshot(self) -> Dict[str, tuple]  # Return {rel_path: (size, mtime)} for all files under wo_dir.
+    def _start_poll_loop(self) -> None  # Block, polling every poll_interval_s until stop() is called.
+  def compute_filelist_hash(wo_dir: Path) -> str  # Return SHA-256 of sorted 'relpath:size:mtime' entries under wo_dir.
+  def _ftp_push_file(ftp: ftplib.FTP_TLS, local_path: Path, remote_path: str) -> None  # Upload local_path to remote_path on the FTP connection.
+  def _ftp_delete_file(ftp: ftplib.FTP_TLS, remote_path: str) -> None  # Delete remote_path on the FTP connection.
+  def _connect_ftp(host: str, port: int, user: str, password: str) -> ftplib.FTP_TLS  # Open an authenticated FTP_TLS connection.
+
+── irc/packages/csc-service/csc_service/installer/__init__.py ──
+# Installer helpers for CSC package deployment and migration.
+  def __getattr__(name)
+
+── irc/packages/csc-service/csc_service/installer/layer_packages.py ──
+# Cross-platform install planning for the layered CSC core packages.
+  LEGACY_IMPORT_MAP = {legacy: spec.replacement_import for spec in LAYER_PACKAGE_ORDER for legacy i...
+  class LayerPackageSpec:  # Metadata for one independently installable layer package.
+    def package_dir(self, repo_root: Path) -> Path
+  def _walk_for_repo_root(start: Path) -> Path
+  def resolve_repo_root() -> Path  # Resolve this checkout's repo root.
+  def build_install_plan(repo_root: Path | None=None) -> list[dict]  # Return structured install metadata in dependency order.
+  def _quote_for_shell(path: Path, shell: str) -> str
+  def build_install_commands(repo_root: Path | None=None, python_executable: str='python', editable: bool=True, shell: str='bash') -> list[str]  # Build ordered pip install commands for all layered packages.
+  def build_uninstall_commands(python_executable: str='python') -> list[str]  # Build reverse-order uninstall commands for all layered packages.
+  def render_install_plan(repo_root: Path | None=None, python_executable: str='python', shell: str='bash') -> str  # Render a human-readable integration plan for control-app usage.
+  def _parse_args(argv: Sequence[str] | None=None)
+  def main(argv: Sequence[str] | None=None) -> int
+
+── irc/packages/csc-service/csc_service/main.py ──
+# csc-service: unified service manager for CSC.
+  def main()
+
+── irc/packages/csc-service/csc_service/pki/__init__.py ──
+# PKI certificate enrollment subsystem for CSC S2S TLS links.
+
+── irc/packages/csc-service/csc_service/pki/enrollment_server.py ──
+# PKI enrollment WSGI server.
+  _SHORTNAME_RE = re.compile('^[a-z0-9][a-z0-9.\\-]{0,62}[a-z0-9]$')
+  EASYRSA_DIR = Platform.PROJECT_ROOT / 'etc' / 'easy-rsa'
+  EASYRSA_BIN = EASYRSA_DIR / ('easyrsa.bat' if os.name == 'nt' else 'easyrsa')
+  PKI_DIR = EASYRSA_DIR / 'pki'
+  CA_CRT = PKI_DIR / 'ca.crt'
+  CRL_PEM = PKI_DIR / 'crl.pem'
+  ISSUED_DIR = PKI_DIR / 'issued'
+  TOKEN_FILE = plat.run_dir / 'pki_tokens.json'
+  APPROVED_FILE = Path('/opt/csc/irc/etc/approved_servers.json')
+  PKI_LOG = Platform.get_logs_dir() / 'pki.log'
+  CERT_DIR = Platform.get_etc_dir()
+  TOKEN_TTL = 86400
+  BIND_HOST = '127.0.0.1'
+  BIND_PORT = 9530
+  class PKIRequestHandler(BaseHTTPRequestHandler):  # HTTP request handler for PKI enrollment endpoints.
+    def log_message(self, format, *args)  # Suppress default HTTP logging — we use PKI log instead.
+    def _send_json(self, code, data)  # Send a JSON response.
+    def _send_file(self, path, content_type='application/x-pem-file')  # Send a file as response.
+    def _read_body(self)  # Read and parse JSON request body.
+    def do_GET(self)  # Handle GET requests.
+    def do_POST(self)  # Handle POST requests.
+    def _handle_enroll(self)  # Handle certificate enrollment request.
+    def _handle_renew(self)  # Handle certificate renewal via mTLS.
+  def _load_approved()  # Load approved server list from repo-tracked JSON. Returns dict shortname → metadata.
+  def _load_tokens()  # Load token store from disk.
+  def _save_tokens(tokens)  # Atomically save token store.
+  def _write_pki_log(message)  # Append a timestamped entry to the PKI log.
+  def _sign_csr(shortname, csr_pem)  # Import CSR and sign it with EasyRSA. Returns cert chain PEM or raises.
+  def run_server(host=BIND_HOST, port=BIND_PORT)  # Start the PKI enrollment HTTP server.
+
+── irc/packages/csc-service/csc_service/pki/main.py ──
+# PKI subsystem entry point.
+  def start()  # Start the PKI enrollment server in a daemon thread.
+  def is_alive()  # Check if the PKI thread is running.
+
+── irc/packages/csc-service/csc_service/server/__init__.py ──
+
+── irc/packages/csc-service/csc_service/server/channel.py ──
+# Channel and ChannelManager for IRC-style channel support.
+  class Channel:  # Represents a single IRC channel.
+    def __init__(self, name: str)  # Initializes the instance.
+    def add_member(self, nick: str, addr: tuple, modes: Optional[Set[str]]=None)  # Add a member to the channel.
+    def remove_member(self, nick: str)  # Remove a member from the channel.
+    def has_member(self, nick: str) -> bool  # Check if nick is in this channel.
+    def get_names_list(self) -> str  # Return space-separated names list with @/+ prefix for ops/voiced.
+    def member_count(self) -> int  # Returns the number of members in the channel.
+    def is_op(self, nick: str) -> bool  # Check if nick has channel operator mode.
+    def has_voice(self, nick: str) -> bool  # Check if nick has voice (+v) mode.
+    def can_speak(self, nick: str) -> bool  # Check if nick can send messages to this channel.
+    def can_set_topic(self, nick: str) -> bool  # Check if nick can set the channel topic.
+  class ChannelManager:  # Manages all channels on the server. Now thread-safe.
+    def __init__(self)  # Initializes the instance.
+    def ensure_channel(self, name: str) -> Channel  # Create channel if it doesn't exist, return it.
+    def get_channel(self, name: str) -> Optional[Channel]  # Get channel by name, or None.
+    def remove_channel(self, name: str) -> bool  # Remove a channel. Cannot remove the default channel.
+    def list_channels(self) -> List[Channel]  # Return all channels.
+    def find_channels_for_nick(self, nick: str) -> List[Channel]  # Find all channels a nick is a member of.
+    def remove_nick_from_all(self, nick: str) -> List[str]  # Remove a nick from all channels. Returns list of channel names they were in.
+
+── irc/packages/csc-service/csc_service/server/client.py ──
+  class Client(Network):  # UDP client with IRC protocol support, identity, macros, aliases, and text-file uploads.
+    def __init__(self, config_path=None)  # Initializes the instance.
+    def _load_config(self)  # Loads client configuration from JSON, creating defaults as needed.
+    def _save_config(self)  # Saves all client data back to config file.
+    def command_server(self, args: str)  # /server <ip> [port]
+    def identify(self)  # Send IRC registration sequence: NICK + USER.
+    def run(self)  # Starts listener thread and handles input.
+    def _input_loop(self)  # Handles blocking user input in a separate thread.
+    def _handle_server_message_data(self, msg_data)  # Decodes and routes a message received from the server.
+    def _handle_irc_line(self, line)  # Parse and handle a single IRC line from the server.
+    def _handle_numeric(self, parsed)  # Handle IRC numeric replies.
+    def _handle_privmsg_recv(self, parsed)  # Handle received PRIVMSG.
+    def _handle_notice_recv(self, parsed)  # Handle received NOTICE.
+    def handle_server_message(self, msg: str)  # Legacy handler — prints messages received from the server.
+    def process_command(self, cmd: str)  # Processes user commands with alias/macro expansion.
+    def print_local_help(self)  # Displays available client-side commands.
+    def send_file(self, filepath: str)  # Sends a text file to the server as PRIVMSG to current channel.
+
+── irc/packages/csc-service/csc_service/server/collision_resolver.py ──
+# Nick collision resolution for S2S-linked IRC servers.
+  def detect_collision(nick, local_nicks, remote_nicks)  # Check if a nick exists in both local and remote user sets.
+  def resolve_collision(nick, server_a_id, server_b_id, local_connect_time=0, remote_connect_time=0)  # Determine which server's user wins and generate a new nick for the loser.
+
+── irc/packages/csc-service/csc_service/server/data.py ──
+  class Data(Log):  # Extends the log class.
+    def __init__(self)  # Initializes the Data class.
+    def connect(self)  # Connects to a data source file.
+    def put_data(self, key: str, value, flush=True)  # Stores a key-value pair and saves the entire data store to file.
+    def store_data(self)  # Persists the current data to the storage backend.
+    def get_data(self, key: str)  # Retrieves a value from the in-memory data store.
+    def init_data(self, source_filename='default')  # Initializes or re-initializes the data object for a subclass instance.
+    def run(self)  # Main execution method.
+
+── irc/packages/csc-service/csc_service/server/handlers/__init__.py ──
+# Handler mixins for server_message_handler.py.
+
+── irc/packages/csc-service/csc_service/server/handlers/botserv.py ──
+# BotServ handlers: ADD, DEL, LIST, SETLOG.
+  NICK_RE = re.compile('^[A-Za-z\\[\\]\\\\`_^{|}][A-Za-z0-9\\[\\]\\\\`_^{|}\\-]*$')
+  class BotServMixin:  # Handles BotServ commands.
+    def _handle_botserv(self, msg, addr)  # Handle PRIVMSG BotServ :COMMAND args -- virtual BotServ service.
+    def _botserv_setlog(self, args, addr)  # SETLOG <botnick> <#chan> <log_file> [enable/disable]
+    def _botserv_add(self, args, addr)  # ADD <botnick> <#chan> <password>
+    def _botserv_del(self, args, addr)  # DEL <botnick> <#chan>
+    def _botserv_list(self, args, addr)  # LIST [#chan]
+    def _botserv_notice(self, addr, text)  # Send a NOTICE from BotServ to a client.
+
+── irc/packages/csc-service/csc_service/server/handlers/channel.py ──
+# Channel handlers: JOIN, PART, TOPIC, INVITE, NAMES, LIST.
+  class ChannelMixin:  # Handles JOIN, PART, TOPIC, INVITE, NAMES, LIST commands.
+    def _handle_join(self, msg, addr)  # JOIN <channel>[,<channel>...]
+    def _handle_part(self, msg, addr)  # PART <channel>[,<channel>...] [:<reason>]
+    def _handle_topic(self, msg, addr)  # TOPIC <channel> [:<new topic>]
+    def _handle_invite(self, msg, addr)  # INVITE <nick> <channel>
+    def _handle_names(self, msg, addr)  # NAMES [<channel>]
+    def _handle_list(self, msg, addr)  # LIST -- list all channels.
+
+── irc/packages/csc-service/csc_service/server/handlers/chanserv.py ──
+# ChanServ handlers: REGISTER, SET, OP, DEOP, VOICE, DEVOICE, BAN, UNBAN, INFO, LIST.
+  class ChanServMixin:  # Handles ChanServ commands.
+    def _handle_chanserv(self, msg, addr)  # Handle PRIVMSG ChanServ :COMMAND args -- virtual ChanServ service.
+    def _chanserv_set(self, args, addr)  # SET <#chan> <option> <on/off>
+    def _chanserv_register(self, args, addr)  # REGISTER <#chan> <topic>
+    def _chanserv_op(self, args, addr)  # OP <#chan> <nick>
+    def _chanserv_deop(self, args, addr)  # DEOP <#chan> <nick>
+    def _chanserv_voice(self, args, addr)  # VOICE <#chan> <nick>
+    def _chanserv_devoice(self, args, addr)  # DEVOICE <#chan> <nick>
+    def _chanserv_ban(self, args, addr)  # BAN <#chan> <mask>
+    def _chanserv_unban(self, args, addr)  # UNBAN <#chan> <mask>
+    def _chanserv_info(self, args, addr)  # INFO <#chan>
+    def _chanserv_list(self, args, addr)  # LIST
+    def _chanserv_notice(self, addr, text)  # Send a NOTICE from ChanServ to a client.
+
+── irc/packages/csc-service/csc_service/server/handlers/info.py ──
+# Info/query handlers: WHO, WHOIS, WHOWAS, MOTD, HELP, LOCALCONFIG, ISOP.
+  class InfoMixin:  # Handles WHO, WHOIS, WHOWAS, MOTD, HELP, LOCALCONFIG, ISOP.
+    def _handle_who(self, msg, addr)  # WHO <channel> -- basic WHO reply.
+    def _handle_whois(self, msg, addr)  # WHOIS <nick> -- return information about a user per RFC 2812.
+    def _handle_whowas(self, msg, addr)  # WHOWAS <nick> -- return information about a disconnected user.
+    def _handle_motd(self, msg, addr)  # MOTD -- send the message of the day.
+    def _send_motd(self, addr, nick)  # Send MOTD as 375/372/376 numerics.
+    def _handle_isop(self, msg, addr)  # ISOP <nick> -- returns whether nick is an IRC operator.
+    def _handle_help(self, msg, addr)  # HELP -- show available commands based on caller's oper flags.
+    def _handle_localconfig(self, msg, addr)  # LOCALCONFIG <show|list|get|set|del> [key] [value]
+
+── irc/packages/csc-service/csc_service/server/handlers/messaging.py ──
+# Messaging handlers: PRIVMSG, NOTICE, wakeword filtering, buffer replay.
+  class MessagingMixin:  # Handles PRIVMSG, NOTICE, wakeword filtering, AI command routing, buffer replay.
+    def _handle_privmsg(self, msg, addr)  # PRIVMSG <target> :<text>
+    def _handle_notice(self, msg, addr)  # NOTICE <target> :<text> -- same as PRIVMSG but no auto-reply expected.
+    def _handle_wakeword(self, msg, addr)  # WAKEWORD ENABLE|DISABLE - Toggle wakeword-based message filtering for this client.
+    def _should_forward_to_client(self, recipient_addr, message_text, sender_nick)  # Check whether a PRIVMSG should be forwarded to a specific recipient.
+    def _broadcast_privmsg_filtered(self, channel, out_msg, message_text, sender_nick, exclude=None)  # Broadcast a PRIVMSG to channel members with wakeword filtering.
+    def _get_local_server_id(self)  # Return the local server's S2S identity (e.g. 'haven.4346').
+    def _parse_ai_command(self, text)  # Detect AI command with optional server prefix.
+    def _forward_ai_command(self, target_server, ai_text, nick, channel, addr)  # Forward an AI command to a remote server via SYNCCMD.
+    def _handle_service_via_chatline(self, raw_line, addr, nick, channel=None)  # Handle service commands received via chatline (e.g., AI 1 agent assign...).
+    def _handle_buffer(self, msg, addr)  # BUFFER <target> [full] -- replay the chat buffer for a channel or PM target.
+    def _send_buffer_replay(self, addr, nick, target, full_history=False)  # Read the buffer for *target* and send each line as a NOTICE to *addr*.
+    def _maybe_replay_pm_buffer(self, recipient_nick, sender_nick)  # On first PM to *recipient_nick* from *sender_nick* in this session,
+
+── irc/packages/csc-service/csc_service/server/handlers/modes.py ──
+# Mode handlers: user modes and channel modes.
+  class ModeMixin:  # Handles MODE command for users and channels, ban mask helpers.
+    def _handle_mode(self, msg, addr)  # MODE <target> <modestring> [param1] [param2] ...
+    def _handle_user_mode(self, msg, addr, nick, target_nick)  # Handle user MODE commands.
+    def _handle_channel_mode(self, msg, addr, nick, chan_name)  # Parse and apply combined channel mode changes (up to 8 per command).
+    def _normalize_ban_mask(mask)  # Normalize a ban mask to nick!user@host format.
+    def _match_ban_mask(mask, nick_user_host)  # Match a ban mask pattern against a nick!user@host string.
+    def _is_banned(self, channel, nick, user, host)  # Check if a nick!user@host matches any ban in the channel's ban list.
+    def _send_ban_list(self, addr, nick, chan_name, channel)  # Send RPL_BANLIST (367) entries followed by RPL_ENDOFBANLIST (368).
+
+── irc/packages/csc-service/csc_service/server/handlers/nickserv.py ──
+# NickServ handlers: REGISTER, IDENTIFY, GHOST, INFO, DROP, enforcement.
+  class NickServMixin:  # Handles NickServ commands and nick enforcement.
+    def _handle_nickserv(self, msg, addr)  # Handle PRIVMSG NickServ :COMMAND args -- virtual NickServ service.
+    def _nickserv_register(self, args, addr)  # REGISTER <password> -- register your current nick with NickServ.
+    def _nickserv_identify(self, args, addr)  # IDENTIFY <password> -- identify as the owner of your current nick.
+    def _nickserv_ghost(self, args, addr)  # GHOST <nickname> <password> -- kill a ghost session to reclaim a nick.
+    def _nickserv_info(self, args, addr)  # INFO <nickname> -- show registration info for a nick.
+    def _nickserv_drop(self, args, addr)  # DROP <password> -- unregister your current nick.
+    def _nickserv_notice(self, addr, text)  # Send a NOTICE from NickServ to a client.
+    def _nickserv_enforce(self, addr, nick)  # Called by enforcement timer if client hasn't identified.
+
+── irc/packages/csc-service/csc_service/server/handlers/oper.py ──
+# Oper/admin handlers: OPER, AWAY, KICK, KILL, CONNECT, SQUIT, TRUST,
+  class OperMixin:  # Handles oper authentication, admin commands, and server kill logic.
+    def _handle_oper(self, msg, addr)  # OPER <account> <password>
+    def _handle_away(self, msg, addr)  # AWAY [:<message>]
+    def _handle_kick(self, msg, addr)  # KICK <channel> <nick> [:<reason>]
+    def _handle_kill(self, msg, addr)  # KILL <nick> [:<reason>] -- requires oper 'kill' flag.
+    def _handle_connect(self, msg, addr)  # CONNECT <host> <port> [password] -- Initiate S2S link.
+    def _handle_squit_cmd(self, msg, addr)  # SQUIT <server_id> [:<reason>] -- Drop an S2S link.
+    def _server_kill(self, target_nick, reason='Disconnected')  # Disconnect a client by nick. Cleans up channels, clients, registration,
+    def _handle_trust(self, msg, addr)  # TRUST <subcommand> [args] -- manage o-lines (oper credentials).
+    def _trust_help(self, addr)
+    def _trust_list(self, addr)
+    def _trust_add(self, addr, args)
+    def _trust_del(self, addr, args)
+    def _trust_edit(self, addr, args)
+    def _trust_addhost(self, addr, args)
+    def _trust_delhost(self, addr, args)
+    def _write_olines_conf(self, data)  # Rewrite olines.conf from current opers.json data (export only).
+    def _handle_stats(self, msg, addr)  # STATS <letter> -- server statistics (oper only).
+    def _handle_setmotd(self, msg, addr)  # SETMOTD :<text> -- set Message of the Day (requires server admin).
+    def _handle_rehash(self, msg, addr)  # REHASH -- no longer supported. opers.json is the sole authority.
+    def _handle_shutdown(self, msg, addr)  # SHUTDOWN [reason] -- graceful server shutdown (requires server admin).
+    def _handle_wallops(self, msg, addr)  # WALLOPS :<message> -- oper only, broadcasts to all opers.
+    def _handle_link(self, msg, addr)  # LINK <server> [port] -- initiate S2S link.
+    def _handle_relink(self, msg, addr)  # RELINK <server> -- reconnect a dropped S2S link.
+    def _handle_delink(self, msg, addr)  # DELINK <server> [reason] -- drop S2S link (alias for SQUIT).
+
+── irc/packages/csc-service/csc_service/server/handlers/registration.py ──
+# Registration handlers: PASS, NICK, USER, and registration completion.
+  NICK_RE = re.compile('^[A-Za-z\\[\\]\\\\`_^{|}][A-Za-z0-9\\[\\]\\\\`_^{|}\\-]*$')
+  class RegistrationMixin:  # Handles PASS, NICK, USER commands and registration completion.
+    def _ensure_reg_state(self, addr)  # Ensure registration state exists for addr.
+    def _handle_pass(self, msg, addr)  # PASS <password>
+    def _handle_nick(self, msg, addr)  # NICK <nickname>
+    def _handle_user(self, msg, addr)  # USER <username> <mode> <unused> :<realname>
+    def _try_complete_registration(self, addr)  # Check if both NICK and USER have been received; if so, complete registration.
+
+── irc/packages/csc-service/csc_service/server/handlers/utility.py ──
+# Utility handlers and helpers: PING, PONG, QUIT, CAP, CRYPTOINIT, legacy compat,
+  class UtilityMixin:  # Utility methods, PING/PONG/QUIT/CAP/CRYPTOINIT, legacy compat, helpers.
+    def _get_nick(self, addr)  # Get the nick for an address.
+    def _get_user(self, addr)  # Get the username for an address.
+    def _is_registered(self, addr)  # Check if an address has completed IRC registration.
+    def _get_client_channel(self, addr)  # Find the primary/current channel for a client.
+    def _find_client_addr(self, nick)  # Find the address for a client by nick.
+    def _send_numeric(self, addr, numeric, target_nick, text)  # Send a numeric reply to an address.
+    def _send_names(self, addr, nick, channel)  # Send RPL_NAMREPLY + RPL_ENDOFNAMES for a channel.
+    def _send_notice(self, addr, text)  # Helper to send a NOTICE message to a client.
+    def _is_authorized(self, nick, channel_name=None)  # Check if a nick is authorized (IRC operator or channel operator).
+    def _update_last_seen(self, name, addr)  # Update the last_seen timestamp for an active client.
+    def _oper_notice(self, addr, text)  # Send a NOTICE to the requesting oper.
+    def _require_oper(self, addr)  # Return nick if oper, else send ERR_NOPRIVILEGES and return None.
+    def _require_admin(self, addr)  # Return nick if server admin (a/A flag), else deny.
+    def handle_service_command(self, line, addr, client_name)  # Legacy entry point for service commands.
+    def _handle_ping(self, msg, addr)  # PING :<token> -> PONG :<token>
+    def _handle_pong(self, msg, addr)  # PONG -- just update last_seen.
+    def _handle_quit(self, msg, addr)  # QUIT [:<message>]
+    def _handle_cap(self, msg, addr)  # CAP -- capability negotiation (IRCv3). Respond with empty list.
+    def _handle_cryptoinit(self, msg, addr)  # CRYPTOINIT DH <p> <g> <pub>
+    def _handle_legacy_ident(self, msg, addr, raw_line)  # Convert legacy IDENT <name> [password] to NICK + USER registration.
+    def _handle_legacy_rename(self, msg, addr, raw_line)  # Convert legacy RENAME <old> <new> to NICK change.
+
+── irc/packages/csc-service/csc_service/server/handlers/vfs.py ──
+# VFS IRC handler mixin — browse, encrypt, decrypt, list, cat, rename.
+  class VFSMixin:  # Mixin for MessageHandler: handles the VFS IRC command.
+    def _vfs_init(self)
+    def _handle_vfs(self, msg, addr)
+    def _vfs_is_allowed(self, nick: str, addr) -> bool  # Allow if NickServ-identified or oper.
+    def _vfs_requester(self, nick: str, addr) -> str  # Return requester id: identified nick, or server shortname for internal.
+    def _vfs_notice(self, addr, nick: str, text: str)
+    def _vfs_pret(self, addr, nick: str, ip: str, port: int, action: str)
+    def _vfs_ok(self, addr, nick: str, message: str)
+    def _vfs_err(self, addr, nick: str, message: str)
+    def _vfs_resolve(self, nick: str, pathspec: str) -> str  # Resolve pathspec relative to nick's working prefix if not absolute.
+    def _vfs_list(self, nick: str, addr, args: list)
+    def _vfs_cwd_cmd(self, nick: str, addr, args: list)
+    def _vfs_encrypt(self, nick: str, addr, args: list)
+    def _vfs_decrypt(self, nick: str, addr, args: list)
+    def _vfs_cat(self, nick: str, addr, args: list)
+    def _vfs_rnfr_cmd(self, nick: str, addr, args: list)
+    def _vfs_rnto_cmd(self, nick: str, addr, args: list)
+    def _vfs_del(self, nick: str, addr, args: list)
+    def _vfs_trigger_sync(self)  # Wake the FTP slave's fs watcher so vfs/ block changes propagate via S2S.
+  def _get_vfs()  # Lazy-load VirtualFileSystem pointed at csc_root/vfs/.
+  def _server_shortname() -> str
+
+── irc/packages/csc-service/csc_service/server/irc.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_UNKNOWNERROR = '400'
+  class IRCMessage:  # Parsed IRC message.
+  def parse_irc_message(line: str) -> IRCMessage  # Parse an IRC wire-format line into an IRCMessage.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Build an IRC wire-format string (without trailing \r\n).
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Build a numeric reply line.
+
+── irc/packages/csc-service/csc_service/server/log.py ──
+  class Log(Root):  # Extends the root class.
+    def __init__(self, server=None)  # Initializes the Log class.
+    def log(self, message: str)  # Logs a message to the central project log file and prints to console.
+    def help(self, method_name=None)  # Returns help for the class or a specific method as a string.
+    def test(self)  # Runs a base self-test for the class.
+
+── irc/packages/csc-service/csc_service/server/main.py ──
+  def main()
+
+── irc/packages/csc-service/csc_service/server/network.py ──
+  class Network(Platform):
+    def __init__(self, host='127.0.0.1', port=9525, name='network')  # Initializes the Network class.
+    def _network_listener(self)  # Listens for all incoming data and filters keepalives.
+    def start_listener(self)  # Starts the background network listener thread.
+    def get_message(self)  # Gets one message tuple (bytes, addr) from the buffer.
+    def send(self, message)  # Send a message to the server, encoding if necessary.
+    def sock_send(self, data, addr)  # Sends data in chunks, handling both string and bytes types safely.
+    def maybe_send_keepalive(self)  # Sends a periodic keep-alive packet silently.
+    def close(self)  # Cleanly close the network socket and stop the listener thread.
+    def connected_for(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-service/csc_service/server/persistent_clients.bat ──
+# @echo off
+
+── irc/packages/csc-service/csc_service/server/root.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  class Root:  # The first and lowest class in the project's inheritance hierarchy.
+    def __init__(self)  # Initializes the Root class.
+    def get_command_keyword(self)  # Returns the system command keyword.
+    def run(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-service/csc_service/server/secret.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  def get_gemini_api_key()  # Retrieves the Gemini API key.
+  def get_claude_api_key()  # Retrieves the Claude API key.
+  def get_known_core_files()  # Returns a list of known core files.
+  def load_initial_core_file_context() -> str  # Loads content of key core files to provide initial context to Gemini.
+  def get_system_instructions(initial_file_context: str) -> str  # Returns the system instructions.
+
+── irc/packages/csc-service/csc_service/server/server.py ──
+  class Server(Service):  # The main UDP server for handling clients, commands, and file operations.
+    def __init__(self, host='0.0.0.0', port=9525, timeout=120)  # Initializes the Server.
+    def client_registry(self)  # Dynamic property that reads client registry from disk.
+    def oper_credentials(self)  # Dynamic property: returns olines dict (v2) for backward compat callers.
+    def opers(self)  # Set of lowercase nicks currently holding any oper status.
+    def active_opers_info(self)  # Dynamic property: returns {nick_lower: {nick, oper_name, flags, class}}.
+    def protect_local_opers(self)  # Whether remote opers without O flag can KILL local opers.
+    def _oper_has_flag(self, nick, flag)  # Return True if nick is an active oper with the given flag.
+    def oper_has_flag(self, nick, flag)  # Public alias for _oper_has_flag (used by message handler).
+    def get_olines(self)  # Return the olines configuration dict.
+    def is_local_oper(self, nick)  # Local oper: any oper flag (o, O, a, A).
+    def is_global_oper(self, nick)  # Global oper: O flag.
+    def is_server_admin(self, nick)  # Server admin: a or A flag.
+    def is_net_admin(self, nick)  # Network admin: A flag.
+    def wakewords(self)  # Dynamic property that reads wakewords from disk on every access.
+    def sync_from_disk(self)  # Reload state from disk ONLY if files have changed.
+    def _cleanup_loop(self)  # Periodic background loop to remove timed-out clients.
+    def _start_s2s_autolink(self)  # Initialize and start the S2S auto-linking thread.
+    def _s2s_autolink_loop(self, peers)  # Background thread: maintain S2S links to configured peers.
+    def _botserv_log_monitor_loop(self)  # Background loop for BotServ log monitoring and echoing.
+    def _syslog_monitor_loop(self)  # Background loop for monitoring syslog and echoing new lines to #syslog.
+    def _run_cleanup_once(self)  # Runs the client cleanup logic once.
+    def _thread_worker(self, data, addr)  # Worker thread to process each incoming packet.
+    def sock_send(self, data, addr)  # Override sock_send to encrypt data if a key is established for addr.
+    def _network_loop(self)  # Background loop for processing all incoming network messages.
+    def broadcast(self, message, exclude=None)  # Sends a message to all active clients.
+    def broadcast_to_channel(self, channel_name, message, exclude=None)  # Send a message to all members of a channel.
+    def send_to_nick(self, nick, message)  # Send a message to a specific nick by looking up their address.
+    def send_wallops(self, message)  # Send a WALLOPS message to all connected IRC operators.
+    def old_broadcast(self, message, exclude=None)  # Sends a message to all active client addresses.
+    def sync_persistent_clients(self)  # Writes the in-memory client registry back to persistent storage.
+    def _persist_session_data(self)  # Persist current session data to separate JSON files atomically.
+    def run(self)  # Starts the server's main network loop and the terminal interface.
+    def _wait_for_shutdown(self)  # Block the main thread until SIGTERM/SIGINT is received or SHUTDOWN file exists.
+    def get_data(self, key)  # Wrapper for persistent data retrieval.
+    def put_data(self, key, value)  # Wrapper for persistent data writes.
+
+── irc/packages/csc-service/csc_service/server/server_file_handler.py ──
+  class FileHandler:  # Handles <begin file> … <end file> uploads with full whitespace preservation,
+    def __init__(self, server)  # Initializes the FileHandler.
+    def start_session(self, addr, line)  # Begins a new upload session from a <begin file="..."> or <append file="..."> tag.
+    def abort_session(self, addr)  # Aborts an in-progress upload session, discarding its buffer and logging the event.
+    def process_chunk(self, addr, line)  # Buffers a line of text for an active upload session.
+    def complete_session(self, addr)  # Completes an upload session, performs final security validation,
+
+── irc/packages/csc-service/csc_service/server/server_message_handler.py ──
+# IRC-compliant message handler for csc-server.
+  NICK_RE = re.compile('^[A-Za-z\\[\\]\\\\`_^{|}][A-Za-z0-9\\[\\]\\\\`_^{|}\\-]*$')
+  class MessageHandler(RegistrationMixin, ChannelMixin, MessagingMixin, ModeMixin, OperMixin, InfoMixin, NickServMixin, ChanServMixin, BotServMixin, UtilityMixin, VFSMixin):  # Handles all incoming UDP messages from clients, acting as the central router
+    def __init__(self, server, file_handler)  # Initializes the instance.
+    def process(self, data, addr)  # Process a raw UDP datagram from a client.
+    def _handle_file_session_line(self, addr, line_stripped, raw_line)  # Handle a line while in an active file upload session.
+    def _dispatch_irc_command(self, msg, addr, raw_line)  # Route an IRC command to the appropriate handler.
+
+── irc/packages/csc-service/csc_service/server/server_s2s.py ──
+# Server-to-Server (S2S) linking protocol for CSC IRC server federation.
+  S2S_CRLF = b'\r\n'
+  S2S_MAX_LINE = 8192
+  class ServerLink:  # Represents a single UDP connection to a peer CSC server with DH encryption.
+    def __init__(self, local_server, remote_host, remote_port, password, remote_server_id=None, sock=None, cert_path='', key_path='', ca_path='')  # Initialize a server link.
+    def connect(self)  # Establish UDP connection to remote server and initiate DH key exchange.
+    def _initiate_dh_exchange(self)  # Send CRYPTOINIT DH message to initiate key exchange.
+    def _handle_dh_reply(self, pubkey_hex)  # Process CRYPTOINIT DHREPLY message and derive AES key.
+    def _send_dh_reply(self, pubkey_hex)  # Process incoming CRYPTOINIT DH and send DHREPLY with AES derivation.
+    def authenticate(self)  # Exchange SLINK/SLINKACK handshake after DH key exchange.
+    def handle_inbound_handshake(self)  # Handle authentication for an inbound (accepted) connection.
+    def start_reader(self, callback)  # Start a background thread that reads S2S messages and calls callback.
+    def _reader_loop(self, callback)  # Background loop reading UDP datagrams and processing S2S messages.
+    def send_message(self, command, *args)  # Send an S2S command to the remote server (encrypted if key available).
+    def send_raw(self, line)  # Send a raw line to the remote server (encrypted if key available).
+    def is_connected(self)  # Check if this link is alive and authenticated.
+    def close(self)  # Gracefully close the link.
+    def _recv_line(self, timeout=None)  # Read one CRLF-terminated line from the socket.
+    def _get_local_server_id(self)  # Return the local server's unique ID.
+    def _log(self, message)  # Log via the local server's logger.
+  class ServerNetwork:  # Manages all linked servers and network-wide operations.
+    def __init__(self, local_server)  # Initialize the server network manager.
+    def _load_cert_config(self)  # Load S2S cert paths and password from csc-service.json (CSC_ROOT/csc-service.json).
+    def start_listener(self)  # Start the UDP listener for inbound S2S connections with DH encryption.
+    def _receive_loop(self)  # Receive inbound S2S UDP datagrams from peers with DH and SLINK auth.
+    def _handle_inbound_link(self, link)  # Handle a newly established inbound UDP S2S link.
+    def link_to(self, host, port, password=None)  # Initiate an outbound link to a remote server.
+    def get_peer_servers(self)  # List all connected peer server IDs.
+    def get_link(self, server_id)  # Get the ServerLink for a specific peer.
+    def broadcast_to_network(self, command, args_str='', exclude_server=None)  # Send an S2S command to all connected peers.
+    def get_user_from_network(self, nick)  # Find a user on any server in the network.
+    def get_channel_from_network(self, channel)  # Find a channel on any server in the network.
+    def route_message(self, source_nick, target, text, exclude_server=None)  # Route a PRIVMSG/NOTICE across the network.
+    def sync_line(self, target_nick, line, exclude_server=None)  # Route a raw IRC line to a specific user on the network.
+    def sync_user_join(self, nick, host, modes, channel=None, exclude_server=None)  # Notify the network that a user joined/connected.
+    def sync_user_quit(self, nick, reason='', exclude_server=None)  # Notify the network that a user disconnected.
+    def sync_user_part(self, nick, channel, reason='', exclude_server=None)  # Notify the network that a user parted a channel.
+    def sync_nick_change(self, old_nick, new_nick, exclude_server=None)  # Notify the network that a user changed their nickname.
+    def sync_channel(self, channel_name, modes_str, members_json, exclude_server=None)  # Broadcast channel state to the network.
+    def sync_topic(self, channel_name, topic, exclude_server=None)  # Broadcast channel topic to the network.
+    def sync_channel_state(self, chan_name, exclude_server=None)  # Helper to sync current state of a local channel to the network.
+    def _send_full_sync(self, link)  # Send complete local state to a newly linked peer.
+    def _dispatch_s2s_message(self, link, command, rest)  # Route an incoming S2S command to the appropriate handler.
+    def _handle_syncuser(self, link, rest)  # Handle SYNCUSER: add/update a remote user in tracking.
+    def _handle_synpart(self, link, rest)  # Handle SYNPART: remote user leaves a channel.
+    def _handle_syncnick(self, link, rest)  # Handle SYNCNICK: remote user changes nickname.
+    def _handle_syncchan(self, link, rest)  # Handle SYNCCHAN: merge remote channel state.
+    def _handle_synctopic(self, link, rest)  # Handle SYNCTOPIC: remote channel topic update.
+    def _handle_syncmsg(self, link, rest)  # Handle SYNCMSG: deliver a message from the network locally.
+    def _handle_syncline(self, link, rest)  # Handle SYNCLINE: deliver a raw IRC line to a local user.
+    def _handle_desync(self, link, rest)  # Handle DESYNC: remove a nick or channel from remote tracking.
+    def _handle_squit(self, link, rest)  # Handle SQUIT: a server is disconnecting.
+    def _handle_error(self, link, rest)  # Handle ERROR message from a peer.
+    def _handle_link_lost(self, link)  # Called when a link's reader thread detects a disconnect.
+    def _remove_server_state(self, server_id)  # Remove all remote state belonging to a disconnected server.
+    def _rename_local_user(self, old_nick, new_nick)  # Rename a local user due to nick collision.
+    def shutdown(self)  # Shut down all S2S connections and the listener.
+    def _get_local_server_id(self)  # Return the local server's unique ID.
+    def _log(self, message)  # Log via the local server's logger.
+  def _project_root()  # Return CSC project root for kill switch file checks. Cached after first call.
+  def _killswitch(name)  # Check if a kill switch file exists. Called at most every 20s — not per-packet.
+  def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple  # Verify a PEM cert against a CA cert file.
+
+── irc/packages/csc-service/csc_service/server/service.py ──
+  class Service(Network):
+    def __init__(self, server_instance=None)
+    def default(self, *args)  # Default command handler for a service.
+    def handle_command(self, class_name_raw, method_name_raw, args, source_name, source_address)  # Executes a command by dynamically loading a service module.
+
+── irc/packages/csc-service/csc_service/server/version.py ──
+  class Version(Data):  # Extends the Data class.
+    def __init__(self)  # Initializes the Version class.
+    def get_version_dir_for_file(self, filepath: str) -> Path  # Generates a unique version history directory for a given file.
+    def _get_version_info(self, file_backup_dir: Path) -> dict  # Reads version metadata from the 'versions.json' file for a specific file.
+    def _write_version_info(self, file_backup_dir: Path, version_info: dict)  # Writes updated version info back to the metadata file.
+    def restore_version(self, filepath: str, version: str='latest')  # Restores a file to a specific version from its backup history.
+    def create_new_version(self, filepath: str)  # Creates a new, sequentially numbered version of a file.
+
+── irc/packages/csc-service/csc_service/server/vfs_data_conn.py ──
+# VFS TCP data connection — single-use PRET-style transfer endpoint.
+  class VFSDataConn:  # Single-use TCP listener for one VFS data transfer.
+    def __init__(self, bind_host: str='0.0.0.0', timeout: int=30)
+    def serve_upload(self, on_data, on_error=None) -> None  # Accept one connection, receive all bytes, call on_data(bytes).
+    def serve_download(self, data_fn, on_done=None, on_error=None) -> None  # Accept one connection, send all bytes from data_fn() (or bytes).
+  def _detect_outbound_ip() -> str  # Best-effort detection of the server's outbound IP.
+
+── irc/packages/csc-service/csc_service/shared/__init__.py ──
+
+── irc/packages/csc-service/csc_service/shared/agent_executor.py ──
+# Agent executor: bridges queue_worker to RunAgentExecutor.
+  class AgentExecutor:  # Wrapper around RunAgentExecutor for queue_worker compatibility.
+    def __init__(self, csc_root: Path)  # Initialize executor with CSC project root.
+    def execute(self, agent_name: str, workorder_path: Path, log_file_path: Path) -> int  # Execute an agent for a workorder.
+
+── irc/packages/csc-service/csc_service/shared/api_key_manager.py ──
+# API Key Manager: Automatic rotation between multiple API keys when credits exhausted.
+  class APIKeyManager:  # Manages rotation of Anthropic API keys across multiple accounts.
+    def __init__(self, config_path=None)  # Initialize key manager.
+    def load_config(self)  # Load API keys from config file.
+    def save_config(self)  # Save current key index to config file.
+    def get_current_key(self)  # Get the currently active API key.
+    def rotate_key(self)  # Rotate to the next API key.
+    def get_key_count(self)  # Get total number of API keys available.
+    def is_credit_exhaustion_error(self, error_text)  # Check if an error message indicates API credit exhaustion.
+
+── irc/packages/csc-service/csc_service/shared/channel.py ──
+# Channel and ChannelManager for IRC-style channel support.
+  class Channel:  # Represents a single IRC channel with members, modes, bans, and topic.
+    def __init__(self, name: str)  # Initialize a new IRC channel.
+    def add_member(self, nick: str, addr: tuple, modes: Optional[Set[str]]=None)  # Add a member to the channel or replace existing member info.
+    def remove_member(self, nick: str)  # Remove a member from the channel if they exist.
+    def has_member(self, nick: str) -> bool  # Check if a nick is a member of this channel.
+    def get_member(self, nick: str) -> Optional[Dict[str, Any]]  # Get member information dictionary for a given nick.
+    def get_display_nick(self, nick: str) -> str  # Get the display-case preserved nickname for a member.
+    def get_names_list(self) -> str  # Return space-separated names list with @/+ prefix for ops/voiced.
+    def member_count(self) -> int  # Get the number of members in this channel.
+    def is_op(self, nick: str) -> bool  # Check if a nick has channel operator (+o) mode.
+    def has_voice(self, nick: str) -> bool  # Check if a nick has voice (+v) mode.
+    def can_speak(self, nick: str) -> bool  # Check if a nick can send messages to this channel.
+    def can_set_topic(self, nick: str) -> bool  # Check if a nick can set the channel topic.
+  class ChannelManager:  # Manages all channels on the server. Thread-safe.
+    def __init__(self)  # Initialize the channel manager with an empty channel list and default channel.
+    def ensure_channel(self, name: str) -> Channel  # Get an existing channel or create it if it doesn't exist. Thread-safe.
+    def get_channel(self, name: str) -> Optional[Channel]  # Get an existing channel by name. Thread-safe.
+    def remove_channel(self, name: str) -> bool  # Remove a channel from the manager. Thread-safe.
+    def list_channels(self) -> List[Channel]  # Get a list of all channels. Thread-safe.
+    def find_channels_for_nick(self, nick: str) -> List[Channel]  # Find all channels a nick is a member of (case-insensitive). Thread-safe.
+    def remove_nick_from_all(self, nick: str) -> List[str]  # Remove a nick from all channels. Returns list of channel names they were in. Thread-safe.
+  def _nk(nick: str) -> str  # Normalize nick to lowercase for case-insensitive lookups.
+
+── irc/packages/csc-service/csc_service/shared/chat_buffer.py ──
+# Chat buffer logging and replay for csc-server.
+  class ChatBuffer:  # Server-side message buffer that persists chat history to disk.
+    def __init__(self, buffers_dir=None)  # Initializes the instance.
+    def append(self, target, sender_nick, command, text)  # Append a timestamped log line for *target* (channel or PM nick).
+    def read(self, target, sender_nick=None, limit_bytes=None)  # Return all buffered lines for *target* as a list of strings.
+    def _filepath_for(self, target, sender_nick=None)  # Derive the log file path for a target.
+    def _get_lock(self, filepath)  # Return (or create) a per-file threading.Lock.
+    def _trim_if_needed(self, filepath)  # If *filepath* exceeds MAX_SIZE, truncate from the front keeping
+
+── irc/packages/csc-service/csc_service/shared/config_loader.py ──
+  def load_config(path, schema_name, logger)  # Load a JSON config file, validate it against a schema, and return it.
+
+── irc/packages/csc-service/csc_service/shared/config_schemas.py ──
+# JSON Schemas for csc-service configuration files.
+  SETTINGS_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  PLATFORM_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  OPERS_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  USERS_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  CHANNELS_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  BANS_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  NICKSERV_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  CHANSERV_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  BOTSERV_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  HISTORY_SCHEMA = {'$schema': 'http://json-schema.org/draft-07/schema#', 'type': 'object', 'pro...
+  SCHEMAS = {'settings': SETTINGS_SCHEMA, 'platform': PLATFORM_SCHEMA, 'opers': OPERS_SCH...
+
+── irc/packages/csc-service/csc_service/shared/crypto.py ──
+# Diffie-Hellman key exchange and AES-256-GCM encryption for the CSC translator.
+  DH_PRIME = int('FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA6...
+  DH_GENERATOR = 2
+  class DHExchange:  # Diffie-Hellman key exchange using RFC 3526 Group 14 (2048-bit).
+    def __init__(self, p: int=None, g: int=None)  # Generate a new ephemeral DH key pair.
+    def compute_shared_key(self, other_public: int) -> bytes  # Derive a 32-byte AES-256 key from the other side's public key.
+    def format_init_message(self) -> str  # Format the CRYPTOINIT DH message for initiating key exchange.
+    def format_reply_message(self) -> str  # Format the CRYPTOINIT DHREPLY message for completing key exchange.
+    def parse_init_message(line: str) -> tuple  # Parse a CRYPTOINIT DH message into its components.
+    def parse_reply_message(line: str) -> int  # Parse a CRYPTOINIT DHREPLY message to extract the public key.
+  def encrypt(key: bytes, plaintext: bytes) -> bytes  # Encrypt plaintext using AES-256-GCM with a random IV.
+  def decrypt(key: bytes, data: bytes) -> bytes  # Decrypt AES-256-GCM data produced by encrypt().
+  def is_encrypted(data: bytes) -> bool  # Heuristic to detect whether a datagram contains encrypted or plaintext data.
+
+── irc/packages/csc-service/csc_service/shared/data.py ──
+# Shim: re-exports Data from the installed csc-data layer package.
+
+── irc/packages/csc-service/csc_service/shared/irc.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = _load_server_name()
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_WHOISUSER = '311'
+  RPL_WHOISSERVER = '312'
+  RPL_WHOISOPERATOR = '313'
+  RPL_ENDOFWHOIS = '318'
+  RPL_WHOWASUSER = '314'
+  RPL_ENDOFWHOWAS = '369'
+  ERR_WASNOSUCHNICK = '406'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  RPL_UMODEIS = '221'
+  RPL_AWAY = '301'
+  RPL_UNAWAY = '305'
+  RPL_NOWAWAY = '306'
+  ERR_UNKNOWNERROR = '400'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_NOPRIVILEGES = '481'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_UMODEUNKNOWNFLAG = '501'
+  ERR_USERSDONTMATCH = '502'
+  ERR_CHANNELISFULL = '471'
+  ERR_UNKNOWNMODE = '472'
+  ERR_INVITEONLYCHAN = '473'
+  ERR_BADCHANNELKEY = '475'
+  RPL_INVITING = '341'
+  RPL_WHOISCHANNELS = '319'
+  RPL_BANLIST = '367'
+  RPL_ENDOFBANLIST = '368'
+  ERR_BANNEDFROMCHAN = '474'
+  ERR_BANLISTFULL = '478'
+  CTCP_DELIM = '\x01'
+  class IRCMessage:  # Parsed IRC message structure representing a single IRC protocol message.
+  def _load_server_name() -> str
+  def parse_irc_message(line: str) -> IRCMessage  # Parse an IRC wire-format line into an IRCMessage.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Build an IRC wire-format string (without trailing \r\n).
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Build a numeric reply line for IRC server responses.
+
+── irc/packages/csc-service/csc_service/shared/log.py ──
+# Shim: re-exports Log from the installed csc-log layer package.
+
+── irc/packages/csc-service/csc_service/shared/network.py ──
+# Shim: re-exports Network from the installed csc-network layer package.
+
+── irc/packages/csc-service/csc_service/shared/platform.py ──
+# Shim: re-exports Platform from the installed csc-platform layer package.
+
+── irc/packages/csc-service/csc_service/shared/platform_service_windows.py ──
+# Windows service detection and management using NSSM.
+  class WindowsServiceDetector:  # Detect Windows services related to CSC.
+    def list_services() -> List[Dict]  # List all CSC-related Windows services.
+    def get_service_status(service_name: str) -> Optional[Dict]  # Get status of a specific service.
+    def service_exists(service_name: str) -> bool  # Check if a service exists.
+  class WindowsServiceProvider:  # Install/manage services on Windows using NSSM.
+    def __init__(self, csc_root: Optional[str]=None)  # Initialize Windows service provider.
+    def _find_or_install_nssm(self) -> Optional[str]  # Find NSSM executable, install if needed.
+    def _download_nssm(self) -> str  # Download and extract NSSM to csc/bin/.
+    def install(self, service_name: str, module: str, args: str='--daemon', auto_start: bool=True) -> Tuple[bool, str]  # Install a service using NSSM.
+    def uninstall(self, service_name: str) -> Tuple[bool, str]  # Uninstall a service.
+    def start(self, service_name: str) -> Tuple[bool, str]  # Start a service.
+    def stop(self, service_name: str) -> Tuple[bool, str]  # Stop a service.
+
+── irc/packages/csc-service/csc_service/shared/root.py ──
+# Shim: re-exports Root from the installed csc-root layer package.
+
+── irc/packages/csc-service/csc_service/shared/secret.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  def get_gemini_api_key()  # Retrieves the Gemini API key.
+  def get_claude_api_key()  # Retrieves the Claude API key.
+  def get_gemini_oper_credentials()  # Returns Gemini operator credentials.
+  def get_claude_oper_credentials()  # Returns Claude operator credentials.
+  def get_known_core_files()  # Returns a list of known core files.
+  def load_initial_core_file_context() -> str  # Loads content of key core files to provide initial context to Gemini.
+  def get_system_instructions(initial_file_context: str) -> str  # Returns the system instructions.
+
+── irc/packages/csc-service/csc_service/shared/server_data.py ──
+# ServerData — pure mixin for all IRC-specific domain persistence.
+  class ServerData:  # All IRC-specific file-backed persistence.  Pure mixin, no parent.
+    def _file_path(self, key)  # Get full path for a storage file.
+    def _has_changed(self, key)  # Check if a file has changed on disk since last read.
+    def _ensure_all_files(self)  # Create any missing storage files with defaults.
+    def _quarantine(self, filepath)  # Rename corrupt file to .corrupt.<timestamp> for investigation.
+    def _atomic_write(self, filepath, data)  # Write data to file atomically via Data._write_json_file.
+    def _atomic_read(self, filepath, schema_name)  # Read a JSON file safely.
+    def _opers_path(self)
+    def _olines_conf_path(self)
+    def _migrate_opers_v1_to_v2(data)  # Upgrade v1 {credentials: {name: pass}} to v2 olines format.
+    def _match_hostmask(mask, client_mask)  # Return True if client_mask matches the wildcard mask pattern.
+    def _load_opers(self)  # Load opers.json, migrating v1->v2 if needed.
+    def _save_opers(self, data)  # Atomically save opers.json.
+    def load_opers(self)  # Public alias for backward compat.
+    def save_opers(self, data)  # Public alias for backward compat.
+    def get_olines(self)  # Return olines dict: {account: [entry, ...]}.
+    def get_active_opers(self)  # Return list of active oper dicts: [{nick, account, flags}].
+    def get_active_opers_info(self)  # Return {nick_lower: entry_dict} for quick lookup.
+    def get_oper_flags(self, nick)  # Return flags string for an active oper nick, '' if not active.
+    def protect_local_opers(self)  # Whether remote opers without O flag can KILL local opers.
+    def add_active_oper(self, nick, account='', flags='o')  # Add or update an active oper entry.
+    def remove_active_oper(self, nick)  # Remove an active oper entry by nick.
+    def check_oper_auth(self, account, password, server_name, client_mask)  # Verify OPER credentials against o-lines.
+    def write_olines_conf(self, olines, path=None, server_name='csc-server')  # Write olines dict to olines.conf text format (EXPORT ONLY).
+    def save_opers_from_server(self, server)  # Sync active_opers from server memory to opers.json.
+    def _load_channels_from_disk(self)
+    def load_channels(self)
+    def save_channels(self, data)
+    def save_channels_from_manager(self, channel_manager)  # Build and save channel data from a ChannelManager instance.
+    def load_users(self)
+    def save_users(self, data)
+    def set_user(self, nick, user_data)
+    def remove_user(self, nick)
+    def save_users_from_server(self, server)  # Build and save user data from server state.
+    def load_bans(self)
+    def save_bans(self, data)
+    def save_bans_from_manager(self, channel_manager)  # Build and save ban data from ChannelManager.
+    def load_history(self)
+    def save_history(self, data)
+    def add_disconnection(self, nick, user, realname, host, quit_reason='')  # Record a user disconnection for WHOWAS.
+    def save_history_from_server(self, server)  # Save disconnection history from server's disconnected_clients dict.
+    def load_nickserv(self)
+    def save_nickserv(self, data)
+    def nickserv_register(self, nick, password, registered_by='')
+    def nickserv_drop(self, nick)
+    def nickserv_get(self, nick)
+    def nickserv_check_password(self, nick, password)
+    def load_chanserv(self)
+    def save_chanserv(self, data)
+    def chanserv_register(self, channel, owner, topic='')
+    def chanserv_get(self, channel)
+    def chanserv_update(self, channel, info)
+    def chanserv_drop(self, channel)
+    def load_botserv(self)
+    def save_botserv(self, data)
+    def botserv_register(self, channel, botnick, owner, password)
+    def botserv_get_for_channel(self, channel)
+    def botserv_get(self, channel, botnick)
+    def botserv_drop(self, channel, botnick)
+    def load_settings(self)
+    def save_settings(self, data)
+    def persist_all(self, server)  # Persist all server state to disk atomically.
+    def restore_channels(self, channel_manager)  # Restore channel state from disk into a ChannelManager.
+    def restore_users(self, server)  # Restore user sessions from disk into server state.
+    def restore_opers(self, server)  # Restore operator state from disk (v2 format).
+    def restore_bans(self, server)  # Restore per-channel bans from disk.
+    def restore_history(self, server)  # Restore disconnection history from disk.
+    def restore_all(self, server)  # Restore complete server state from disk.
+
+── irc/packages/csc-service/csc_service/shared/service.py ──
+# Base Service class for CSC service modules.
+  class Service(Data):  # Base class for all CSC service modules.
+    def __init__(self, server_instance)  # Initialize a service.
+    def default(self, *args)  # Default handler called when a method is not found.
+
+── irc/packages/csc-service/csc_service/shared/services/__init__.py ──
+# CSC shared services.
+  PROJECT_ROOT = find_project_root()
+  def find_project_root()  # Find the CSC project root directory.
+
+── irc/packages/csc-service/csc_service/shared/services/agent_service.py ──
+  class Agent(Service):  # AI agent runner service.
+    def PROMPTS_BASE(self)
+    def READY_DIR(self)
+    def WIP_DIR(self)
+    def DONE_DIR(self)
+    def _build_cmd(self, agent_name, prompt, wip_filename, repo_clone_path=None)  # Build the command for the given agent.
+    def __init__(self, server_instance)
+    def _is_running(self)  # Check if the tracked agent process is still alive.
+    def _find_prompt(self, filename)  # Find a prompt file in ready/ or wip/. Returns Path or None.
+    def _read_text_safe(path)  # Read a text file, trying utf-8 first then falling back to latin-1.
+    def _create_queue_metadata(self, agent_name: str, workorder_name: str, original_path: Path) -> dict  # Create metadata dictionary for a queued workorder.
+    def _ensure_agent_dirs(self, agent_dir, agent_name)  # Create agent directory structure and copy default template if missing.
+    def _detect_agents(self)  # Return dict of agent name -> available (bool).
+    def _parse_front_matter(filepath)  # Parse YAML-like front-matter from a prompt file.
+    def _check_prompt_capabilities(self, filepath)  # Check if this system can satisfy a prompt's requirements.
+    def _build_prompt(self, wip_path)  # Assemble the full prompt from README.1shot + agent context dir + WIP content.
+    def list(self) -> str  # List available AI agent backends.
+    def select(self, name: str) -> str  # Select which AI agent backend to use.
+    def assign(self, prompt_filename: str) -> str  # Assign a prompt to the selected agent for queue-based processing.
+    def _write_queued_files(self, wip_path: Path, metadata: dict, agent_name: str, workorder_filename: str)  # Writes the workorder content and its metadata to the agent's queue/in/ directory.
+    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str)  # Generate orders.md in agent's queue/in/ with cached context.
+    def _format_elapsed(self, started)  # Format elapsed time from a start timestamp.
+    def _get_proc_mem(self, pid)  # Get resident memory of a process in MB from /proc. Returns str or '?'.
+    def _get_log_size(self, log_path)  # Get log file size as human-readable string.
+    def _get_wip_progress(self, prompt_name)  # Count completed/next/pending steps in WIP file.
+    def status(self) -> str  # Show queue and agent status by scanning queue directories and WIP files.
+    def _is_running_pid(self, pid)  # Check if a specific PID is alive.
+    def stop(self) -> str  # Stop the running agent.
+    def kill(self) -> str  # Kill the running agent and move WIP prompt back to ready.
+    def tail(self, *args) -> str  # Tail the WIP journal file to see agent progress.
+    def _find_temp_repo_wips(self)  # Find WIP files in agent temp repos (where running agents write).
+    def _find_wip_file(self, filename)  # Find a workorder file in wip/, done/, or ready/. Returns Path or None.
+    def _tail_file(self, wip_path, n=20, source=None)  # Return the last N lines of a file with a header.
+    def _check_stale(self)  # Check if the WIP file hasn't been updated recently. Returns warning or None.
+    def _clear_state(self)  # Reset agent tracking state.
+    def _git_sync(self, msg)  # Commit staged changes, push, pull.
+    def default(self, *args) -> str  # Show available commands.
+  def _get_file_ops()  # Get the FtpFileOps singleton (lazy init, falls back to plain mode).
+
+── irc/packages/csc-service/csc_service/shared/services/backup_service.py ──
+  class backup(Service):  # Backup service using pure Python (tarfile/shutil).
+    def __init__(self, server_instance)  # Initializes the instance.
+    def create(self, *paths) -> str  # Creates a tar.gz backup of the specified files/directories.
+    def list(self) -> str  # Lists all available backup archives.
+    def restore(self, archive: str, dest: str='.') -> str  # Restores a backup archive to a destination directory.
+    def diff(self, archive: str, filepath: str) -> str  # Compares a file in a backup archive with its current version on disk.
+    def default(self, *args) -> str  # Shows available commands for the Backup service.
+
+── irc/packages/csc-service/csc_service/shared/services/benchmark_service.py ──
+  class benchmark(Service):  # Benchmark service for running and tracking AI agent performance tests.
+    def __init__(self, server_instance)
+    def _save_metadata(self)  # Save benchmark metadata to disk.
+    def _read_prompt_file(self, name)  # Read a benchmark prompt file.
+    def _write_prompt_file(self, name, content)  # Write a benchmark prompt file.
+    def add(self, name, *description_parts) -> str  # Add a new benchmark prompt.
+    def delete(self, name) -> str  # Delete a benchmark prompt and its results.
+    def run(self, name, agent_name) -> str  # Run a benchmark with the specified agent using the queue system.
+    def _archive_result(self, name, agent_name, duration, prompt, result, start_time)  # Archive benchmark result as a tarball with metadata.
+    def list(self) -> str  # List all available benchmarks.
+    def results(self, name, agent_filter='') -> str  # Show results for a benchmark.
+    def default(self, *args) -> str  # Show available commands.
+
+── irc/packages/csc-service/csc_service/shared/services/botserv_service.py ──
+# BotServ Service - Bot registration and management for channels.
+  class Botserv(Service):  # BotServ service for channel bot management.
+    def __init__(self, server_instance)  # Initialize the BotServ service.
+    def add(self, *args) -> str  # ADD <botnick> <#chan> <password>
+    def delete(self, *args) -> str  # DEL <botnick> <#chan>
+    def list(self, *args) -> str  # LIST [#chan]
+    def addmatch(self, *args) -> str  # ADDMATCH <#chan> <pattern> - Add a match filter pattern for a channel.
+    def delmatch(self, *args) -> str  # DELMATCH <#chan> <pattern> - Delete a match filter pattern for a channel.
+    def addnomatch(self, *args) -> str  # ADDNOMATCH <#chan> <pattern> - Add a nomatch filter pattern for a channel.
+    def delnomatch(self, *args) -> str  # DELNOMATCH <#chan> <pattern> - Delete a nomatch filter pattern for a channel.
+    def listfilters(self, *args) -> str  # LISTFILTERS <#chan> - List all match and nomatch filters for a channel.
+    def default(self, *args) -> str  # Show available BotServ commands.
+    def logread(self, *args, filter_pattern=None) -> str  # LOGREAD <#chan> <logfile_path> [filter_pattern] - Read logfile to channel with optional filtering.
+
+── irc/packages/csc-service/csc_service/shared/services/builtin_service.py ──
+  class builtin(Service):
+    def echo(self, *args) -> str  # Echoes back the given arguments.
+    def status(self) -> str  # Returns the status of the system.
+    def current_time(self) -> str  # Returns the current server time.
+    def download_url_content(self, url: str) -> str  # Downloads the content of a URL.
+    def download_url_to_file(self, url: str, local_filepath: str) -> str  # Downloads the content of a URL to a file.
+    def _add_core_files_to_safeguards(self)  # Dynamically adds core project files to the list of safeguarded paths.
+    def __init__(self, server_instance)  # Initialize the builtin service with server instance and safeguards.
+    def list_dir(self, path_argument: str='.') -> str  # Lists the contents of a directory.
+    def read_file_content(self, filepath: str) -> str  # Reads the content of a file, making newlines visible.
+    def create_directory_local(self, path_str: str) -> str  # Creates a local directory
+    def delete_local(self, path_str: str) -> str  # Deletes a local file or empty directory
+    def move_local(self, source_path_str: str, destination_path_str: str) -> str  # Moves a local file or directory
+    def _get_ftp_connection(self, h, p_s, u, pw) -> Union[ftplib.FTP, str]  # Establishes an FTP connection.
+    def ftp_connect_list(self, host: str, remote_path: str='.', port_str: str='21', user: str='anonymous', passwd: str='') -> str  # Connects to FTP and lists directory contents.
+    def ftp_download_file(self, host: str, remote_filepath: str, local_filepath: str, port_str: str='21', user: str='anonymous', passwd: str='') -> str  # Downloads a file from an FTP server.
+    def ftp_upload_file(self, host: str, local_filepath: str, remote_filepath: str, port_str: str='21', user: str='anonymous', passwd: str='') -> str  # Uploads a file to an FTP server.
+
+── irc/packages/csc-service/csc_service/shared/services/catalog_service.py ──
+# Catalog and ranking service for AI agents.
+  class catalog(Service):  # Agent catalog and ranking system.
+    def __init__(self, server_instance)
+    def _calculate_total_cost(self, agent_id, duration_seconds)  # Calculate total cost = API cost + time cost.
+    def _parse_result_filename(self, filename)  # Parse benchmark result filename: {name}-{duration}-{agent}-{unixtime}.tgz
+    def _load_benchmark_results(self)  # Load all benchmark results from results directory.
+    def _calculate_rankings(self)  # Calculate cost-performance rankings for all agents.
+    def list(self) -> str  # List all agents with specifications.
+    def rank(self) -> str  # Show cost-performance rankings with multiple perspectives.
+    def assign(self, task_type, priority='balanced') -> str  # Get recommended agent for task type.
+    def update(self) -> str  # Refresh rankings from benchmark data.
+    def default(self, *args) -> str  # Show available commands.
+
+── irc/packages/csc-service/csc_service/shared/services/cryptserv_service.py ──
+  class CryptServ(Service):  # CryptServ is a key distribution bot, managing RSA key pairs for channels and DM pairs.
+    def __init__(self, server_instance)
+    def _run_gencert_script(self, target_name)  # Executes the gencert.sh script to generate keys for a target.
+    def _load_cert_bundle(self, target_name)  # Loads private and public keys for a given target.
+    def request(self, target: str, requestor_nick: str) -> str  # Handles requests for certificates (channel or DM).
+    def _send_cert_bundle_to_requestor(self, cert_bundle: dict, target: str, requestor_nick: str) -> str  # Sends the certificate bundle as PRIVMSG to the requestor.
+    def default(self, *args) -> str  # Default handler for CryptServ commands.
+
+── irc/packages/csc-service/csc_service/shared/services/curl_service.py ──
+  class curl(Service):  # A service to perform basic cURL-like web requests.
+    def __init__(self, server_instance)  # Initializes the Curl service.
+    def run(self, *args)  # Parses curl-like arguments to make an HTTP request.
+    def default(self, *args)  # Default help message.
+
+── irc/packages/csc-service/csc_service/shared/services/help_service.py ──
+  class Help(Service):
+    def default(self, *args)
+
+── irc/packages/csc-service/csc_service/shared/services/module_manager_service.py ──
+  class module_manager(Service):  # Dynamic module management for the service system.
+    def __init__(self, server_instance)  # Initializes the instance.
+    def list(self) -> str  # Lists all available and currently loaded service modules.
+    def read(self, name: str) -> str  # Reads the source code of a service module.
+    def create(self, name: str, content_b64: str) -> str  # Creates a new service module from base64-encoded content.
+    def rehash(self, *names) -> str  # Reloads specified service modules.
+    def staging(self) -> str  # Lists all files in staging_uploads/ waiting for approval.
+    def _validate_service_file(self, filepath: Path, expected_class: str) -> tuple  # Validates a service file contains exactly one class with the expected name.
+    def approve(self, name: str) -> str  # Validates and moves a service module from staging_uploads/ to services/.
+    def reject(self, name: str) -> str  # Deletes a service module from staging_uploads/ (with version backup).
+    def default(self, *args) -> str  # Shows available commands for the Module Manager service.
+
+── irc/packages/csc-service/csc_service/shared/services/moltbook_service.py ──
+  BASE_URL = 'https://www.moltbook.com/api/v1'
+  class moltbook(Service):  # Moltbook social network service for AI agents.
+    def __init__(self, server_instance)
+    def _request(self, method, path, body=None, api_key=None)
+    def _get(self, path, params=None, api_key=None)
+    def _post(self, path, body=None, api_key=None)
+    def _patch(self, path, body=None, api_key=None)
+    def _delete(self, path, body=None, api_key=None)
+    def _require_key(self)
+    def _fmt(self, data)
+    def setup(self, *args)  # Save API credentials. Usage: setup <api_key> <agent_name>
+    def register(self, *args)  # Register a new agent. Usage: register <name> <description>
+    def status(self, *args)  # Check account/claim status. Usage: status
+    def post(self, *args)  # Create a text post. Usage: post <submolt> <title> <content...>
+    def post_link(self, *args)  # Create a link post. Usage: post_link <submolt> <title> <url>
+    def comment(self, *args)  # Comment on a post. Usage: comment <post_id> <content...>
+    def reply(self, *args)  # Reply to a comment. Usage: reply <post_id> <parent_comment_id> <content...>
+    def upvote(self, *args)  # Upvote a post. Usage: upvote <post_id>
+    def downvote(self, *args)  # Downvote a post. Usage: downvote <post_id>
+    def delete_post(self, *args)  # Delete a post. Usage: delete_post <post_id>
+    def feed(self, *args)  # Read the feed. Usage: feed [sort] [limit]
+    def submolt_feed(self, *args)  # Feed for a specific submolt. Usage: submolt_feed <submolt> [sort] [limit]
+    def get_post(self, *args)  # Get a single post. Usage: get_post <post_id>
+    def get_comments(self, *args)  # Get comments on a post. Usage: get_comments <post_id> [sort]
+    def search(self, *args)  # Search posts. Usage: search <query> [limit]
+    def create_submolt(self, *args)  # Create a submolt community. Usage: create_submolt <name> <description>
+    def subscribe(self, *args)  # Subscribe to a submolt. Usage: subscribe <submolt>
+    def unsubscribe(self, *args)  # Unsubscribe from a submolt. Usage: unsubscribe <submolt>
+    def list_submolts(self, *args)  # List all submolts. Usage: list_submolts [sort] [limit]
+    def follow(self, *args)  # Follow another agent. Usage: follow <agent_name>
+    def unfollow(self, *args)  # Unfollow an agent. Usage: unfollow <agent_name>
+    def profile(self, *args)  # View profile. Usage: profile [agent_name]
+    def update_profile(self, *args)  # Update profile description. Usage: update_profile <description>
+    def notifications(self, *args)  # View notifications. Usage: notifications [limit]
+    def default(self, *args)  # Show available commands.
+
+── irc/packages/csc-service/csc_service/shared/services/nickserv_service.py ──
+# NickServ Service - User registration and identity management.
+  class Nickserv(Service):  # NickServ service for user registration and authentication.
+    def __init__(self, server_instance)  # Initialize the NickServ service.
+    def _load_db(self)  # Load the nickserv database from disk into memory.
+    def _save_db(self)  # Save the in-memory registry back to disk.
+    def _hash_password(self, password: str) -> str  # Hash a password using MD5.
+    def _verify_password(self, stored_hash: str, password: str) -> bool  # Verify a password against its stored hash.
+    def register(self, email: str, password: str) -> str  # Register the current nick with an email and password.
+    def _register_nick(self, nick: str, email: str, password: str) -> str  # Internal method to register a nick.
+    def ident(self, password: str) -> str  # Identify with your registered nick using the password.
+    def _ident_nick(self, nick: str, password: str) -> tuple  # Internal method to identify a nick.
+    def unregister(self, nick: str) -> str  # Unregister a nick (oper only).
+    def info(self, nick: str) -> str  # Show registration information for a nick (visible to oper/self).
+    def is_registered(self, nick: str) -> bool  # Check if a nick is registered.
+    def default(self, *args) -> str  # Show available NickServ commands.
+
+── irc/packages/csc-service/csc_service/shared/services/ntfy_service.py ──
+  class ntfy(Service):  # A dedicated service to send notifications via ntfy.sh.
+    def __init__(self, server_instance)  # Initializes the instance.
+    def send(self, *args)  # Sends a notification to the ntfy.sh topic.
+    def default(self, *args)  # Checks service status and shows the configured topic.
+
+── irc/packages/csc-service/csc_service/shared/services/orders_assembler.py ──
+# OrdersAssembler: Reads orders.md-template and resolves @include directives.
+  class OrdersAssembler:  # Reads orders.md-template and resolves @include directives into final orders.md.
+    def __init__(self, project_root)
+    def assemble(self, agent_name, workorder_filename, role='worker', template_path=None)  # Read template, resolve all @include directives, return assembled string.
+    def _find_template(self, agent_name)  # Find template: agent-specific first, then global fallback.
+    def _resolve_include(self, uri, agent_name, role, workorder_filename)  # Resolve an @include URI to file content.
+    def _read_glob(self, base, pattern)  # Expand glob pattern, sort results (README.md first), concatenate.
+    def _read_file(self, path)  # Read a single file, return content or empty string.
+    def _substitute(self, text, placeholders)  # Replace placeholder tags in text.
+    def extract_role(wip_path)  # Read role from workorder YAML front-matter. Default: 'worker'.
+
+── irc/packages/csc-service/csc_service/shared/services/patch_service.py ──
+  class patch(Service):  # Fuzzy patch service for applying code changes to service modules.
+    def __init__(self, server_instance)
+    def _find_anchor(lines, line_hint, text_fragment)  # Find a line containing text_fragment near line_hint.
+    def _parse_loose_patch(content)  # Parse loose anchor-format patch content.
+    def _apply_hunks(lines, hunks)  # Apply parsed hunks to a list of lines.
+    def _parse_unified_diff(content)  # Parse unified diff into hunks using fuzzy anchor matching.
+    def _detect_format(content)  # Detect patch format. Returns 'loose', 'unified', or None.
+    def _resolve_service_path(self, service_name)  # Convert a service name to its file path.
+    def apply(self, patch_filename: str) -> str  # Version target files and apply a patch from patches/ directory.
+    def _apply_content(self, content)  # Apply patch content (auto-detect format).
+    def revert(self, service_name: str, version: str='latest') -> str  # Revert a service file to a previous version.
+    def history(self, service_name: str) -> str  # Show version/patch history for a service file.
+    def default(self, *args) -> str  # Show help and patch format examples.
+
+── irc/packages/csc-service/csc_service/shared/services/patch_test_dummy_service.py ──
+  class patch_test_dummy(Service):  # A dummy service used exclusively as a patch test target.
+    def __init__(self, server_instance)
+    def hello(self)  # Return a greeting.
+    def add(self, a, b)  # Add two numbers.
+    def status(self)  # Return status string.
+    def multiply(self, x, y)  # Multiply two numbers.
+    def default(self, *args)  # Fallback handler.
+
+── irc/packages/csc-service/csc_service/shared/services/platform_service.py ──
+# Platform Service - System inventory and capability queries.
+  class platform(Service):  # Service for querying platform capabilities from IRC.
+    def __init__(self, server_instance)
+    def _load(self)  # Load current platform data from disk.
+    def info(self, *args) -> str  # Full system inventory.
+    def capabilities(self, *args) -> str  # List available tools and features.
+    def can(self, tool_name: str='', *args) -> str  # Check if a specific tool is available.
+    def hardware(self, *args) -> str  # Show hardware details.
+    def docker(self, *args) -> str  # Show Docker status details.
+    def agents(self, *args) -> str  # Show AI agent availability.
+    def refresh(self, *args) -> str  # Re-detect and refresh platform data.
+    def default(self, *args) -> str  # Show available commands.
+
+── irc/packages/csc-service/csc_service/shared/services/prompts_service.py ──
+# Prompts Service - Legacy Compatibility Wrapper
+
+── irc/packages/csc-service/csc_service/shared/services/proof_service.py ──
+  class Proof(Service):  # Proof of concept service
+    def __init__(self, service_layer=None)
+    def run(self, *args)  # Execute proof of concept
+    def default(self, *args)  # Default handler
+
+── irc/packages/csc-service/csc_service/shared/services/run_agent_executor.py ──
+# RunAgentExecutor: Pure Python executor for running AI agents without bash/batch scripts.
+  class RunAgentExecutor:  # Execute an AI agent for a queued workorder.
+    def __init__(self, agent_name: str, queue_entry_path: Path, project_root: Optional[Path]=None)  # Initialize executor with queue entry metadata.
+    def _find_project_root() -> Path  # Find project root by looking for CLAUDE.md or csc-service.json.
+    def _load_queue_entry(self) -> bool  # Load queue metadata from orders.json in same directory as orders.md.
+    def _prepare_environment(self) -> Dict[str, str]  # Prepare environment variables for agent execution.
+    def _build_command(self) -> Optional[Tuple[list, str]]  # Build the claude command for executing the agent.
+    def _journal_start(self) -> bool  # Write START marker to WIP file with timestamp.
+    def _journal_complete(self) -> bool  # Write COMPLETE marker to WIP file.
+    def _journal_error(self, message: str)  # Write error message to WIP file (and stderr).
+    def execute(self) -> int  # Main execution flow: load, prepare, build, run, journal.
+  def main()  # Entry point when run as: python run_agent_executor.py <agent> <queue_entry>
+
+── irc/packages/csc-service/csc_service/shared/services/version_service.py ──
+  class version(Service):  # Chatline-callable wrapper for the server's built-in file versioning system.
+    def create(self, filepath: str) -> str  # Creates a new version backup of the specified file.
+    def restore(self, filepath: str, version: str='latest') -> str  # Restores a file to a specific version (default: latest).
+    def history(self, filepath: str) -> str  # Shows version history for a file.
+    def list(self) -> str  # Lists all files that have version backups.
+    def default(self, *args) -> str  # Shows available commands for the Version service.
+
+── irc/packages/csc-service/csc_service/shared/services/wakeword_service.py ──
+# Wakeword Service - Manages global wakeword list for AI message filtering.
+  WAKEWORDS_FILE = 'wakewords.json'
+  WAKEWORDS_DEFAULT = {'version': 1, 'words': []}
+  class wakeword(Service):  # Wakeword management service for AI message filtering.
+    def __init__(self, server_instance)
+    def _get_storage_path(self)  # Get the path to wakewords.json.
+    def _load_wakewords(self)  # Load wakewords from disk. Returns list of lowercase words.
+    def _save_wakewords(self, words)  # Save wakewords to disk atomically.
+    def add(self, *args) -> str  # Add a wakeword (case-insensitive).
+    def delete(self, *args) -> str  # Remove a wakeword.
+    def __getattr__(self, name)
+    def remove(self, *args) -> str  # Alias for delete.
+    def list(self, *args) -> str  # Show all wakewords.
+    def default(self, *args) -> str  # Show available wakeword commands.
+
+── irc/packages/csc-service/csc_service/shared/services/workorders_service.py ──
+# Prompts Service - Work Queue Management
+  class workorders(Service):  # Service for managing prompt files in a work queue system.
+    def __init__(self, server_instance)
+    def urgency(self, *args) -> str  # Get or set default urgency level for new workorders.
+    def _sanitize_filename(self, description)  # Convert description to safe filename component.
+    def _format_prompt_list(self, dir_name, files)  # Format a numbered list of workorders with urgency and tags.
+    def add(self, *args) -> str  # Create a new workorder with metadata and execution mode support.
+    def list(self, *args) -> str  # List workorders in specified directory or all directories.
+    def read(self, filename: str) -> str  # Read and display a prompt file.
+    def edit(self, *args) -> str  # Edit an existing prompt file.
+    def append(self, *args) -> str  # Append content to an existing prompt file.
+    def _resolve_prompt(self, ref, from_dir='ready')  # Resolve a prompt reference (number or filename) to a filepath.
+    def assign(self, *args) -> str  # Assign a workorder to an agent with execution mode support.
+    def move(self, *args) -> str  # Move a prompt between directories.
+    def delete(self, filename: str) -> str  # Delete a prompt file.
+    def status(self) -> str  # Show status of all prompt directories.
+    def archive(self, filename: str) -> str  # Archive a completed prompt from done/ to archive/.
+    def default(self, *args) -> str  # Show available commands.
+  class prompts(workorders):  # Compatibility alias for legacy prompts service.
+
+── irc/packages/csc-service/csc_service/shared/subprocess_wrapper.py ──
+# Global subprocess wrapper - auto-hides windows on Windows.
+  class Popen(subprocess.Popen):  # subprocess.Popen wrapper - auto-add CREATE_NO_WINDOW on Windows.
+    def __init__(self, *args, **kwargs)
+  def run(*args, **kwargs)  # subprocess.run wrapper - auto-add CREATE_NO_WINDOW on Windows.
+  def patch_subprocess()  # Monkey-patch subprocess module to auto-hide windows.
+
+── irc/packages/csc-service/csc_service/shared/utils/__init__.py ──
+# Shared utility modules for CSC framework.
+
+── irc/packages/csc-service/csc_service/shared/utils/queue_utils.py ──
+# Utilities for work queue directory management (ready/wip/done/hold).
+  class QueueDirectories:  # Manages ready/wip/done/hold directory structure for work queues.
+    def __init__(self, base_path: Path)  # Initialize queue directories.
+    def ensure_exist(self)  # Create all queue directories if they don't exist.
+    def get(self, name: str) -> Path  # Get directory path by name.
+    def list_files(self, dirname: str, suffix: str='.md') -> List[str]  # List files in directory with given suffix, sorted alphabetically.
+    def find_file(self, filename: str, add_suffix: bool=True) -> Tuple[Path, str]  # Find file in any directory.
+    def get_counts(self) -> Dict[str, int]  # Get file counts per directory.
+    def move_file(self, filename: str, from_dir: str, to_dir: str) -> bool  # Move file between directories.
+
+── irc/packages/csc-service/csc_service/shared/utils/wip_journal.py ──
+# Utilities for WIP file journaling and crash recovery.
+  class WIPJournal:  # Manages WIP file journaling for crash recovery and progress tracking.
+    def __init__(self, wip_path: Path)  # Initialize journal for a WIP file.
+    def append_entry(self, entry: str) -> bool  # Add a single-line journal entry.
+    def stamp_pid(self, pid: int) -> bool  # Replace PID placeholder with actual process ID.
+    def get_last_entry(self) -> str  # Get the last journal entry (for crash recovery).
+    def read_content(self) -> str  # Read full WIP file content.
+    def write_content(self, content: str) -> bool  # Overwrite WIP file content.
+    def exists(self) -> bool  # Check if WIP file exists.
+    def get_line_count(self) -> int  # Get number of lines in WIP file.
+    def get_last_n_lines(self, n: int=20) -> str  # Get last N lines of WIP file.
+
+── irc/packages/csc-service/csc_service/shared/version.py ──
+# Shim: re-exports Version from the installed csc-version layer package.
+
+── irc/packages/csc-service/pyproject.toml ──
+# [build-system]

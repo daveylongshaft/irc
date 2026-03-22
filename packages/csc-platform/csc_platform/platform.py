@@ -970,9 +970,7 @@ class Platform(Version):
                 f.flush()
                 os.fsync(f.fileno())
             tmp.replace(filepath)
-            # Only log if DEBUG mode enabled - reduces spam in normal operation
-            if os.environ.get('CSC_DEBUG'):
-                self.log(f"[Platform] Persisted inventory to {filepath}")
+            self.log(f"[Platform] Persisted inventory to {filepath}")
         except Exception as e:
             self.log(f"[Platform] Failed to persist platform.json: {e}")
 

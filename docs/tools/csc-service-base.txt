@@ -1,0 +1,28 @@
+CSC-SERVICE-BASE SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-service-base/csc_service_base.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-service-base/csc_service_base.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-service-base/csc_service_base.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-service-base/csc_service_base.egg-info/requires.txt ──
+# csc-network>=0.1.0
+
+── irc/packages/csc-service-base/csc_service_base.egg-info/top_level.txt ──
+# csc_service_base
+
+── irc/packages/csc-service-base/csc_service_base/__init__.py ──
+# Independent Service layer package for the CSC inheritance chain.
+
+── irc/packages/csc-service-base/csc_service_base/service.py ──
+  class Service(Network):
+    def __init__(self, server_instance=None)
+    def default(self, *args)  # Default command handler for a service.
+    def handle_command(self, class_name_raw, method_name_raw, args, source_name, source_address)  # Executes a command by dynamically loading a service module.
+
+── irc/packages/csc-service-base/pyproject.toml ──
+# [build-system]
