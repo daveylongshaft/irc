@@ -15,7 +15,7 @@ from csc_service.shared.channel import ChannelManager
 from csc_service.shared.chat_buffer import ChatBuffer
 from csc_service.shared.irc import SERVER_NAME
 from csc_service.shared.crypto import is_encrypted, decrypt, encrypt
-from csc_service.server.server_s2s import ServerNetwork
+from csc_server_core.server_network import ServerNetwork
 
 
 class Server(Service):
@@ -102,8 +102,10 @@ class Server(Service):
         # Restore server state from disk
         self.restore_all(self)
 
-        # Record startup time for S2S federation
+        # Record startup time and server identity for S2S federation
         self.startup_time = time.time()
+        from csc_platform import Platform
+        self.server_id = Platform.get_server_shortname()
 
         # Run one cleanup pass immediately to prune any ghosts from previous runs
         self._run_cleanup_once()
@@ -513,8 +515,8 @@ class Server(Service):
 
         # Check if nick is on a remote server via S2S
         if hasattr(self, 's2s_network'):
-            remote_info = self.s2s_network.get_user_from_network(nick)
-            if remote_info:
+            _link, remote_info = self.s2s_network.get_user_from_network(nick)
+            if remote_info is not None:
                 # Route via S2S
                 line = message if isinstance(message, str) else message.decode("utf-8", errors="ignore")
                 self.log(f"[S2S] Routing line to remote user {nick} on {remote_info['server_id']}")
