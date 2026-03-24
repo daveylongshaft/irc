@@ -3,7 +3,7 @@
 """Info/query handlers: WHO, WHOIS, WHOWAS, MOTD, HELP, LOCALCONFIG, ISOP."""
 
 import time
-from csc_service.shared.irc import (
+from csc_server_core.irc import (
     format_irc_message, SERVER_NAME,
     RPL_WHOISUSER, RPL_WHOISSERVER, RPL_WHOISOPERATOR, RPL_ENDOFWHOIS,
     RPL_WHOWASUSER, RPL_ENDOFWHOWAS, ERR_WASNOSUCHNICK,

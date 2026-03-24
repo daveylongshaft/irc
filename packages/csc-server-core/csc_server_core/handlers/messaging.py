@@ -2,7 +2,7 @@
 
 """Messaging handlers: PRIVMSG, NOTICE, wakeword filtering, buffer replay."""
 
-from csc_service.shared.irc import (
+from csc_server_core.irc import (
     format_irc_message, SERVER_NAME,
     ERR_NORECIPIENT, ERR_NOTEXTTOSEND, ERR_NOSUCHCHANNEL,
     ERR_CANNOTSENDTOCHAN, ERR_NOSUCHNICK, ERR_NEEDMOREPARAMS,
