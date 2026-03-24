@@ -27,7 +27,7 @@ import json
 import threading
 from pathlib import Path
 from csc_log import Log
-from csc_service.shared.server_data import ServerData
+from csc_data.server_data import ServerData
 
 
 # ---------------------------------------------------------------------------
