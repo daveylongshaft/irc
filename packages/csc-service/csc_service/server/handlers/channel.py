@@ -71,9 +71,10 @@ class ChannelMixin:
                                            f"{chan_name} :Cannot join channel (+b) - You are banned")
                         return
 
-                # Auto-op founder: first joiner of empty channel gets +o, channel gets +nt
+                # Auto-op founder: first local joiner of channel with no local members gets +o
                 initial_modes = set()
-                if channel.member_count() == 0:
+                local_member_count = sum(1 for m in channel.members.values() if m.get("addr") is not None)
+                if local_member_count == 0:
                     initial_modes.add("o")
                     channel.modes.add("n")   # no external messages
                     channel.modes.add("t")   # topic locked to ops
