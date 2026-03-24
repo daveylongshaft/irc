@@ -599,7 +599,7 @@ class ServerNetwork:
         self._seen_servers = {self.server_id}
 
     def _load_cert_config(self):
-        """Load S2S cert paths from csc-service.json (CSC_ROOT/csc-service.json)."""
+        """Load S2S cert paths and password from csc-service.json (CSC_ROOT/csc-service.json)."""
         try:
             csc_root = os.environ.get('CSC_HOME', '')
             if not csc_root:
@@ -612,8 +612,13 @@ class ServerNetwork:
             self.s2s_cert_path = cfg.get("s2s_cert", "")
             self.s2s_key_path = cfg.get("s2s_key", "")
             self.s2s_ca_path = cfg.get("s2s_ca", "")
+            # Load s2s_password from config if not already set from environment
+            if not self.s2s_password:
+                self.s2s_password = cfg.get("s2s_password", "")
             if self.s2s_cert_path:
                 self._log(f"Cert auth configured: {Path(self.s2s_cert_path).name}")
+            if self.s2s_password:
+                self._log(f"S2S password configured")
         except Exception as e:
             self._log(f"WARNING: Could not load cert config: {e}")
 

@@ -102,7 +102,12 @@ class Data(OldData):
                 print(f"CRITICAL: Failed to write encrypted log '{enc_path}': {exc}", file=sys.stderr)
 
     def log(self, message: str, level: str = "INFO"):
-        """Write a structured log entry to the encrypted VFS log for this object."""
+        """Write a structured log entry to plain filesystem (not VFS).
+
+        All logging in Data stays on plain filesystem.
+        VFS is reserved for encrypted file transfers over IRC only."""
+        from csc_log.log import _get_logs_dir
+
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         class_name = self.__class__.__name__
         log_entry = f"[{timestamp}] [{class_name}] [{level}] {message}\n"
@@ -110,13 +115,26 @@ class Data(OldData):
         if not os.environ.get("CSC_QUIET"):
             print(log_entry.strip())
 
-        log_filename = Path(self.log_file).name if hasattr(self, "log_file") else "data.log"
-        self.write_log(log_filename, log_entry)
+        try:
+            log_filename = Path(self.log_file).name if hasattr(self, "log_file") else "data.log"
+            log_path = _get_logs_dir() / log_filename
+            with open(log_path, "a") as f:
+                f.write(log_entry)
+        except Exception as e:
+            if not os.environ.get("CSC_QUIET"):
+                print(f"CRITICAL: Failed to write log file '{log_filename}': {e}", file=sys.stderr)
 
     def _write_runtime(self, line: str):
-        """Persist runtime feed lines to the encrypted VFS log."""
+        """Persist runtime feed lines to plain filesystem (not VFS).
+
+        All runtime logs in Data stay on plain filesystem.
+        VFS is reserved for encrypted file transfers over IRC only."""
+        from csc_log.log import _get_logs_dir
+
         try:
-            self.write_log("runtime.log", line + "\n")
+            runtime_path = _get_logs_dir() / "runtime.log"
+            with open(runtime_path, "a") as f:
+                f.write(line + "\n")
         except Exception:
             pass
 

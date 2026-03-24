@@ -1,0 +1,32 @@
+CSC-VERSION SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-version/csc_version.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-version/csc_version.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-version/csc_version.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-version/csc_version.egg-info/requires.txt ──
+# csc-data>=0.1.0
+
+── irc/packages/csc-version/csc_version.egg-info/top_level.txt ──
+# csc_version
+
+── irc/packages/csc-version/csc_version/__init__.py ──
+# Independent Version layer package for the CSC inheritance chain.
+
+── irc/packages/csc-version/csc_version/version.py ──
+# File versioning system for the CSC shared package.
+  class Version(Data):  # Extends the Data class.
+    def __init__(self)
+    def get_version_dir_for_file(self, filepath: str) -> Path  # Generates a unique version history directory for a given file.
+    def _get_version_info(self, file_backup_dir: Path) -> dict  # Reads version metadata from the 'versions.json' file for a specific file.
+    def _write_version_info(self, file_backup_dir: Path, version_info: dict)  # Writes updated version info back to the metadata file.
+    def restore_version(self, filepath: str, version: str='latest')  # Restores a file to a specific version from its backup history.
+    def create_new_version(self, filepath: str)  # Creates a new, sequentially numbered version of a file.
+
+── irc/packages/csc-version/pyproject.toml ──
+# [build-system]

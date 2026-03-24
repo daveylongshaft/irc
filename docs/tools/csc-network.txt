@@ -1,0 +1,35 @@
+CSC-NETWORK SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-network/csc_network.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-network/csc_network.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-network/csc_network.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-network/csc_network.egg-info/requires.txt ──
+# csc-platform>=0.1.0
+
+── irc/packages/csc-network/csc_network.egg-info/top_level.txt ──
+# csc_network
+
+── irc/packages/csc-network/csc_network/__init__.py ──
+# Independent Network layer package for the CSC inheritance chain.
+
+── irc/packages/csc-network/csc_network/network.py ──
+# Network communication module for the CSC shared package.
+  class Network(Platform):
+    def __init__(self, host='127.0.0.1', port=9525, name='network')  # Initializes the Network class.
+    def _network_listener(self)  # Listens for all incoming data and filters keepalives.
+    def start_listener(self)  # Starts the background network listener thread.
+    def get_message(self)  # Gets one message tuple (bytes, addr) from the buffer.
+    def send(self, message)  # Send a message to the server, encoding if necessary.
+    def sock_send(self, data, addr)  # Sends data in chunks, handling both string and bytes types safely.
+    def maybe_send_keepalive(self)  # Sends a periodic keep-alive packet silently.
+    def close(self)  # Cleanly close the network socket and stop the listener thread.
+    def connected_for(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-network/pyproject.toml ──
+# [build-system]

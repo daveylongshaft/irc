@@ -5,7 +5,7 @@ import shlex
 import importlib
 import sys
 import inspect
-from csc_service.shared.network import Network
+from csc_network import Network
 
 
 class Service( Network ):

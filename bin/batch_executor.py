@@ -25,6 +25,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Optional
 
+# Fix Windows console encoding issue
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 # CSC paths - try to use Platform object for intelligent resolution
 try:
     from csc_service.shared.platform import Platform

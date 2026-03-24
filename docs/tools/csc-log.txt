@@ -1,0 +1,33 @@
+CSC-LOG SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-log/csc_log.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-log/csc_log.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-log/csc_log.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-log/csc_log.egg-info/requires.txt ──
+# csc-root>=0.1.0
+
+── irc/packages/csc-log/csc_log.egg-info/top_level.txt ──
+# csc_log
+
+── irc/packages/csc-log/csc_log/__init__.py ──
+# Independent Log layer package for the CSC inheritance chain.
+
+── irc/packages/csc-log/csc_log/log.py ──
+  class Log(Root):  # Extends the root class.
+    def __init__(self, server=None)
+    def set_platform_log_dir(cls, log_dir)  # Called by Platform after path detection — no-op here since log.py
+    def log(self, message: str, level: str='INFO')  # Logs a message to the central project log file and prints to console.
+    def runtime(self, message: str)  # Write a compact line to logs/runtime.log for the #runtime IRC feed.
+    def help(self, method_name=None)  # Returns help for the class or a specific method as a string.
+    def _tail_log_file(self, path, offset: int=0)  # Read new lines from a disk log file starting at byte offset.
+    def test(self)  # Runs a base self-test for the class.
+  def _get_logs_dir() -> Path  # Resolve logs directory without requiring Platform() to be instantiated.
+
+── irc/packages/csc-log/pyproject.toml ──
+# [build-system]

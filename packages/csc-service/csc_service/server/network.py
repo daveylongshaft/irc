@@ -3,7 +3,7 @@ import time
 import random
 import threading
 import queue
-from csc_service.shared.platform import Platform
+from csc_platform import Platform
 
 
 class Network( Platform ):

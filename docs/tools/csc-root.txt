@@ -1,0 +1,47 @@
+CSC-ROOT SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-root/bin/parity.py ──
+# Parity File Utility
+  PARITY_FILENAME = '.parity_set'
+  REDUNDANCY = 2
+  BLOCK_SIZE = 4096
+  METADATA_HEADER_SIZE = 16
+  class ParityManager:  # Manages the creation, verification, and repair of files using parity data.
+    def __init__(self, base_dir, recursion_level)
+    def _scan_files(self)  # Scans for files in the base directory according to the recursion level.
+    def _hash_file(self, filepath)  # Calculates the SHA256 hash of a file.
+    def _read_metadata(self)  # Reads and returns the metadata from the parity file.
+    def _verify_integrity(self, metadata)  # Verifies files against metadata and returns their status.
+    def create_parity_file(self, force_new=False, file_list=None)  # Creates a new parity file for the files in the directory.
+    def check_only(self)  # Performs a check and reports the status without repairing.
+    def repair(self)  # Verifies file integrity and repairs them if necessary and possible.
+    def update(self)  # Checks for new/removed files and updates the parity set.
+  def main()  # Main function to parse arguments and execute commands.
+
+── irc/packages/csc-root/csc_root.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-root/csc_root.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-root/csc_root.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-root/csc_root.egg-info/top_level.txt ──
+# csc_root
+
+── irc/packages/csc-root/csc_root/__init__.py ──
+# Independent Root layer package for the CSC inheritance chain.
+
+── irc/packages/csc-root/csc_root/letter_to_other_me.md ──
+# # Letter to the Other Me at haven.ef6e
+
+── irc/packages/csc-root/csc_root/root.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  class Root:  # The first and lowest class in the project's inheritance hierarchy.
+    def __init__(self)  # Initializes the Root class.
+    def get_command_keyword(self)  # Returns the system command keyword.
+    def run(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-root/pyproject.toml ──
+# [build-system]

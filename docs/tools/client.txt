@@ -55,7 +55,9 @@ CLIENT SUBMODULE MAP
     def _is_authorized(self, nick, channel=None)  # Check if a nick is authorized to command this client.
     def _handle_privmsg_recv(self, parsed)  # Handle received PRIVMSG, including nick-prefixed command execution.
     def _handle_local_file_session_line(self, sender_nick, text, target)  # Handle a line during an active local file upload session.
-    def _handle_notice_recv(self, parsed)  # Handle received NOTICE, including ISOP responses.
+    def _handle_notice_recv(self, parsed)  # Handle received NOTICE, including ISOP responses and VFS protocol.
+    def _handle_vfs_notice(self, text: str)  # Handle VFS protocol NOTICEs from the server.
+    def _vfs_command(self, args: str)  # Handle /vfs subcommands.
     def handle_server_message(self, msg: str)  # Legacy handler — prints messages received from the server.
     def process_command(self, cmd: str)  # Processes user commands with alias/macro expansion.
     def print_local_help(self)  # Displays available client-side commands.
@@ -184,6 +186,35 @@ CLIENT SUBMODULE MAP
 
 ── irc/packages/csc-service/csc_service/clients/gemini/gemini.bat ──
 # @echo off
+
+── irc/packages/csc-service/csc_service/clients/jules/__init__.py ──
+
+── irc/packages/csc-service/csc_service/clients/jules/config.py ──
+# Jules configuration - reads from csc-service.json.
+  class JulesConfig:  # Jules configuration loaded from csc-service.json.
+    def __init__(self, config_path=None)
+    def enabled(self)
+    def api_key_path(self)
+    def max_concurrent_sessions(self)
+    def auto_approve_plans(self)
+    def github_repo(self)
+    def github_branch(self)
+
+── irc/packages/csc-service/csc_service/clients/jules/jules.py ──
+# Jules client for workorder execution via Jules REST API.
+  JULES_API_BASE = 'https://jules.googleapis.com/v1alpha'
+  class Jules(Log):  # Jules API client for autonomous coding tasks via REST API.
+    def __init__(self)
+    def _load_api_key(self) -> str  # Load Jules API key from config file.
+    def _api_headers(self) -> dict  # Build API request headers.
+    def submit_workorder(self, workorder_path: str, repo_url: str) -> str  # Submit workorder to Jules via REST API, return session ID.
+    def _create_session(self, prompt: str, repo_url: str) -> str  # Create Jules session via REST API.
+    def check_status(self, session_id: str) -> dict  # Check session status via REST API.
+    def list_sessions(self) -> list  # List all sessions via REST API.
+    def get_results(self, session_id: str) -> dict  # Get session activities/results via REST API.
+    def approve_plan(self, session_id: str) -> bool  # Approve a pending plan via REST API.
+    def send_message(self, session_id: str, message: str) -> bool  # Send a message to an active session.
+    def cancel_session(self, session_id: str) -> bool  # Cancel active session (not directly supported, send cancel message).
 
 ── irc/packages/csc-service/csc_service/clients/julius/__init__.py ──
 
