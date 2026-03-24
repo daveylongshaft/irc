@@ -122,6 +122,10 @@ class MessagingMixin:
                     out = format_irc_message(prefix, "NOTICE", [normalized_target], text) + "\r\n"
                     self.server.broadcast_to_channel(normalized_target, out, exclude=addr)
                     self.server.chat_buffer.append(normalized_target, nick, "NOTICE", text)
+
+                    # S2S: Route channel NOTICE to federation network
+                    if hasattr(self.server, 's2s_network'):
+                        self.server.s2s_network.route_notice(nick, normalized_target, text)
             else:
                 self._maybe_replay_pm_buffer(target, nick)
                 out = format_irc_message(prefix, "NOTICE", [target], text) + "\r\n"

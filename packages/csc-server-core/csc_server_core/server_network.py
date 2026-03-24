@@ -130,6 +130,7 @@ class ServerLink:
         self._running = False
         self.link_time = None  # timestamp when link was established
         self.remote_timestamp = None  # remote server's startup time
+        self.direction = "outbound"  # or "inbound", set by caller
 
         # Crypto state
         self._dh_exchange = None  # Local DHExchange instance
@@ -139,6 +140,17 @@ class ServerLink:
         # Handshake synchronization (for outbound connections)
         self._slinkack_received = threading.Event()  # Signaled when SLINKACK arrives
         self._slinkack_error = None  # Error message if SLINKACK validation failed
+
+        # Reliable delivery
+        self._send_seq = 0
+        self._recv_seq = 0
+        self._peer_ack_seq = 0
+        self._outbound_queue = []    # [(seq, timestamp, encrypted_bytes)]
+        self._queue_lock = threading.Lock()
+        self._max_queue = 1000
+        self._max_age = 30.0         # seconds
+        self._retransmit_interval = 2.0
+        self._last_retransmit = 0.0
 
         # Per-link remote state tracking (users/channels learned from THIS peer)
         self.remote_users = {}   # nick_lower -> {nick, server_id, host, modes, connect_time, channels}
@@ -277,9 +289,9 @@ class ServerLink:
                         self._slinkack_received.set()
                         return
                     if cn != self.remote_server_id:
-                        self._slinkack_error = f"Cert CN {cn!r} != claimed server_id {self.remote_server_id!r}"
-                        self._slinkack_received.set()
-                        return
+                        # Cert CN is authoritative — use it as the real server_id
+                        self._log(f"Cert CN {cn!r} overrides claimed server_id {self.remote_server_id!r}")
+                        self.remote_server_id = cn
                 except Exception as e:
                     self._slinkack_error = f"Failed to verify cert: {e}"
                     self._slinkack_received.set()
@@ -441,6 +453,7 @@ class ServerLink:
                 try:
                     data, addr = self._sock.recvfrom(65535)
                 except socket.timeout:
+                    self._retransmit_unacked()
                     continue
 
                 if not data:
@@ -467,6 +480,25 @@ class ServerLink:
 
                 if not line:
                     continue
+
+                # Parse SEQ/ACK header if present (reliable delivery)
+                if line.startswith("SEQ "):
+                    parts = line.split(" ", 5)
+                    if len(parts) >= 4:
+                        try:
+                            msg_seq = int(parts[1])
+                            ack_seq = int(parts[3])
+                        except (ValueError, IndexError):
+                            continue
+                        line = parts[4] if len(parts) > 4 else ""
+                        self._process_ack(ack_seq)
+                        if msg_seq == 0:
+                            continue  # Pure ACK, no payload
+                        if msg_seq <= self._recv_seq:
+                            continue  # Duplicate, already processed
+                        self._recv_seq = msg_seq
+                        if not line:
+                            continue
 
                 # Check for crypto handshake messages first
                 if line.startswith("CRYPTOINIT DH "):
@@ -512,25 +544,10 @@ class ServerLink:
             *args: Arguments for the command. The last arg with spaces
                    gets trailing syntax automatically.
         """
-        with self._lock:
-            if not self._connected or not self._sock or not self._remote_address:
-                return False
-            try:
-                parts = [command] + [str(a) for a in args]
-                line = " ".join(parts)
-                data = line.encode("utf-8")
-
-                # Encrypt if we have an AES key
-                if self._encrypted and self._aes_key:
-                    data = encrypt(self._aes_key, data)
-
-                # Send UDP datagram
-                self._sock.sendto(data, self._remote_address)
-                return True
-            except Exception as e:
-                self._log(f"Send failed to {self.remote_server_id}: {e}")
-                self._connected = False
-                return False
+        parts = [command] + [str(a) for a in args]
+        line = " ".join(parts)
+        # SEQ/ACK disabled until both peers support it (Linux drops SEQ as unknown cmd)
+        return self._send_raw_direct(line)
 
     def send_raw(self, line):
         """Send a raw line to the remote server (encrypted if key available).
@@ -538,23 +555,80 @@ class ServerLink:
         Args:
             line: Complete S2S line (without CRLF).
         """
+        # SEQ/ACK disabled until both peers support it (Linux drops SEQ as unknown cmd)
+        return self._send_raw_direct(line)
+
+    def _send_raw_direct(self, line):
+        """Send a raw line without seq/ack wrapping (used for pre-auth messages)."""
         with self._lock:
             if not self._connected or not self._sock or not self._remote_address:
                 return False
             try:
                 data = line.encode("utf-8")
-
-                # Encrypt if we have an AES key
                 if self._encrypted and self._aes_key:
                     data = encrypt(self._aes_key, data)
-
-                # Send UDP datagram
                 self._sock.sendto(data, self._remote_address)
                 return True
             except Exception as e:
                 self._log(f"Raw send failed: {e}")
                 self._connected = False
                 return False
+
+    def _send_with_seq(self, line):
+        """Send a line with SEQ/ACK header for reliable delivery."""
+        with self._queue_lock:
+            self._send_seq += 1
+            seq = self._send_seq
+            header = f"SEQ {seq} ACK {self._recv_seq} {line}"
+        with self._lock:
+            if not self._connected or not self._sock or not self._remote_address:
+                return False
+            try:
+                data = header.encode("utf-8")
+                if self._encrypted and self._aes_key:
+                    data = encrypt(self._aes_key, data)
+                self._sock.sendto(data, self._remote_address)
+                with self._queue_lock:
+                    self._outbound_queue.append((seq, time.time(), data))
+                    # Trim queue if too large
+                    if len(self._outbound_queue) > self._max_queue:
+                        self._outbound_queue = self._outbound_queue[-self._max_queue:]
+                return True
+            except Exception as e:
+                self._log(f"Seq send failed to {self.remote_server_id}: {e}")
+                self._connected = False
+                return False
+
+    def _process_ack(self, ack_seq):
+        """Remove all queue entries with seq <= ack_seq."""
+        with self._queue_lock:
+            self._peer_ack_seq = max(self._peer_ack_seq, ack_seq)
+            self._outbound_queue = [
+                (s, t, d) for s, t, d in self._outbound_queue if s > ack_seq
+            ]
+
+    def _retransmit_unacked(self):
+        """Retransmit unacked messages, dropping those older than max_age."""
+        now = time.time()
+        if now - self._last_retransmit < self._retransmit_interval:
+            return
+        self._last_retransmit = now
+        with self._queue_lock:
+            # Drop messages older than max_age
+            self._outbound_queue = [
+                (s, t, d) for s, t, d in self._outbound_queue
+                if now - t < self._max_age
+            ]
+            to_send = list(self._outbound_queue)
+        # Retransmit remaining (already encrypted)
+        with self._lock:
+            if not self._connected or not self._sock or not self._remote_address:
+                return
+            for seq, ts, data in to_send:
+                try:
+                    self._sock.sendto(data, self._remote_address)
+                except Exception:
+                    break
 
     def is_connected(self):
         """Check if this link is alive and authenticated."""
@@ -565,13 +639,18 @@ class ServerLink:
         self._running = False
         self._connected = False
         self._authenticated = False
-        if self._sock:
+        # Only close socket for outbound links (they own their socket).
+        # Inbound links share the listener socket — closing it would kill
+        # ALL S2S reception.
+        if self._sock and self.direction != "inbound":
             try:
                 self._sock.close()
             except Exception:
                 if hasattr(self, 'log'):
                     self.log('Ignored exception', level='DEBUG')
             self._sock = None
+        elif self.direction == "inbound":
+            self._sock = None  # Release reference without closing
         if self._reader_thread and self._reader_thread.is_alive():
             self._reader_thread.join(timeout=2)
         self._log(f"Link to {self.remote_server_id or 'unknown'} closed")
@@ -810,8 +889,34 @@ class ServerNetwork:
                     self._links.pop(remote_id, None)
                 link.close()
                 return
-            print(f"[S2S-LINKER] Successfully linked to {peer_key} as {remote_id}")
-            self._log(f"Successfully linked to peer {peer_key} as {remote_id}")
+
+            # Re-register under real server_id with tiebreaker
+            actual_id = link.remote_server_id
+            with self._lock:
+                # Remove placeholder key (was "host:port" before auth)
+                self._links.pop(remote_id, None)
+
+                # Tiebreaker: lower server_id is the designated connector
+                local_id = self._get_local_server_id()
+                existing = self._links.get(actual_id)
+                if existing and existing.is_connected():
+                    if local_id < actual_id:
+                        # We win as connector — close their inbound, keep ours
+                        self._log(f"Tiebreaker: closing inbound from {actual_id}, keeping outbound")
+                        existing.close()
+                    else:
+                        # They win — keep their link, drop ours
+                        self._log(f"Tiebreaker: keeping inbound from {actual_id}, dropping outbound")
+                        link.close()
+                        return
+
+                self._links[actual_id] = link
+                self._seen_servers.add(actual_id)
+            print(f"[S2S-LINKER] Successfully linked to {peer_key} as {actual_id}")
+            self._log(f"Successfully linked to peer {peer_key} as {actual_id}")
+
+            # Send our users/channels to the remote so sync is bidirectional
+            self._send_full_sync(link)
 
         except Exception as e:
             print(f"[S2S-LINKER] Exception linking to {peer_key}: {e}")
@@ -899,9 +1004,29 @@ class ServerNetwork:
                     link._remote_address = addr
                     link._connected = True
                     link._sock = self._listener_sock  # For sending replies
+                    link.direction = "inbound"
                     peer_links[addr] = link
 
                 link = peer_links[addr]
+
+                # Parse SEQ/ACK header if present (reliable delivery)
+                if line.startswith("SEQ "):
+                    parts = line.split(" ", 5)
+                    if len(parts) >= 4:
+                        try:
+                            msg_seq = int(parts[1])
+                            ack_seq = int(parts[3])
+                        except (ValueError, IndexError):
+                            continue
+                        line = parts[4] if len(parts) > 4 else ""
+                        link._process_ack(ack_seq)
+                        if msg_seq == 0:
+                            continue  # Pure ACK, no payload
+                        if msg_seq <= link._recv_seq:
+                            continue  # Duplicate, already processed
+                        link._recv_seq = msg_seq
+                        if not line:
+                            continue
 
                 # Handle DH exchange
                 if line.startswith("CRYPTOINIT DH "):
@@ -980,6 +1105,23 @@ class ServerNetwork:
                         print(f"[S2S-INBOUND] SLINKACK sent")
 
                         with self._lock:
+                            existing = self._links.get(remote_id)
+                            if existing and existing.is_connected():
+                                local_id_check = self._get_local_server_id()
+                                if local_id_check < remote_id:
+                                    # We are designated connector — reject inbound
+                                    self._log(f"Tiebreaker: rejecting inbound cert link from {remote_id}")
+                                    link._authenticated = False
+                                    link._connected = False
+                                    reply = "ERROR Already linked"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
+                                    peer_links.pop(addr, None)
+                                    continue
+                                else:
+                                    # They are designated connector — close our outbound, accept theirs
+                                    self._log(f"Tiebreaker: closing outbound to {remote_id}, accepting inbound")
+                                    existing.close()
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
@@ -1010,6 +1152,23 @@ class ServerNetwork:
                         self._listener_sock.sendto(reply_data, addr)
 
                         with self._lock:
+                            existing = self._links.get(remote_id)
+                            if existing and existing.is_connected():
+                                local_id_check = self._get_local_server_id()
+                                if local_id_check < remote_id:
+                                    # We are designated connector — reject inbound
+                                    self._log(f"Tiebreaker: rejecting inbound link from {remote_id}")
+                                    link._authenticated = False
+                                    link._connected = False
+                                    reply = "ERROR Already linked"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
+                                    peer_links.pop(addr, None)
+                                    continue
+                                else:
+                                    # They are designated connector — close our outbound, accept theirs
+                                    self._log(f"Tiebreaker: closing outbound to {remote_id}, accepting inbound")
+                                    existing.close()
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
@@ -1027,6 +1186,8 @@ class ServerNetwork:
                         self._log(f"Error dispatching S2S message: {e}")
 
             except socket.timeout:
+                for link in list(peer_links.values()):
+                    link._retransmit_unacked()
                 continue
             except Exception as e:
                 if self._running:
@@ -1156,11 +1317,17 @@ class ServerNetwork:
         """
         line = f"{command} {args_str}".strip() if args_str else command
         with self._lock:
+            link_count = len(self._links)
+            if link_count == 0:
+                self._log(f"broadcast_to_network({command}): no links!")
             for server_id, link in list(self._links.items()):
                 if server_id == exclude_server:
                     continue
-                if link.is_connected():
-                    link.send_raw(line)
+                connected = link.is_connected()
+                self._log(f"broadcast_to_network({command}) -> {server_id}: connected={connected}, has_sock={link._sock is not None}, has_addr={link._remote_address is not None}")
+                if connected:
+                    ok = link.send_raw(line)
+                    self._log(f"broadcast_to_network({command}) -> {server_id}: send_raw returned {ok}")
 
     def get_user_from_network(self, nick):
         """Find a user on any server in the network and which link has them.
@@ -1212,6 +1379,11 @@ class ServerNetwork:
         """
         args = f"{source_nick} {target} :{text}"
         self.broadcast_to_network("SYNCMSG", args, exclude_server=exclude_server)
+
+    def route_notice(self, source_nick, target, text, exclude_server=None):
+        """Route a NOTICE across the network."""
+        args = f"{source_nick} {target} :{text}"
+        self.broadcast_to_network("SYNCNOTICE", args, exclude_server=exclude_server)
 
     def sync_line(self, target_nick, line, exclude_server=None):
         """Route a raw IRC line to a specific user on the network.
@@ -1307,6 +1479,20 @@ class ServerNetwork:
         args = f"{channel_name} :{topic}"
         self.broadcast_to_network("SYNCTOPIC", args, exclude_server=exclude_server)
 
+    def sync_channel_mode(self, chan_name, setter_nick, mode_str, params=None, exclude_server=None):
+        """Notify the network of a channel mode change.
+
+        Args:
+            chan_name: Channel name.
+            setter_nick: Nick that set the mode.
+            mode_str: Mode string (e.g. '+m', '-n+k').
+            params: List of mode params (e.g. ['key'] for +k).
+            exclude_server: Server to exclude.
+        """
+        params_str = (" " + " ".join(params)) if params else ""
+        args = f"{chan_name} {setter_nick} {mode_str}{params_str}"
+        self.broadcast_to_network("SYNCMODE", args, exclude_server=exclude_server)
+
     def sync_channel_state(self, chan_name, exclude_server=None):
         """Helper to sync current state of a local channel to the network.
 
@@ -1391,6 +1577,8 @@ class ServerNetwork:
             "SYNCCHAN": self._handle_syncchan,
             "SYNCTOPIC": self._handle_synctopic,
             "SYNCMSG":  self._handle_syncmsg,
+            "SYNCNOTICE": self._handle_syncnotice,
+            "SYNCMODE": self._handle_syncmode,
             "SYNCLINE": self._handle_syncline,
             "DESYNC":   self._handle_desync,
             "SQUIT":    self._handle_squit,
@@ -1699,6 +1887,73 @@ class ServerNetwork:
         # NOTE: Do NOT re-broadcast SYNCMSG to other peers
         # User messages route only to their destination, not flooded across the network
         # State messages (SYNCUSER, SYNPART, etc.) are re-broadcast, but not SYNCMSG
+
+    def _handle_syncnotice(self, link, rest):
+        """Handle SYNCNOTICE: deliver a NOTICE from the network locally.
+
+        Format: SYNCNOTICE <source_nick> <target> :<text>
+        """
+        parts = rest.split(" ", 2)
+        if len(parts) < 3:
+            return
+
+        source_nick = parts[0]
+        target = parts[1]
+        text = parts[2]
+        if text.startswith(":"):
+            text = text[1:]
+
+        server = self.local_server
+        from csc_server_core.irc import format_irc_message
+        source_host = f"{source_nick}!{source_nick}@{link.remote_server_id}"
+        irc_msg = format_irc_message(source_host, "NOTICE", [target], text) + "\r\n"
+
+        if target.startswith("#") or target.startswith("&"):
+            server.broadcast_to_channel(target, irc_msg)
+        else:
+            server.send_to_nick(target, irc_msg)
+
+    def _handle_syncmode(self, link, rest):
+        """Handle SYNCMODE: apply a remote channel mode change.
+
+        Format: SYNCMODE <channel> <setter_nick> <modestr> [params...]
+        """
+        parts = rest.split(" ", 3)
+        if len(parts) < 3:
+            return
+
+        channel_name = parts[0]
+        setter_nick = parts[1]
+        mode_str = parts[2]
+        params_str = parts[3] if len(parts) > 3 else ""
+
+        server = self.local_server
+        ch = server.channel_manager.get_channel(channel_name)
+        if ch:
+            # Apply mode changes locally
+            adding = True
+            for c in mode_str:
+                if c == "+":
+                    adding = True
+                elif c == "-":
+                    adding = False
+                else:
+                    if adding:
+                        ch.modes.add(c)
+                    else:
+                        ch.modes.discard(c)
+
+            # Broadcast MODE to local clients
+            from csc_server_core.irc import format_irc_message
+            prefix = f"{setter_nick}!{setter_nick}@{link.remote_server_id}"
+            params_part = (" " + params_str) if params_str else ""
+            mode_msg = f":{prefix} MODE {channel_name} {mode_str}{params_part}\r\n"
+            server.broadcast_to_channel(channel_name, mode_msg)
+
+        self._log(f"Synced remote MODE: {channel_name} {mode_str} from {link.remote_server_id}")
+
+        # Re-broadcast
+        self.broadcast_to_network("SYNCMODE", rest, exclude_server=link.remote_server_id)
 
     def _handle_syncline(self, link, rest):
         """Handle SYNCLINE: deliver a raw IRC line to a local user.

@@ -377,7 +377,7 @@ class ModeMixin:
 
         # S2S: Notify federation network of mode change
         if hasattr(self.server, 's2s_network'):
-            self.server.s2s_network.sync_channel_state(chan_name)
+            self.server.s2s_network.sync_channel_mode(chan_name, nick, applied_modes, applied_params)
 
         # Real-time persistence: Save session state immediately
         self.server._persist_session_data()
