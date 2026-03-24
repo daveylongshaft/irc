@@ -515,8 +515,9 @@ class Server(Service):
 
         # Check if nick is on a remote server via S2S
         if hasattr(self, 's2s_network'):
-            _link, remote_info = self.s2s_network.get_user_from_network(nick)
-            if remote_info is not None:
+            result = self.s2s_network.get_user_from_network(nick)
+            remote_info = result[1] if isinstance(result, tuple) else result
+            if remote_info is not None and remote_info:
                 # Route via S2S
                 line = message if isinstance(message, str) else message.decode("utf-8", errors="ignore")
                 self.log(f"[S2S] Routing line to remote user {nick} on {remote_info['server_id']}")

@@ -71,8 +71,9 @@ class InfoMixin:
 
             if not target_addr:
                 if hasattr(self.server, 's2s_network'):
-                    _link, remote_info = self.server.s2s_network.get_user_from_network(target_nick)
-                    if remote_info is not None:
+                    result = self.server.s2s_network.get_user_from_network(target_nick)
+                    remote_info = result[1] if isinstance(result, tuple) else result
+                    if remote_info is not None and remote_info:
                         whoisuser = f":{SERVER_NAME} {RPL_WHOISUSER} {nick} {remote_info['nick']} {remote_info['nick']} {remote_info['server_id']} * :{remote_info['nick']}\r\n"
                         self.server.sock_send(whoisuser.encode(), addr)
                         whoisserver = f":{SERVER_NAME} {RPL_WHOISSERVER} {nick} {remote_info['nick']} {remote_info['server_id']} :Federated CSC Server\r\n"
