@@ -1876,13 +1876,13 @@ class ServerNetwork:
             # Channel message - broadcast to local members
             server.broadcast_to_channel(target, irc_msg)
             # Log to chat buffer
-            server.chat_buffer.add(target, source_nick, text)
+            server.chat_buffer.append(target, source_nick, "PRIVMSG", text)
         else:
             # PM to local user
             server.send_to_nick(target, irc_msg)
             # Log to chat buffer
             pm_key = "".join(sorted([source_nick.lower(), target.lower()]))
-            server.chat_buffer.add(pm_key, source_nick, text)
+            server.chat_buffer.append(pm_key, source_nick, "PRIVMSG", text)
 
         # NOTE: Do NOT re-broadcast SYNCMSG to other peers
         # User messages route only to their destination, not flooded across the network
