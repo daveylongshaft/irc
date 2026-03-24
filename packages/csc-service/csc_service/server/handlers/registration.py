@@ -205,6 +205,12 @@ class RegistrationMixin:
         reg["state"] = "registered"
         now = time.time()
 
+        # S2S: Announce nick to network immediately (before welcome burst)
+        # so other servers can detect collisions before the client gets a welcome
+        if hasattr(self.server, 's2s_network'):
+            host = f"{addr[0]}:{addr[1]}" if isinstance(addr, tuple) else str(addr)
+            self.server.s2s_network.sync_user_join(nick, host, "+")
+
         # DEBUG: Log registration
         self.server.log(f"[REG DEBUG] Registering {nick} at {addr}")
 
