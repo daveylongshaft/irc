@@ -234,7 +234,7 @@ def main():
                             ftpd_master.start()
                             print(f"[{ts()}] [csc-service] Started FTP master (ftp={ftpd_cfg.ftp_control_port}, slaves={ftpd_cfg.master_control_port})")
                             # Wire announce callback for FTP master handler
-                            if srv:
+                            if srv and hasattr(srv, 'ftp_announce'):
                                 ftpd_master.server._ftpd_announce_callback = srv.ftp_announce
                         else:
                             from csc_service.ftpd.ftp_slave import FtpSlave
@@ -243,7 +243,8 @@ def main():
                             print(f"[{ts()}] [csc-service] Started FTP slave (master={ftpd_cfg.master_host}:{ftpd_cfg.master_control_port})")
                             # Wire announce callback for FTP slave; store ref for VFS sync
                             if srv:
-                                ftpd_slave.set_announce_callback(srv.ftp_announce)
+                                if hasattr(srv, 'ftp_announce'):
+                                    ftpd_slave.set_announce_callback(srv.ftp_announce)
                                 srv._ftpd_slave = ftpd_slave
                             # Wire S2S bridge for peer-to-peer file sync
                             if hasattr(srv, 's2s_network'):

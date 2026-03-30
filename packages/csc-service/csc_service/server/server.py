@@ -130,6 +130,7 @@ class Server(Service):
 
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)
+        self.server_id = self.s2s_network.server_id  # expose for ServerLink
         self.s2s_network.start_listener()
 
         # Start S2S auto-linking thread (maintains links to configured peers)
