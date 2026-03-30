@@ -74,10 +74,12 @@ def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
             cert.signature_hash_algorithm,
         )
 
-        # Check not expired
+        # Check not expired (compat: not_valid_before_utc added in cryptography 42.x)
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        if now < cert.not_valid_before_utc or now > cert.not_valid_after_utc:
+        not_before = getattr(cert, 'not_valid_before_utc', cert.not_valid_before.replace(tzinfo=timezone.utc))
+        not_after = getattr(cert, 'not_valid_after_utc', cert.not_valid_after.replace(tzinfo=timezone.utc))
+        if now < not_before or now > not_after:
             return (False, "", "certificate expired or not yet valid")
 
         cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
@@ -585,7 +587,7 @@ class ServerNetwork:
         self.remote_channels = {}  # chan_lower -> {name, server_id, modes, members}
 
         # S2S configuration
-        self.s2s_port = int(os.environ.get('CSC_S2S_PORT', '9526'))
+        self.s2s_port = int(os.environ.get('CSC_S2S_PORT', '9520'))
         self.s2s_password = os.environ.get('CSC_SERVER_LINK_PASSWORD', '')
         self.server_id = os.environ.get('CSC_SERVER_ID', 'server_001')
 
@@ -646,6 +648,11 @@ class ServerNetwork:
         except Exception:
             pass
         return None
+
+    def attach_fxp_bridge(self, bridge):
+        """Attach an FtpS2sBridge to receive SYNCFILE/RSYNCFILE/SYNCINVENTORY messages."""
+        self._fxp_bridge = bridge
+        self._log("FXP bridge attached")
 
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
@@ -1221,6 +1228,16 @@ class ServerNetwork:
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
         }
+        # FXP bridge commands
+        bridge = getattr(self, '_fxp_bridge', None)
+        if bridge:
+            handlers.update({
+                "SYNCFILE":      bridge.handle_syncfile,
+                "RSYNCFILE":     bridge.handle_rsyncfile,
+                "SYNCFILE_ACK":  bridge.handle_syncfile_ack,
+                "SYNCINVENTORY": bridge.handle_syncinventory,
+                "SYNCRENAME":    bridge.handle_syncrename,
+            })
         handler = handlers.get(command)
         if handler:
             try:
