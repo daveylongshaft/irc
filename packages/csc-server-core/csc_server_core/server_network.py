@@ -76,10 +76,12 @@ def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
             cert.signature_hash_algorithm,
         )
 
-        # Check not expired
+        # Check not expired (compat: not_valid_before_utc added in cryptography 42.x)
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        if now < cert.not_valid_before_utc or now > cert.not_valid_after_utc:
+        not_before = getattr(cert, 'not_valid_before_utc', cert.not_valid_before.replace(tzinfo=timezone.utc))
+        not_after = getattr(cert, 'not_valid_after_utc', cert.not_valid_after.replace(tzinfo=timezone.utc))
+        if now < not_before or now > not_after:
             return (False, "", "certificate expired or not yet valid")
 
         cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
