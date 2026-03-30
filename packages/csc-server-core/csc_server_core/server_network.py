@@ -876,11 +876,14 @@ class ServerNetwork:
         """Attempt to establish an outbound S2S link to a peer."""
         peer_key = f"{host}:{port}"
         try:
-            # Check if we're already linked
+            # Check if we're already linked (by host:port or by any active link)
             with self._lock:
-                for link in self._links.values():
-                    if (link.remote_host, link.remote_port) == (host, port):
-                        return  # Already linked
+                for sid, link in self._links.items():
+                    if link.is_connected():
+                        if (link.remote_host, link.remote_port) == (host, port):
+                            return  # Already linked by address
+                        if link.remote_host == host:
+                            return  # Already linked to this host
 
             # Create ServerLink for outbound connection
             print(f"[S2S-LINKER] Creating link to {peer_key}...")
