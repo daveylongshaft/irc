@@ -805,6 +805,11 @@ class ServerNetwork:
             pass
         return None
 
+    def attach_fxp_bridge(self, bridge):
+        """Attach an FtpS2sBridge to receive SYNCFILE/RSYNCFILE/SYNCINVENTORY messages."""
+        self._fxp_bridge = bridge
+        self._log("FXP bridge attached")
+
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
         print(f"[S2S] start_listener called. password={bool(self.s2s_password)}, cert={bool(self.s2s_cert_path)}, ca={bool(self.s2s_ca_path)}, peers={len(self.s2s_peers)}")
@@ -1610,6 +1615,16 @@ class ServerNetwork:
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
         }
+        # FXP bridge commands
+        bridge = getattr(self, '_fxp_bridge', None)
+        if bridge:
+            handlers.update({
+                "SYNCFILE":      bridge.handle_syncfile,
+                "RSYNCFILE":     bridge.handle_rsyncfile,
+                "SYNCFILE_ACK":  bridge.handle_syncfile_ack,
+                "SYNCINVENTORY": bridge.handle_syncinventory,
+                "SYNCRENAME":    bridge.handle_syncrename,
+            })
         handler = handlers.get(command)
         if handler:
             try:
