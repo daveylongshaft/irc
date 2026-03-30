@@ -134,7 +134,7 @@ class Server(Service):
         self.s2s_network.start_listener()
 
         # Start S2S auto-linking thread (only if ServerNetwork doesn't have its own)
-        if not hasattr(self.s2s_network, '_peer_link_thread') or not self.s2s_network._peer_link_thread:
+        if not hasattr(self.s2s_network, '_start_peer_linker'):
             self._start_s2s_autolink()
 
     @property
