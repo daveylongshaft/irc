@@ -738,6 +738,13 @@ class ServerNetwork:
         except Exception as e:
             debug_file.write_text(f"Config load error: {e}\n")
 
+        # If no explicit server_id, derive from cert CN so S2S auth matches
+        if self.server_id in ('server_001', '') and self.s2s_cert_path:
+            cn = self._cn_from_cert(self.s2s_cert_path)
+            if cn:
+                self.server_id = cn
+                self._log(f"Server ID derived from cert CN: {cn}")
+
         # Track which servers have been seen (loop prevention)
         self._seen_servers = {self.server_id}
 
@@ -778,6 +785,23 @@ class ServerNetwork:
                 self._log(f"S2S peers configured: {len(self.s2s_peers)}")
         except Exception as e:
             self._log(f"WARNING: Could not load cert config: {e}")
+
+    @staticmethod
+    def _cn_from_cert(cert_path):
+        """Extract Common Name from a PEM certificate file."""
+        try:
+            import subprocess, re
+            result = subprocess.run(
+                ['openssl', 'x509', '-noout', '-subject', '-in', str(cert_path)],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                m = re.search(r'CN\s*=\s*(\S+)', result.stdout)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+        return None
 
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
