@@ -633,17 +633,16 @@ class ServerNetwork:
     def _cn_from_cert(cert_path):
         """Extract Common Name from a PEM certificate file."""
         try:
-            import subprocess
+            import subprocess, re
             result = subprocess.run(
                 ['openssl', 'x509', '-noout', '-subject', '-in', str(cert_path)],
                 capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
-                line = result.stdout.strip()
-                for part in line.replace('/', ',').split(','):
-                    part = part.strip()
-                    if part.startswith('CN') and '=' in part:
-                        return part.split('=', 1)[1].strip()
+                # Handles both "subject=CN = foo" and "subject= /CN=foo" formats
+                m = re.search(r'CN\s*=\s*(\S+)', result.stdout)
+                if m:
+                    return m.group(1)
         except Exception:
             pass
         return None
