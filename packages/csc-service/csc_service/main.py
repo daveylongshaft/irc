@@ -144,9 +144,9 @@ def main():
                 print(f"[{ts()}] [csc-service] Started BotServ channel registration (#runtime, #ftp)")
 
                 # Start S2S auto-link thread if peers are configured
-                # Skip if ServerNetwork already has its own peer linker
+                # Skip if ServerNetwork already has its own peer linker (_start_peer_linker method)
                 s2s_peers = config.get("s2s_peers", [])
-                s2s_has_linker = hasattr(srv, 's2s_network') and hasattr(srv.s2s_network, '_peer_link_thread') and srv.s2s_network._peer_link_thread
+                s2s_has_linker = hasattr(srv, 's2s_network') and hasattr(srv.s2s_network, '_start_peer_linker')
                 if s2s_peers and hasattr(srv, 's2s_network') and not s2s_has_linker:
                     def _s2s_autolink_thread(srv_ref, peers, project_root):
                         """Daemon thread: maintain S2S links to configured peers."""
