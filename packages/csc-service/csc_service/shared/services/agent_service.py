@@ -1131,3 +1131,7 @@ When complete, write "COMPLETE" to the workorder and exit.
             "Agents: haiku, claude, opus, gemini-2.5-flash, gemini-2.5-flash-lite,\n"
             "        gemini-3-flash, gemini-3-pro, qwen, deepseek, codellama"
         )
+
+
+# Module-level alias so `from agent_service import agent` works
+agent = Agent
