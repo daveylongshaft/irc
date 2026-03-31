@@ -146,9 +146,10 @@ def run_one_test(test_file):
         return "platform_skip"
 
     failed_lines = [l for l in output.splitlines() if "FAILED" in l]
-    if failed_lines or (hasattr(result, 'returncode') and result.returncode != 0):
-        log(f"FAILED: {test_file.name} ({len(failed_lines)} failures)", "WARN")
-        _generate_fix_prompt(basename, "\n".join(failed_lines))
+    error_lines = [l for l in output.splitlines() if l.startswith("E ") or l.startswith("ERROR ")]
+    if failed_lines or error_lines or (hasattr(result, 'returncode') and result.returncode != 0):
+        log(f"FAILED: {test_file.name} ({len(failed_lines)} failures, {len(error_lines)} errors)", "WARN")
+        _generate_fix_prompt(basename, failed_lines, error_lines, output)
         return "failed"
 
     log(f"PASSED: {test_file.name}")
@@ -181,7 +182,7 @@ def run_cycle(work_dir_arg=None):
 # Prompt generation
 # ---------------------------------------------------------------------------
 
-def _generate_fix_prompt(basename, failed_lines):
+def _generate_fix_prompt(basename, failed_lines, error_lines, full_output):
     prompt_file = PROMPT_DIR / f"PROMPT_fix_{basename}.md"
     if prompt_file.exists():
         return
@@ -189,11 +190,23 @@ def _generate_fix_prompt(basename, failed_lines):
         log(f"Template missing: {TEMPLATE}", "WARN")
         return
     test_name = basename[5:] if basename.startswith("test_") else basename
+
+    # Build a useful error summary for the agent
+    failed_text = "\n".join(failed_lines) if failed_lines else "(no FAILED lines — see errors below)"
+    error_text = "\n".join(error_lines) if error_lines else ""
+
+    # Extract the short test summary + last 30 lines for context
+    output_lines = full_output.splitlines()
+    tail_lines = output_lines[-30:] if len(output_lines) > 30 else output_lines
+    tail_text = "\n".join(tail_lines)
+
     content = _fill_template(TEMPLATE, {
         "TEST_NAME": test_name,
         "TEST_FILE": f"{basename}.py",
         "LOG_FILE": f"{basename}.log",
-        "FAILED_LINES": failed_lines,
+        "FAILED_LINES": failed_text,
+        "ERROR_LINES": error_text,
+        "OUTPUT_TAIL": tail_text,
     })
     if content:
         PROMPT_DIR.mkdir(parents=True, exist_ok=True)
