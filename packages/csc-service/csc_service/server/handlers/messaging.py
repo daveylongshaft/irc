@@ -85,9 +85,9 @@ class MessagingMixin:
                 out = format_irc_message(prefix, "PRIVMSG", [target], text) + "\r\n"
                 if not self.server.send_to_nick(target, out):
                     # Try S2S routing for remote users
-                    if hasattr(self.server, 's2s_network'):
-                        _link, remote_info = self.server.s2s_network.get_user_from_network(target)
-                        if remote_info:
+                    if hasattr(self.server, 's2s_network') and self.server.s2s_network:
+                        link, remote_info = self.server.s2s_network.get_user_from_network(target)
+                        if link and remote_info and link.is_connected():
                             self.server.s2s_network.route_message(nick, target, text)
                             self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
                             return
