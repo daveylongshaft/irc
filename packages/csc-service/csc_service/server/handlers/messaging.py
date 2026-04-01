@@ -86,9 +86,8 @@ class MessagingMixin:
                 if not self.server.send_to_nick(target, out):
                     # Try S2S routing for remote users
                     if hasattr(self.server, 's2s_network'):
-                        result = self.server.s2s_network.get_user_from_network(target)
-                        remote_info = result[1] if isinstance(result, tuple) else result
-                        if remote_info is not None and remote_info:
+                        _link, remote_info = self.server.s2s_network.get_user_from_network(target)
+                        if remote_info:
                             self.server.s2s_network.route_message(nick, target, text)
                             self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
                             return

@@ -79,10 +79,8 @@ class RegistrationMixin:
 
                 # S2S: Check remote collision
                 if hasattr(self.server, 's2s_network'):
-                    result = self.server.s2s_network.get_user_from_network(new_nick)
-                    # Handle both tuple (link, info) and dict/None return types
-                    remote_info = result[1] if isinstance(result, tuple) else result
-                    if remote_info is not None and remote_info:
+                    _link, remote_info = self.server.s2s_network.get_user_from_network(new_nick)
+                    if remote_info:
                         target = old_nick or "*"
                         self._send_numeric(addr, ERR_NICKNAMEINUSE, target,
                                            f"{new_nick} :Nickname is already in use on the network")
