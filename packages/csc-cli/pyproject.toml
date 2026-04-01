@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csc-cli"
+version = "0.1.0"
+description = "Command-line interface for CSC system."
+requires-python = ">=3.8"
+dependencies = [
+    "csc-platform>=0.1.0",
+]
+
+[project.scripts]
+csc-ctl = "csc_cli.csc_ctl:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

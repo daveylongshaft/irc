@@ -459,6 +459,8 @@ class ServerLink:
                 if not data:
                     continue
 
+                self._log(f"_reader_loop got {len(data)} bytes from {addr}")
+
                 # Store remote address for replies
                 if not self._remote_address:
                     self._remote_address = addr
@@ -692,10 +694,6 @@ class ServerLink:
         """Return the local server's unique ID."""
         result = getattr(self.local_server, 'server_id',
                        os.environ.get('CSC_SERVER_ID', 'server_001'))
-        # DEBUG: Log what we're returning
-        if not hasattr(self, '_get_local_server_id_logged'):
-            print(f"[S2S-ID] _get_local_server_id: result={result}, has_attr={hasattr(self.local_server, 'server_id')}")
-            self._get_local_server_id_logged = True
         return result
 
     def _log(self, message):
@@ -781,10 +779,7 @@ class ServerNetwork:
 
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
-        print(f"[S2S] start_listener called. password={bool(self.s2s_password)}, cert={bool(self.s2s_cert_path)}, ca={bool(self.s2s_ca_path)}, peers={len(self.s2s_peers)}")
-
         if not self.s2s_password and not (self.s2s_cert_path and self.s2s_ca_path):
-            print(f"[S2S] Listener disabled - no auth configured")
             self._log("No S2S password or certs configured, S2S listener disabled")
             return False
 
@@ -815,8 +810,6 @@ class ServerNetwork:
 
     def _peer_link_loop(self):
         """Periodically attempt to link to configured S2S peers."""
-        print(f"[S2S-LINKER] Thread started at {time.time()}")
-
         while self._running:
             try:
                 for peer in self.s2s_peers:
@@ -832,11 +825,9 @@ class ServerNetwork:
                     if now - last_attempt < 30:
                         continue
 
-                    print(f"[S2S-LINKER] Attempting to link to {peer_key}")
                     self._last_peer_link_attempt[peer_key] = now
                     self._try_link_to_peer(host, port)
             except Exception as e:
-                print(f"[S2S-LINKER] Error: {e}")
                 self._log(f"Peer linker error: {e}")
 
             time.sleep(5)
@@ -852,7 +843,6 @@ class ServerNetwork:
                         return  # Already linked
 
             # Create ServerLink for outbound connection
-            print(f"[S2S-LINKER] Creating link to {peer_key}...")
             link = ServerLink(
                 self.local_server,
                 host,
@@ -864,9 +854,7 @@ class ServerNetwork:
             )
 
             # Establish connection
-            print(f"[S2S-LINKER] Connecting to {peer_key}...")
             if not link.connect():
-                print(f"[S2S-LINKER] Failed to connect to {peer_key}")
                 self._log(f"Failed to connect to {peer_key}")
                 return
 
@@ -876,13 +864,10 @@ class ServerNetwork:
                 self._links[remote_id] = link
 
             # Start reader thread BEFORE authenticating (to receive DH responses)
-            print(f"[S2S-LINKER] Starting reader thread for {peer_key}...")
             link.start_reader(self._dispatch_s2s_message)
 
             # Now authenticate
-            print(f"[S2S-LINKER] Connected, authenticating with {peer_key}...")
             if not link.authenticate():
-                print(f"[S2S-LINKER] Failed to authenticate with {peer_key}")
                 self._log(f"Failed to authenticate with {peer_key}")
                 # Remove from links and close socket to avoid leaking UDP sockets
                 with self._lock:
@@ -912,14 +897,12 @@ class ServerNetwork:
 
                 self._links[actual_id] = link
                 self._seen_servers.add(actual_id)
-            print(f"[S2S-LINKER] Successfully linked to {peer_key} as {actual_id}")
             self._log(f"Successfully linked to peer {peer_key} as {actual_id}")
 
             # Send our users/channels to the remote so sync is bidirectional
             self._send_full_sync(link)
 
         except Exception as e:
-            print(f"[S2S-LINKER] Exception linking to {peer_key}: {e}")
             self._log(f"Failed to link to peer {peer_key}: {e}")
 
     def _receive_loop(self):
@@ -1048,13 +1031,11 @@ class ServerNetwork:
 
                 # Handle SLINK (link request)
                 if line.startswith("SLINK "):
-                    print(f"[S2S-INBOUND] Received SLINK from {addr}: {line[:80]}")
                     if link._authenticated:
                         continue  # Already authenticated
                     parts = line.split()
                     local_id = self._get_local_server_id()
                     local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
-                    print(f"[S2S-INBOUND] Processing SLINK: parts={len(parts)}, local_id={local_id}")
 
                     if len(parts) >= 5 and parts[1] == "CERT":
                         # Cert-based auth
@@ -1100,9 +1081,7 @@ class ServerNetwork:
                         our_cert_b64 = base64.b64encode(our_cert_pem.encode()).decode()
                         reply = f"SLINKACK CERT {our_cert_b64} {local_id} {local_ts}"
                         reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                        print(f"[S2S-INBOUND] Sending SLINKACK CERT to {addr}, encrypted={link._encrypted}, data_len={len(reply_data)}")
                         self._listener_sock.sendto(reply_data, addr)
-                        print(f"[S2S-INBOUND] SLINKACK sent")
 
                         with self._lock:
                             existing = self._links.get(remote_id)
@@ -1318,16 +1297,11 @@ class ServerNetwork:
         line = f"{command} {args_str}".strip() if args_str else command
         with self._lock:
             link_count = len(self._links)
-            if link_count == 0:
-                self._log(f"broadcast_to_network({command}): no links!")
             for server_id, link in list(self._links.items()):
                 if server_id == exclude_server:
                     continue
-                connected = link.is_connected()
-                self._log(f"broadcast_to_network({command}) -> {server_id}: connected={connected}, has_sock={link._sock is not None}, has_addr={link._remote_address is not None}")
-                if connected:
-                    ok = link.send_raw(line)
-                    self._log(f"broadcast_to_network({command}) -> {server_id}: send_raw returned {ok}")
+                if link.is_connected():
+                    link.send_raw(line)
 
     def get_user_from_network(self, nick):
         """Find a user on any server in the network and which link has them.
