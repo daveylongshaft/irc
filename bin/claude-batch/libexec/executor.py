@@ -52,16 +52,6 @@ def _serialize_content(content) -> list[dict]:
     return serialized
 
 
-def _find_repo_root(start: Path) -> Path:
-    """Walk up from start to find .git directory. Returns start if not found."""
-    p = start.resolve()
-    while p.parent != p:
-        if (p / ".git").exists():
-            return p
-        p = p.parent
-    return start.resolve()
-
-
 class BatchExecutor:
     """Execute workorders via Anthropic Batches API with tool loops."""
 
@@ -76,17 +66,11 @@ class BatchExecutor:
     def execute_workorder(self, wo_path: Path, system_context: str = "") -> bool:
         """Execute single workorder with tool loops.
 
-        Changes cwd to repo root so all tool paths are relative to repo.
-        Restores cwd when done.
+        Uses current working directory as the repo root. cd to the right
+        repo before calling this.
         """
-        repo_root = _find_repo_root(wo_path.parent)
-        old_cwd = os.getcwd()
-        os.chdir(repo_root)
-        _log(f"Working directory: {repo_root}")
-        try:
-            return self._run_workorder(wo_path, system_context)
-        finally:
-            os.chdir(old_cwd)
+        _log(f"Working directory: {os.getcwd()}")
+        return self._run_workorder(wo_path, system_context)
 
     def _run_workorder(self, wo_path: Path, system_context: str) -> bool:
         """Inner workorder execution loop."""
