@@ -101,12 +101,15 @@ class BatchExecutor:
         system_blocks = []
         if system_context:
             system_blocks.append({"type": "text", "text": system_context})
+        cwd = os.getcwd()
         system_blocks.append({
             "type": "text",
             "text": (
                 "You are an AI assistant executing a workorder. "
                 "Use provided tools to read files, make changes, run commands, etc. "
-                "All file paths are relative to the current working directory (the repo root). "
+                f"The repo root is: {cwd}\n"
+                f"Use paths relative to this root (e.g. packages/csc-server/server.py) "
+                f"or absolute paths starting with {cwd}/. "
                 "Be direct and efficient. Stop only when the workorder is complete."
             ),
             "cache_control": {"type": "ephemeral"},
