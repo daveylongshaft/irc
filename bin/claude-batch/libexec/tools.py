@@ -7,19 +7,9 @@ from pathlib import Path
 
 
 def read_file(path: str) -> str:
-    """Read file contents. Handles both absolute and relative paths."""
+    """Read file contents. Paths relative to current working directory."""
     try:
-        p = Path(path)
-
-        # If path is absolute but doesn't exist, try as relative
-        if p.is_absolute() and not p.exists():
-            # Try stripping leading slashes and treating as relative
-            rel_path = path.lstrip('/')
-            p = Path.cwd() / rel_path
-
-        # Resolve to absolute for consistency
-        p = p.resolve()
-
+        p = Path(path).resolve()
         if not p.exists():
             return f"ERROR: File not found: {path}"
         return p.read_text(encoding='utf-8')
@@ -28,16 +18,9 @@ def read_file(path: str) -> str:
 
 
 def write_file(path: str, content: str) -> str:
-    """Write/overwrite file. Handles both absolute and relative paths."""
+    """Write/overwrite file. Paths relative to current working directory."""
     try:
-        p = Path(path)
-
-        # If path is absolute, try as-is; if not absolute or parent doesn't exist, try relative
-        if p.is_absolute():
-            p = p.resolve()
-        else:
-            p = (Path.cwd() / p).resolve()
-
+        p = Path(path).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding='utf-8')
         return f"OK: Wrote {len(content)} bytes to {path}"
@@ -46,17 +29,9 @@ def write_file(path: str, content: str) -> str:
 
 
 def delete_file(path: str) -> str:
-    """Delete a file. Handles both absolute and relative paths."""
+    """Delete a file. Paths relative to current working directory."""
     try:
-        p = Path(path)
-
-        # If path is absolute but doesn't exist, try as relative
-        if p.is_absolute() and not p.exists():
-            rel_path = path.lstrip('/')
-            p = Path.cwd() / rel_path
-
-        p = p.resolve()
-
+        p = Path(path).resolve()
         if not p.exists():
             return f"ERROR: File not found: {path}"
         p.unlink()
@@ -89,17 +64,9 @@ def run_command(command: str, cwd: str = None) -> str:
 
 
 def list_directory(path: str) -> str:
-    """List directory contents. Handles both absolute and relative paths."""
+    """List directory contents. Paths relative to current working directory."""
     try:
-        p = Path(path)
-
-        # If path is absolute but doesn't exist, try as relative
-        if p.is_absolute() and not p.exists():
-            rel_path = path.lstrip('/')
-            p = Path.cwd() / rel_path
-
-        p = p.resolve()
-
+        p = Path(path).resolve()
         if not p.is_dir():
             return f"ERROR: Not a directory: {path}"
         items = sorted(p.iterdir())
@@ -110,18 +77,9 @@ def list_directory(path: str) -> str:
 
 
 def glob_files(pattern: str, base: str = None) -> str:
-    """Glob file pattern. Handles both absolute and relative base paths."""
+    """Glob file pattern. Paths relative to current working directory."""
     try:
-        if base:
-            p = Path(base)
-            # If absolute but doesn't exist, try as relative
-            if p.is_absolute() and not p.exists():
-                rel_path = base.lstrip('/')
-                p = Path.cwd() / rel_path
-            base_path = p.resolve()
-        else:
-            base_path = Path.cwd()
-
+        base_path = Path(base or ".").resolve()
         results = list(base_path.glob(pattern))
         lines = [str(p.relative_to(base_path)) for p in sorted(results)]
         return "\n".join(lines) if lines else "(no matches)"
@@ -130,19 +88,10 @@ def glob_files(pattern: str, base: str = None) -> str:
 
 
 def search_files(pattern: str, path: str = None, file_glob: str = "*.py") -> str:
-    """Search file contents with regex. Handles both absolute and relative paths."""
+    """Search file contents with regex. Paths relative to current working directory."""
     try:
         import re
-        if path:
-            p = Path(path)
-            # If absolute but doesn't exist, try as relative
-            if p.is_absolute() and not p.exists():
-                rel_path = path.lstrip('/')
-                p = Path.cwd() / rel_path
-            base_path = p.resolve()
-        else:
-            base_path = Path.cwd()
-
+        base_path = Path(path or ".").resolve()
         regex = re.compile(pattern)
         results = []
 
@@ -188,20 +137,20 @@ def execute_tool(name: str, args: dict) -> str:
 TOOL_DEFINITIONS = [
     {
         "name": "read_file",
-        "description": "Read file contents. Use absolute paths.",
+        "description": "Read file contents. Paths are relative to the repo root.",
         "input_schema": {
             "type": "object",
-            "properties": {"path": {"type": "string", "description": "Absolute path"}},
+            "properties": {"path": {"type": "string", "description": "File path relative to repo root (e.g. packages/csc-server/server.py)"}},
             "required": ["path"]
         }
     },
     {
         "name": "write_file",
-        "description": "Write/overwrite file.",
+        "description": "Write/overwrite file. Paths are relative to the repo root.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Absolute path"},
+                "path": {"type": "string", "description": "File path relative to repo root"},
                 "content": {"type": "string", "description": "File content"}
             },
             "required": ["path", "content"]
@@ -209,54 +158,54 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "delete_file",
-        "description": "Delete a file.",
+        "description": "Delete a file. Paths are relative to the repo root.",
         "input_schema": {
             "type": "object",
-            "properties": {"path": {"type": "string", "description": "Absolute path"}},
+            "properties": {"path": {"type": "string", "description": "File path relative to repo root"}},
             "required": ["path"]
         }
     },
     {
         "name": "run_command",
-        "description": "Run shell command.",
+        "description": "Run shell command from repo root.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "command": {"type": "string", "description": "Shell command"},
-                "cwd": {"type": "string", "description": "Working directory (default: current)"}
+                "cwd": {"type": "string", "description": "Working directory relative to repo root (default: repo root)"}
             },
             "required": ["command"]
         }
     },
     {
         "name": "list_directory",
-        "description": "List directory contents.",
+        "description": "List directory contents. Paths are relative to the repo root.",
         "input_schema": {
             "type": "object",
-            "properties": {"path": {"type": "string", "description": "Directory path"}},
+            "properties": {"path": {"type": "string", "description": "Directory path relative to repo root (e.g. packages/)"}},
             "required": ["path"]
         }
     },
     {
         "name": "glob_files",
-        "description": "Find files by glob pattern.",
+        "description": "Find files by glob pattern from repo root.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "pattern": {"type": "string", "description": "Glob pattern (e.g. **/*.py)"},
-                "base": {"type": "string", "description": "Base directory (default: .)"}
+                "base": {"type": "string", "description": "Base directory relative to repo root (default: repo root)"}
             },
             "required": ["pattern"]
         }
     },
     {
         "name": "search_files",
-        "description": "Search file contents with regex.",
+        "description": "Search file contents with regex from repo root.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "pattern": {"type": "string", "description": "Regex pattern"},
-                "path": {"type": "string", "description": "Base directory"},
+                "path": {"type": "string", "description": "Base directory relative to repo root"},
                 "file_glob": {"type": "string", "description": "File glob (e.g. *.py)"}
             },
             "required": ["pattern"]

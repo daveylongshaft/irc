@@ -1,8 +1,10 @@
 """Batch API executor with tool loop support."""
 
 import json
+import os
 import time
 import sys
+import traceback
 from pathlib import Path
 
 try:
@@ -46,9 +48,18 @@ def _serialize_content(content) -> list[dict]:
                 "input": block.input,
             })
         else:
-            # Unknown block type — try to preserve it
             serialized.append({"type": block.type})
     return serialized
+
+
+def _find_repo_root(start: Path) -> Path:
+    """Walk up from start to find .git directory. Returns start if not found."""
+    p = start.resolve()
+    while p.parent != p:
+        if (p / ".git").exists():
+            return p
+        p = p.parent
+    return start.resolve()
 
 
 class BatchExecutor:
@@ -65,29 +76,37 @@ class BatchExecutor:
     def execute_workorder(self, wo_path: Path, system_context: str = "") -> bool:
         """Execute single workorder with tool loops.
 
-        Returns True if successful, False if failed.
+        Changes cwd to repo root so all tool paths are relative to repo.
+        Restores cwd when done.
         """
-        # Parse workorder
+        repo_root = _find_repo_root(wo_path.parent)
+        old_cwd = os.getcwd()
+        os.chdir(repo_root)
+        _log(f"Working directory: {repo_root}")
+        try:
+            return self._run_workorder(wo_path, system_context)
+        finally:
+            os.chdir(old_cwd)
+
+    def _run_workorder(self, wo_path: Path, system_context: str) -> bool:
+        """Inner workorder execution loop."""
         wo_text = wo_path.read_text(encoding='utf-8')
         metadata, prompt = parse_frontmatter(wo_text)
 
         model = metadata.get("model", self.model)
         max_rounds = int(metadata.get("max_rounds", self.max_rounds))
 
-        # Build system message as content blocks with cache_control.
-        # The last block gets cache_control so the entire system prefix is
-        # cached across rounds (90% input discount, stacked with 50% batch).
+        # System message as content blocks with cache_control on the last block.
+        # Prompt caching: 90% discount on cached input, stacked with 50% batch.
         system_blocks = []
         if system_context:
-            system_blocks.append({
-                "type": "text",
-                "text": system_context,
-            })
+            system_blocks.append({"type": "text", "text": system_context})
         system_blocks.append({
             "type": "text",
             "text": (
                 "You are an AI assistant executing a workorder. "
                 "Use provided tools to read files, make changes, run commands, etc. "
+                "All file paths are relative to the current working directory (the repo root). "
                 "Be direct and efficient. Stop only when the workorder is complete."
             ),
             "cache_control": {"type": "ephemeral"},
@@ -101,7 +120,6 @@ class BatchExecutor:
 
         messages = [{"role": "user", "content": prompt}]
         custom_id = f"wo-{wo_path.stem}"
-        hit_max_rounds = True
 
         for round_num in range(1, max_rounds + 1):
             _log(f"\n--- Round {round_num}/{max_rounds} ---")
@@ -132,10 +150,9 @@ class BatchExecutor:
             while True:
                 try:
                     batch = self.client.messages.batches.retrieve(batch_id)
-                    status = batch.processing_status
-                    if status == "ended":
+                    if batch.processing_status == "ended":
                         break
-                    _log(f"  Status: {status} (waiting {self.poll_interval}s...)")
+                    _log(f"  Status: {batch.processing_status} (waiting {self.poll_interval}s...)")
                     time.sleep(self.poll_interval)
                 except Exception as e:
                     _log_err(f"ERROR polling batch: {e}")
@@ -157,7 +174,6 @@ class BatchExecutor:
                     _log_err(f"ERROR: No result for custom_id={custom_id}")
                     return False
 
-                # result_entry.result is a union: succeeded / errored / expired / canceled
                 res = result_entry.result
                 if res.type != "succeeded":
                     if res.type == "errored":
@@ -169,15 +185,12 @@ class BatchExecutor:
                 message = res.message
             except Exception as e:
                 _log_err(f"ERROR retrieving results: {e}")
-                import traceback
                 traceback.print_exc()
                 return False
 
-            # Process response content
-            stop_reason = message.stop_reason
+            # Process response
             text_parts = []
             tool_blocks = []
-
             for block in message.content:
                 if block.type == "text":
                     text_parts.append(block.text)
@@ -185,28 +198,25 @@ class BatchExecutor:
                     tool_blocks.append(block)
 
             if text_parts:
-                preview = ' '.join(text_parts)[:200]
-                _log(f"Response: {preview}...")
+                _log(f"Response: {' '.join(text_parts)[:200]}...")
 
-            # Serialize and append assistant message
+            # Append assistant turn (serialized to dicts)
             messages.append({
                 "role": "assistant",
                 "content": _serialize_content(message.content),
             })
 
-            # If model is done (no more tool calls), we're finished
-            if stop_reason != "tool_use" or not tool_blocks:
-                _log(f"\nCOMPLETE (stop_reason={stop_reason})")
+            # Done if no tool calls
+            if message.stop_reason != "tool_use" or not tool_blocks:
+                _log(f"\nCOMPLETE (stop_reason={message.stop_reason})")
                 if text_parts:
                     _log('\n'.join(text_parts))
-                hit_max_rounds = False
-                break
+                return True
 
-            # Execute tool calls locally
+            # Execute tools locally, append results
             tool_results = []
             for tb in tool_blocks:
-                preview = json.dumps(tb.input)[:80]
-                _log(f"  Tool: {tb.name}({preview})")
+                _log(f"  Tool: {tb.name}({json.dumps(tb.input)[:80]})")
                 output = execute_tool(tb.name, dict(tb.input))
                 if len(output) > 30000:
                     output = output[:29000] + "\n...[TRUNCATED]..."
@@ -215,30 +225,19 @@ class BatchExecutor:
                     "tool_use_id": tb.id,
                     "content": output,
                 })
-
-            # Append tool results as user turn
             messages.append({"role": "user", "content": tool_results})
 
-        if hit_max_rounds:
-            _log_err(f"WARNING: Max rounds ({max_rounds}) reached without completion")
-            return False
-
-        return True
+        _log_err(f"WARNING: Max rounds ({max_rounds}) reached without completion")
+        return False
 
     def execute_workorders(self, wo_paths: list[Path], system_context: str = "") -> dict[str, bool]:
-        """Execute multiple workorders sequentially.
-
-        Returns dict of {wo_name: success}.
-        """
+        """Execute multiple workorders sequentially."""
         results = {}
         for wo_path in wo_paths:
             try:
-                success = self.execute_workorder(wo_path, system_context)
-                results[wo_path.name] = success
+                results[wo_path.name] = self.execute_workorder(wo_path, system_context)
             except Exception as e:
                 _log_err(f"ERROR executing {wo_path.name}: {e}")
-                import traceback
                 traceback.print_exc()
                 results[wo_path.name] = False
-
         return results
