@@ -62,6 +62,14 @@ class MessagingMixin:
                 if hasattr(self.server, 's2s_network'):
                     self.server.s2s_network.route_message(nick, normalized_target, text)
 
+                # Check for prefixed service command: <prefix> ai token <service> <method> [args]
+                prefix_cmd, service, method, args = self._parse_prefixed_command(text)
+                if prefix_cmd:
+                    # Enqueue the message for FIFO execution via queue processor
+                    self.server.message_queue.enqueue(addr, text, nick, normalized_target)
+                    self.server.log(f"[QUEUE] Enqueued command from {nick} for {normalized_target}: {text}")
+                    return  # Don't process further, queue processor will handle it
+
                 # Check for embedded service command (AI ... or <server> AI ...)
                 ai_info = self._parse_ai_command(text)
                 if ai_info:
@@ -78,16 +86,16 @@ class MessagingMixin:
                         self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
                         self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                         return
-                    self.file_handler.start_session(addr, text)
+                    self.file_handler.start_session(normalized_target, nick, addr, text)
             else:
                 # Private message to a nick
                 self._maybe_replay_pm_buffer(target, nick)
                 out = format_irc_message(prefix, "PRIVMSG", [target], text) + "\r\n"
                 if not self.server.send_to_nick(target, out):
                     # Try S2S routing for remote users
-                    if hasattr(self.server, 's2s_network') and self.server.s2s_network:
-                        link, remote_info = self.server.s2s_network.get_user_from_network(target)
-                        if link and remote_info and link.is_connected():
+                    if hasattr(self.server, 's2s_network'):
+                        _link, remote_info = self.server.s2s_network.get_user_from_network(target)
+                        if remote_info:
                             self.server.s2s_network.route_message(nick, target, text)
                             self.server.chat_buffer.append(target, nick, "PRIVMSG", text)
                             return
@@ -373,4 +381,23 @@ class MessagingMixin:
             return
 
         self._pm_buffer_replayed.add(track_key)
+
+    def _parse_prefixed_command(self, text):
+        """
+        Parse a prefixed service command: <prefix> ai token <service> <method> [args...]
+
+        Returns: (prefix, service, method, args) or (None, None, None, None) if not a command
+
+        Example: "haven.ef6e ai token help builtin"
+        Returns: ("haven.ef6e", "help", "builtin", [])
+        """
+        match = re.match(r'^(\w+(?:\.\w+)?)\s+ai\s+token\s+(\w+)\s+(\w+)(?:\s+(.*))?$', text)
+        if match:
+            prefix = match.group(1)
+            service = match.group(2)
+            method = match.group(3)
+            args_str = match.group(4) or ""
+            args = args_str.split() if args_str else []
+            return prefix, service, method, args
+        return None, None, None, None
         self._send_buffer_replay(recipient_addr, recipient_nick, sender_nick, full_history=False)

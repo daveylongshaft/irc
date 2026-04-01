@@ -91,7 +91,11 @@ class MessageHandler(
             line_stripped = line.strip()
 
             # Active file upload sessions take priority
-            if addr in self.file_handler.sessions:
+            # Check if user has an active session (key is now (channel, nick))
+            nick = self._get_nick(addr)
+            channel = self._get_client_channel(addr)
+            session_key = (channel, nick) if channel and nick else None
+            if session_key and session_key in self.file_handler.sessions:
                 self._handle_file_session_line(addr, line_stripped, raw_line)
                 continue
 
@@ -126,7 +130,7 @@ class MessageHandler(
                 content_stripped = content.strip()
 
         if content_stripped.startswith("<begin file=") or content_stripped.startswith("<append file="):
-            self.file_handler.abort_session(addr)
+            self.file_handler.abort_session(channel, nick)
             error_msg = "[Server] Error: Nested file uploads are not supported. Session aborted.\n"
             self.server.sock_send(error_msg.encode(), addr)
         elif content_stripped.startswith("<end file>"):
@@ -135,7 +139,7 @@ class MessageHandler(
                 broadcast_msg = format_irc_message(prefix, "PRIVMSG", [channel], content_stripped)
                 self.server.broadcast_to_channel(channel, broadcast_msg + "\r\n", exclude=addr)
 
-            result = self.file_handler.complete_session(addr)
+            result = self.file_handler.complete_session(channel, nick)
             # Send result to sender
             self.server.sock_send(f"[Server] {result}\n".encode(), addr)
             # Broadcast result from ServiceBot
@@ -146,7 +150,7 @@ class MessageHandler(
                 self.server.broadcast_to_channel(channel, result_msg + "\r\n")
         else:
             # Use extracted content (preserves indentation)
-            self.file_handler.process_chunk(addr, content)
+            self.file_handler.process_chunk(channel, nick, content)
             # Broadcast file chunk to channel (transparency)
             if nick and channel:
                 chunk_text = content.rstrip("\r\n")

@@ -35,10 +35,6 @@ import hashlib
 import os
 from pathlib import Path
 from csc_server_core.crypto import DHExchange, encrypt, decrypt, is_encrypted
-try:
-    from csc_server_core.s2s_debug import dlog
-except Exception:
-    def dlog(tag, msg): pass
 
 def _project_root():
     """Return CSC project root for kill switch file checks. Cached after first call."""
@@ -80,12 +76,10 @@ def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
             cert.signature_hash_algorithm,
         )
 
-        # Check not expired (compat: not_valid_before_utc added in cryptography 42.x)
+        # Check not expired
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        not_before = getattr(cert, 'not_valid_before_utc', cert.not_valid_before.replace(tzinfo=timezone.utc))
-        not_after = getattr(cert, 'not_valid_after_utc', cert.not_valid_after.replace(tzinfo=timezone.utc))
-        if now < not_before or now > not_after:
+        if now < cert.not_valid_before_utc or now > cert.not_valid_after_utc:
             return (False, "", "certificate expired or not yet valid")
 
         cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
@@ -170,19 +164,16 @@ class ServerLink:
             True on success, False on failure.
         """
         if self._connected:
-            dlog("CONN", f"Already connected to {self.remote_host}:{self.remote_port}")
             return True
         try:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._sock.settimeout(10)
             # Bind to any available local address
             self._sock.bind(('0.0.0.0', 0))
-            local_port = self._sock.getsockname()[1]
             self._remote_address = (self.remote_host, self.remote_port)
             self._connected = True
             self.link_time = time.time()
             self._log(f"UDP connected to {self.remote_host}:{self.remote_port}")
-            dlog("CONN", f"Outbound UDP {self.remote_host}:{self.remote_port} from local port {local_port}, link id={id(self)}")
 
             # Initiate DH key exchange
             if not self._initiate_dh_exchange():
@@ -194,7 +185,6 @@ class ServerLink:
             return True
         except Exception as e:
             self._log(f"Failed to connect to {self.remote_host}:{self.remote_port}: {e}")
-            dlog("CONN", f"FAILED connect to {self.remote_host}:{self.remote_port}: {e}")
             self._sock = None
             self._connected = False
             return False
@@ -208,13 +198,11 @@ class ServerLink:
         try:
             self._dh_exchange = DHExchange()
             init_msg = self._dh_exchange.format_init_message()
-            dlog("DH", f"Sending CRYPTOINIT DH to {self._remote_address}, link={id(self)}, msg_len={len(init_msg)}")
             self._sock.sendto(init_msg.encode(), self._remote_address)
             self._log("Sent CRYPTOINIT DH")
             return True
         except Exception as e:
             self._log(f"Failed to send DH init: {e}")
-            dlog("DH", f"FAILED DH init: {e}")
             return False
 
     def _handle_dh_reply(self, pubkey_hex):
@@ -227,16 +215,13 @@ class ServerLink:
             True if key derivation succeeded, False on error.
         """
         try:
-            dlog("DH", f"Got DHREPLY, link={id(self)}, pubkey_len={len(pubkey_hex)}, _encrypted_before={self._encrypted}")
             remote_pubkey = int(pubkey_hex, 16)
             self._aes_key = self._dh_exchange.compute_shared_key(remote_pubkey)
             self._encrypted = True
             self._log("DH key exchange completed, AES-256 key derived")
-            dlog("DH", f"DH complete, link={id(self)}, _encrypted={self._encrypted}, key_len={len(self._aes_key) if self._aes_key else 0}")
             return True
         except Exception as e:
             self._log(f"Failed to complete DH exchange: {e}")
-            dlog("DH", f"FAILED DH reply: {e}, link={id(self)}")
             return False
 
     def _send_dh_reply(self, pubkey_hex):
@@ -265,7 +250,6 @@ class ServerLink:
             if self._remote_address:
                 self._sock.sendto(data, self._remote_address)
             self._log("Sent CRYPTOINIT DHREPLY, AES-256 key derived")
-            dlog("DH", f"Sent DHREPLY to {self._remote_address}, link={id(self)}, _encrypted={self._encrypted}")
             return True
         except Exception as e:
             self._log(f"Failed to process DH init: {e}")
@@ -280,7 +264,6 @@ class ServerLink:
         Args:
             line: The full "SLINKACK ..." line.
         """
-        dlog("SLINK", f"_handle_slinkack_response: link={id(self)}, line[:100]={line[:100]}")
         try:
             parts = line.split()
             if len(parts) < 3:
@@ -336,48 +319,42 @@ class ServerLink:
             True if handshake succeeds, False otherwise.
         """
         if not self._connected:
-            dlog("AUTH", f"authenticate() called but not connected, link={id(self)}")
             return False
 
         # Wait for DH key exchange to complete (outbound)
         # (For inbound, DH is handled when processing CRYPTOINIT DH)
-        dlog("AUTH", f"authenticate() start: link={id(self)}, _encrypted={self._encrypted}, _dh_exchange={self._dh_exchange is not None}")
-        if not self._encrypted and self._dh_exchange is not None:
-            # We sent DH init — wait for DH reply
-            dlog("AUTH", f"Waiting for DH reply, link={id(self)}")
-            for i in range(100):  # ~10 second timeout
+        if not self._encrypted and self._dh_exchange is None:
+            # We're the ones initiating - wait for DH reply
+            for _ in range(100):  # ~10 second timeout
                 if self._encrypted:
                     break
                 time.sleep(0.1)
 
             if not self._encrypted:
                 self._log("DH key exchange timeout")
-                dlog("AUTH", f"DH TIMEOUT after 10s, link={id(self)}")
                 return False
-            dlog("AUTH", f"DH ready after {i*100}ms, link={id(self)}")
 
         try:
             local_id = self._get_local_server_id()
             local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
-            dlog("AUTH", f"Authenticating as {local_id}, cert_path={bool(self.cert_path)}, ca_path={bool(self.ca_path)}, link={id(self)}")
+
+            # DEBUG: Log what server_id we're claiming
+            self._log(f"Authenticating as server_id={local_id}, local_server has server_id attribute: {hasattr(self.local_server, 'server_id')}")
+            if hasattr(self.local_server, 'server_id'):
+                self._log(f"local_server.server_id is: {self.local_server.server_id}")
 
             if self.cert_path and self.ca_path:
                 # Cert-based auth: send our cert chain, verify theirs
                 cert_pem = Path(self.cert_path).read_text()
                 cert_b64 = base64.b64encode(cert_pem.encode()).decode()
-                dlog("AUTH", f"Sending SLINK CERT, cert_b64_len={len(cert_b64)}, link={id(self)}")
                 self.send_message("SLINK", "CERT", cert_b64, local_id, local_ts)
 
                 # Wait for SLINKACK to be processed by reader thread
                 self._slinkack_received.clear()
-                self._slinkack_error = None  # Clear any stale error
-                dlog("AUTH", f"Waiting for SLINKACK, link={id(self)}")
                 if not self._slinkack_received.wait(timeout=10):
                     self._log("Timeout waiting for SLINKACK during cert handshake")
-                    dlog("AUTH", f"SLINKACK TIMEOUT after 10s, link={id(self)}")
                     return False
 
-                dlog("AUTH", f"SLINKACK received, error={self._slinkack_error}, link={id(self)}")
                 if self._slinkack_error:
                     self._log(f"Invalid cert handshake response: {self._slinkack_error}")
                     return False
@@ -482,38 +459,29 @@ class ServerLink:
                 if not data:
                     continue
 
+                self._log(f"_reader_loop got {len(data)} bytes from {addr}")
+
                 # Store remote address for replies
                 if not self._remote_address:
                     self._remote_address = addr
 
                 # Decrypt if encrypted
-                raw_hex = data[:20].hex() if len(data) > 20 else data.hex()
-                is_enc = is_encrypted(data)
-                if self._encrypted and is_enc:
+                if self._encrypted and is_encrypted(data):
                     try:
                         plaintext = decrypt(self._aes_key, data)
                         data = plaintext
-                        dlog("READER", f"Decrypted OK, link={id(self)}, plain_len={len(data)}")
                     except Exception as e:
                         self._log(f"Decryption failed: {e}")
-                        dlog("READER", f"Decrypt FAILED: {e}, link={id(self)}, _encrypted={self._encrypted}, raw={raw_hex}")
                         continue
-                elif is_enc and not self._encrypted:
-                    dlog("READER", f"Got encrypted data but _encrypted=False, link={id(self)}, raw={raw_hex}")
-                elif not is_enc and self._encrypted:
-                    dlog("READER", f"Got plaintext after encryption enabled, link={id(self)}")
 
                 # Parse as text message
                 try:
                     line = data.decode('utf-8').strip()
                 except UnicodeDecodeError:
-                    dlog("READER", f"UnicodeDecodeError, link={id(self)}, raw={raw_hex}")
                     continue
 
                 if not line:
                     continue
-
-                dlog("READER", f"line={line[:100]}, link={id(self)}, _encrypted={self._encrypted}")
 
                 # Parse SEQ/ACK header if present (reliable delivery)
                 if line.startswith("SEQ "):
@@ -533,11 +501,9 @@ class ServerLink:
                         self._recv_seq = msg_seq
                         if not line:
                             continue
-                    dlog("READER", f"After SEQ strip: line={line[:100]}, link={id(self)}")
 
                 # Check for crypto handshake messages first
                 if line.startswith("CRYPTOINIT DH "):
-                    dlog("READER", f"Processing inbound CRYPTOINIT DH, link={id(self)}")
                     parts = line.split()
                     if len(parts) >= 5:
                         # Remote is initiating DH
@@ -545,7 +511,6 @@ class ServerLink:
                     continue
 
                 if line.startswith("CRYPTOINIT DHREPLY "):
-                    dlog("READER", f"Processing DHREPLY, link={id(self)}")
                     parts = line.split()
                     if len(parts) >= 3:
                         # Remote replied to our DH
@@ -553,7 +518,6 @@ class ServerLink:
                     continue
 
                 if line.startswith("SLINKACK "):
-                    dlog("READER", f"Processing SLINKACK, link={id(self)}, line[:80]={line[:80]}")
                     # Handle SLINKACK during handshake
                     self._handle_slinkack_response(line)
                     continue
@@ -730,10 +694,6 @@ class ServerLink:
         """Return the local server's unique ID."""
         result = getattr(self.local_server, 'server_id',
                        os.environ.get('CSC_SERVER_ID', 'server_001'))
-        # DEBUG: Log what we're returning
-        if not hasattr(self, '_get_local_server_id_logged'):
-            print(f"[S2S-ID] _get_local_server_id: result={result}, has_attr={hasattr(self.local_server, 'server_id')}")
-            self._get_local_server_id_logged = True
         return result
 
     def _log(self, message):
@@ -776,13 +736,6 @@ class ServerNetwork:
         except Exception as e:
             debug_file.write_text(f"Config load error: {e}\n")
 
-        # If no explicit server_id, derive from cert CN so S2S auth matches
-        if self.server_id in ('server_001', '') and self.s2s_cert_path:
-            cn = self._cn_from_cert(self.s2s_cert_path)
-            if cn:
-                self.server_id = cn
-                self._log(f"Server ID derived from cert CN: {cn}")
-
         # Track which servers have been seen (loop prevention)
         self._seen_servers = {self.server_id}
 
@@ -824,34 +777,9 @@ class ServerNetwork:
         except Exception as e:
             self._log(f"WARNING: Could not load cert config: {e}")
 
-    @staticmethod
-    def _cn_from_cert(cert_path):
-        """Extract Common Name from a PEM certificate file."""
-        try:
-            import subprocess, re
-            result = subprocess.run(
-                ['openssl', 'x509', '-noout', '-subject', '-in', str(cert_path)],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0:
-                m = re.search(r'CN\s*=\s*(\S+)', result.stdout)
-                if m:
-                    return m.group(1)
-        except Exception:
-            pass
-        return None
-
-    def attach_fxp_bridge(self, bridge):
-        """Attach an FtpS2sBridge to receive SYNCFILE/RSYNCFILE/SYNCINVENTORY messages."""
-        self._fxp_bridge = bridge
-        self._log("FXP bridge attached")
-
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
-        print(f"[S2S] start_listener called. password={bool(self.s2s_password)}, cert={bool(self.s2s_cert_path)}, ca={bool(self.s2s_ca_path)}, peers={len(self.s2s_peers)}")
-
         if not self.s2s_password and not (self.s2s_cert_path and self.s2s_ca_path):
-            print(f"[S2S] Listener disabled - no auth configured")
             self._log("No S2S password or certs configured, S2S listener disabled")
             return False
 
@@ -882,8 +810,6 @@ class ServerNetwork:
 
     def _peer_link_loop(self):
         """Periodically attempt to link to configured S2S peers."""
-        print(f"[S2S-LINKER] Thread started at {time.time()}")
-
         while self._running:
             try:
                 for peer in self.s2s_peers:
@@ -899,11 +825,9 @@ class ServerNetwork:
                     if now - last_attempt < 30:
                         continue
 
-                    print(f"[S2S-LINKER] Attempting to link to {peer_key}")
                     self._last_peer_link_attempt[peer_key] = now
                     self._try_link_to_peer(host, port)
             except Exception as e:
-                print(f"[S2S-LINKER] Error: {e}")
                 self._log(f"Peer linker error: {e}")
 
             time.sleep(5)
@@ -912,18 +836,13 @@ class ServerNetwork:
         """Attempt to establish an outbound S2S link to a peer."""
         peer_key = f"{host}:{port}"
         try:
-            # Check if we're already linked (by host:port or by any active link)
+            # Check if we're already linked
             with self._lock:
-                for sid, link in self._links.items():
-                    if link.is_connected():
-                        if (link.remote_host, link.remote_port) == (host, port):
-                            dlog("LINKER", f"Already linked to {peer_key} by address (sid={sid})")
-                            return  # Already linked by address
-                        if link.remote_host == host:
-                            dlog("LINKER", f"Already linked to host {host} (sid={sid})")
-                            return  # Already linked to this host
+                for link in self._links.values():
+                    if (link.remote_host, link.remote_port) == (host, port):
+                        return  # Already linked
 
-            dlog("LINKER", f"Attempting link to {peer_key}")
+            # Create ServerLink for outbound connection
             link = ServerLink(
                 self.local_server,
                 host,
@@ -937,23 +856,19 @@ class ServerNetwork:
             # Establish connection
             if not link.connect():
                 self._log(f"Failed to connect to {peer_key}")
-                dlog("LINKER", f"connect() failed for {peer_key}")
                 return
 
             # Register link BEFORE authenticating (so reader thread can process responses)
             remote_id = link.remote_server_id or peer_key
             with self._lock:
                 self._links[remote_id] = link
-            dlog("LINKER", f"Registered as {remote_id}, starting reader")
 
             # Start reader thread BEFORE authenticating (to receive DH responses)
             link.start_reader(self._dispatch_s2s_message)
 
             # Now authenticate
-            dlog("LINKER", f"Authenticating with {peer_key}...")
             if not link.authenticate():
                 self._log(f"Failed to authenticate with {peer_key}")
-                dlog("LINKER", f"authenticate() FAILED for {peer_key}")
                 # Remove from links and close socket to avoid leaking UDP sockets
                 with self._lock:
                     self._links.pop(remote_id, None)
@@ -982,14 +897,12 @@ class ServerNetwork:
 
                 self._links[actual_id] = link
                 self._seen_servers.add(actual_id)
-            print(f"[S2S-LINKER] Successfully linked to {peer_key} as {actual_id}")
             self._log(f"Successfully linked to peer {peer_key} as {actual_id}")
 
             # Send our users/channels to the remote so sync is bidirectional
             self._send_full_sync(link)
 
         except Exception as e:
-            print(f"[S2S-LINKER] Exception linking to {peer_key}: {e}")
             self._log(f"Failed to link to peer {peer_key}: {e}")
 
     def _receive_loop(self):
@@ -1036,31 +949,23 @@ class ServerNetwork:
 
                 # Decrypt if encrypted
                 plaintext = data
-                is_enc = is_encrypted(data)
-                if is_enc:
+                if is_encrypted(data):
                     # Peek to see if this is an authenticated link
                     if addr in peer_links and peer_links[addr]._encrypted:
                         try:
                             plaintext = decrypt(peer_links[addr]._aes_key, data)
-                            dlog("LISTEN", f"Decrypted from {addr}, plain_len={len(plaintext)}")
                         except Exception as e:
                             self._log(f"Decryption failed from {addr}: {e}")
-                            dlog("LISTEN", f"Decrypt FAILED from {addr}: {e}")
                             continue
-                    else:
-                        dlog("LISTEN", f"Got encrypted data from {addr} but no encrypted link, known={addr in peer_links}")
 
                 # Decode message
                 try:
                     line = plaintext.decode('utf-8').strip()
                 except UnicodeDecodeError:
-                    dlog("LISTEN", f"UnicodeDecodeError from {addr}")
                     continue
 
                 if not line:
                     continue
-
-                dlog("LISTEN", f"From {addr}: {line[:100]}, is_enc={is_enc}, peer_known={addr in peer_links}")
 
                 # Refuse all new connections while DISCONNECT is active
                 if _disconnect_active and addr not in peer_links:
@@ -1069,7 +974,6 @@ class ServerNetwork:
                 # Get or create ServerLink for this peer
                 if addr not in peer_links:
                     self._log(f"Inbound S2S datagram from {addr}")
-                    dlog("LISTEN", f"New inbound link from {addr}")
                     link = ServerLink(
                         self.local_server,
                         remote_host=addr[0],
@@ -1127,7 +1031,6 @@ class ServerNetwork:
 
                 # Handle SLINK (link request)
                 if line.startswith("SLINK "):
-                    dlog("LISTEN", f"SLINK from {addr}: parts={len(line.split())}, authenticated={link._authenticated}, encrypted={link._encrypted}")
                     if link._authenticated:
                         continue  # Already authenticated
                     parts = line.split()
@@ -1178,9 +1081,7 @@ class ServerNetwork:
                         our_cert_b64 = base64.b64encode(our_cert_pem.encode()).decode()
                         reply = f"SLINKACK CERT {our_cert_b64} {local_id} {local_ts}"
                         reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                        dlog("LISTEN", f"Sending SLINKACK CERT to {addr}, encrypted={link._encrypted}, reply_len={len(reply)}, data_len={len(reply_data)}")
                         self._listener_sock.sendto(reply_data, addr)
-                        dlog("LISTEN", f"SLINKACK sent to {addr}")
 
                         with self._lock:
                             existing = self._links.get(remote_id)
@@ -1396,16 +1297,11 @@ class ServerNetwork:
         line = f"{command} {args_str}".strip() if args_str else command
         with self._lock:
             link_count = len(self._links)
-            if link_count == 0:
-                self._log(f"broadcast_to_network({command}): no links!")
             for server_id, link in list(self._links.items()):
                 if server_id == exclude_server:
                     continue
-                connected = link.is_connected()
-                self._log(f"broadcast_to_network({command}) -> {server_id}: connected={connected}, has_sock={link._sock is not None}, has_addr={link._remote_address is not None}")
-                if connected:
-                    ok = link.send_raw(line)
-                    self._log(f"broadcast_to_network({command}) -> {server_id}: send_raw returned {ok}")
+                if link.is_connected():
+                    link.send_raw(line)
 
     def get_user_from_network(self, nick):
         """Find a user on any server in the network and which link has them.
@@ -1662,16 +1558,6 @@ class ServerNetwork:
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
         }
-        # FXP bridge commands
-        bridge = getattr(self, '_fxp_bridge', None)
-        if bridge:
-            handlers.update({
-                "SYNCFILE":      bridge.handle_syncfile,
-                "RSYNCFILE":     bridge.handle_rsyncfile,
-                "SYNCFILE_ACK":  bridge.handle_syncfile_ack,
-                "SYNCINVENTORY": bridge.handle_syncinventory,
-                "SYNCRENAME":    bridge.handle_syncrename,
-            })
         handler = handlers.get(command)
         if handler:
             try:

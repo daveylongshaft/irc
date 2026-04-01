@@ -1,0 +1,1946 @@
+[
+  {
+    "file": "fft_waveform_analysis.py",
+    "function": "main",
+    "line": 93
+  },
+  {
+    "file": "run_local_benchmarks.py",
+    "class": "DummyServer",
+    "method": "log",
+    "line": 14
+  },
+  {
+    "file": "run_local_benchmarks.py",
+    "function": "main",
+    "line": 17
+  },
+  {
+    "file": "send_chat.py",
+    "function": "main",
+    "line": 4
+  },
+  {
+    "file": "test_0000_verify_client_bridge_localserver_service_commands.py",
+    "function": "main",
+    "line": 54
+  },
+  {
+    "file": ".trash/agent-setup.py",
+    "function": "main",
+    "line": 159
+  },
+  {
+    "file": ".trash/aider-shim.py",
+    "function": "main",
+    "line": 33
+  },
+  {
+    "file": ".trash/csc-daemon.py",
+    "function": "main",
+    "line": 9
+  },
+  {
+    "file": ".trash/run_agent.py",
+    "function": "main",
+    "line": 227
+  },
+  {
+    "file": "agents/chatgpt/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/claude/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/codellama/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/deepseek/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/dmr_qwen_task_runner/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-2.5-flash/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-2.5-flash-lite/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-2.5-pro/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-3-flash/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-3-flash-preview/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-3-pro/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/gemini-3-pro-preview/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/haiku/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/ollama-codellama/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/ollama-deepseek/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/ollama-qwen/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/opus/bin/run_agent.py",
+    "function": "main",
+    "line": 247
+  },
+  {
+    "file": "agents/qwen/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/sonnet/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "agents/templates/run_agent.py",
+    "function": "main",
+    "line": 265
+  },
+  {
+    "file": "agents/test-agent/bin/run_agent.py",
+    "function": "main",
+    "line": 234
+  },
+  {
+    "file": "bin/run_agent.py",
+    "function": "main",
+    "line": 227
+  },
+  {
+    "file": "bin/update_bins_for_venv.py",
+    "function": "update_bat_files",
+    "line": 7
+  },
+  {
+    "file": "bin/update_bins_for_venv.py",
+    "function": "update_shell_scripts",
+    "line": 17
+  },
+  {
+    "file": "bin/claude-batch/cbatch_add.py",
+    "function": "build_parser",
+    "line": 17
+  },
+  {
+    "file": "bin/claude-batch/cbatch_add.py",
+    "function": "main",
+    "line": 37
+  },
+  {
+    "file": "bin/claude-batch/cbatch_edit.py",
+    "function": "build_parser",
+    "line": 9
+  },
+  {
+    "file": "bin/claude-batch/cbatch_edit.py",
+    "function": "main",
+    "line": 23
+  },
+  {
+    "file": "bin/claude-batch/cbatch_list.py",
+    "function": "build_parser",
+    "line": 19
+  },
+  {
+    "file": "bin/claude-batch/cbatch_list.py",
+    "function": "main",
+    "line": 30
+  },
+  {
+    "file": "bin/claude-batch/cbatch_queue_run.py",
+    "class": "_DummyService",
+    "method": "log",
+    "line": 19
+  },
+  {
+    "file": "bin/claude-batch/cbatch_queue_run.py",
+    "function": "build_parser",
+    "line": 23
+  },
+  {
+    "file": "bin/claude-batch/cbatch_queue_run.py",
+    "function": "_prompt_filename",
+    "line": 34
+  },
+  {
+    "file": "bin/claude-batch/cbatch_queue_run.py",
+    "function": "main",
+    "line": 38
+  },
+  {
+    "file": "bin/claude-batch/cbatch_remove.py",
+    "function": "build_parser",
+    "line": 9
+  },
+  {
+    "file": "bin/claude-batch/cbatch_remove.py",
+    "function": "main",
+    "line": 16
+  },
+  {
+    "file": "bin/claude-batch/cbatch_retrieve.py",
+    "function": "build_parser",
+    "line": 13
+  },
+  {
+    "file": "bin/claude-batch/cbatch_retrieve.py",
+    "function": "main",
+    "line": 20
+  },
+  {
+    "file": "bin/claude-batch/cbatch_run.py",
+    "function": "build_parser",
+    "line": 12
+  },
+  {
+    "file": "bin/claude-batch/cbatch_run.py",
+    "function": "_load_system_text",
+    "line": 20
+  },
+  {
+    "file": "bin/claude-batch/cbatch_run.py",
+    "function": "_request_from_entry",
+    "line": 28
+  },
+  {
+    "file": "bin/claude-batch/cbatch_run.py",
+    "function": "main",
+    "line": 52
+  },
+  {
+    "file": "bin/claude-batch/cbatch_status.py",
+    "function": "build_parser",
+    "line": 12
+  },
+  {
+    "file": "bin/claude-batch/cbatch_status.py",
+    "function": "main",
+    "line": 18
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "_default_data",
+    "line": 45
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "load_config",
+    "line": 61
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "save_config",
+    "line": 72
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "repo_root",
+    "line": 80
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "rel_to_repo",
+    "line": 84
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "abs_from_user_path",
+    "line": 92
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "parse_json_arg",
+    "line": 97
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "find_entry",
+    "line": 107
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "make_entry_id",
+    "line": 114
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "read_text",
+    "line": 120
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "ensure_env",
+    "line": 125
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "estimate_tokens_for_text",
+    "line": 132
+  },
+  {
+    "file": "bin/claude-batch/common.py",
+    "function": "estimate_cost_usd",
+    "line": 137
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "log",
+    "line": 56
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "install_linux",
+    "line": 152
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "uninstall_linux",
+    "line": 187
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "install_macos",
+    "line": 328
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "uninstall_macos",
+    "line": 382
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "install_windows",
+    "line": 413
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "uninstall_windows",
+    "line": 461
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "install_android",
+    "line": 495
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "uninstall_android",
+    "line": 547
+  },
+  {
+    "file": "deploy/install.py",
+    "function": "main",
+    "line": 567
+  },
+  {
+    "file": "server/scripts/read_privileged_log.py",
+    "function": "read_privileged_log",
+    "line": 6
+  },
+  {
+    "file": "tools/syslog_monitor.py",
+    "function": "get_last_pos",
+    "line": 8
+  },
+  {
+    "file": "tools/syslog_monitor.py",
+    "function": "set_last_pos",
+    "line": 17
+  },
+  {
+    "file": "tools/syslog_monitor.py",
+    "function": "main",
+    "line": 25
+  },
+  {
+    "file": "packages/coding-agent/coding_agent/agent.py",
+    "class": "CodingAgent",
+    "method": "__init__",
+    "line": 14
+  },
+  {
+    "file": "packages/coding-agent/coding_agent/docker_runner.py",
+    "class": "DockerRunner",
+    "method": "__init__",
+    "line": 21
+  },
+  {
+    "file": "packages/csc-pm/csc_pm/main.py",
+    "function": "main",
+    "line": 15
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "__init__",
+    "line": 8
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "_resolve_config_path",
+    "line": 12
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "load_config",
+    "line": 30
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "save_config",
+    "line": 40
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "get_value",
+    "line": 58
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "set_value",
+    "line": 68
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "get_service_config",
+    "line": 76
+  },
+  {
+    "file": "packages/csc-service/csc_service/config.py",
+    "class": "ConfigManager",
+    "method": "get_all_services_config",
+    "line": 79
+  },
+  {
+    "file": "packages/csc-service/csc_service/main.py",
+    "function": "main",
+    "line": 15
+  },
+  {
+    "file": "packages/csc-service/csc_service/cli/csc_ctl.py",
+    "function": "main",
+    "line": 8
+  },
+  {
+    "file": "packages/csc-service/csc_service/client/client.py",
+    "class": "Client",
+    "method": "_write_to_output",
+    "line": 106
+  },
+  {
+    "file": "packages/csc-service/csc_service/clients/scriptbot/csc_scriptbot/main.py",
+    "function": "main",
+    "line": 15
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/git_sync.py",
+    "function": "setup",
+    "line": 8
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/pm.py",
+    "function": "_ts",
+    "line": 70
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/pm.py",
+    "function": "_log",
+    "line": 74
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/pm.py",
+    "function": "setup",
+    "line": 82
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/pm.py",
+    "function": "_save_state",
+    "line": 122
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/queue_worker.py",
+    "function": "_initialize_paths",
+    "line": 78
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/queue_worker.py",
+    "function": "log",
+    "line": 582
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/queue_worker.py",
+    "function": "git_pull",
+    "line": 622
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/queue_worker.py",
+    "function": "load_stale_state",
+    "line": 971
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/queue_worker.py",
+    "function": "save_stale_state",
+    "line": 981
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/queue_worker.py",
+    "function": "main",
+    "line": 1606
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/test_runner.py",
+    "function": "log",
+    "line": 105
+  },
+  {
+    "file": "packages/csc-service/csc_service/infra/test_runner.py",
+    "function": "main",
+    "line": 496
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/platform.py",
+    "class": "Platform",
+    "method": "__init__",
+    "line": 77
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/agent_service.py",
+    "class": "agent",
+    "method": "PROMPTS_BASE",
+    "line": 38
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/agent_service.py",
+    "class": "agent",
+    "method": "READY_DIR",
+    "line": 42
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/agent_service.py",
+    "class": "agent",
+    "method": "WIP_DIR",
+    "line": 46
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/agent_service.py",
+    "class": "agent",
+    "method": "DONE_DIR",
+    "line": 50
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/agent_service.py",
+    "class": "agent",
+    "method": "__init__",
+    "line": 174
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/benchmark_service.py",
+    "class": "benchmark",
+    "method": "__init__",
+    "line": 37
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/catalog_service.py",
+    "class": "catalog",
+    "method": "__init__",
+    "line": 134
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/cryptserv_service.py",
+    "class": "CryptServ",
+    "method": "__init__",
+    "line": 20
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/help_service.py",
+    "class": "help",
+    "method": "default",
+    "line": 5
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "__init__",
+    "line": 21
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_request",
+    "line": 29
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_get",
+    "line": 60
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_post",
+    "line": 67
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_patch",
+    "line": 70
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_delete",
+    "line": 73
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_require_key",
+    "line": 76
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/moltbook_service.py",
+    "class": "moltbook",
+    "method": "_fmt",
+    "line": 82
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/patch_service.py",
+    "class": "patch",
+    "method": "__init__",
+    "line": 27
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/patch_test_dummy_service.py",
+    "class": "patch_test_dummy",
+    "method": "__init__",
+    "line": 11
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/queue_worker_service.py",
+    "class": "QueueWorkerService",
+    "method": "__init__",
+    "line": 72
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/wakeword_service.py",
+    "class": "wakeword",
+    "method": "__init__",
+    "line": 38
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/wakeword_service.py",
+    "class": "wakeword",
+    "method": "__getattr__",
+    "line": 122
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/workorders_service.py",
+    "class": "workorders",
+    "method": "__init__",
+    "line": 38
+  },
+  {
+    "file": "packages/csc-service/csc_service/shared/services/stats_service/stats_service.py",
+    "class": "StatsService",
+    "method": "__init__",
+    "line": 14
+  },
+  {
+    "file": "services/platform_service.py",
+    "class": "platform",
+    "method": "__init__",
+    "line": 23
+  },
+  {
+    "file": "tests/live_botserv_real_client_test.py",
+    "class": "TestLiveBotservRealClient",
+    "method": "setUpClass",
+    "line": 19
+  },
+  {
+    "file": "tests/live_botserv_real_client_test.py",
+    "class": "TestLiveBotservRealClient",
+    "method": "tearDownClass",
+    "line": 35
+  },
+  {
+    "file": "tests/live_botserv_real_client_test.py",
+    "class": "TestLiveBotservRealClient",
+    "method": "setUp",
+    "line": 42
+  },
+  {
+    "file": "tests/live_botserv_real_client_test.py",
+    "class": "TestLiveBotservRealClient",
+    "method": "_run_client",
+    "line": 48
+  },
+  {
+    "file": "tests/live_client_programmatic_test.py",
+    "class": "TestLiveClientProgrammatic",
+    "method": "setUp",
+    "line": 15
+  },
+  {
+    "file": "tests/live_client_programmatic_test.py",
+    "class": "TestLiveClientProgrammatic",
+    "method": "tearDown",
+    "line": 34
+  },
+  {
+    "file": "tests/test_0000_verify_client_bridge_localserver_service_commands.py",
+    "function": "main",
+    "line": 54
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "setUp",
+    "line": 21
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "tearDown",
+    "line": 67
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_list",
+    "line": 71
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_select",
+    "line": 78
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_assign_flow",
+    "line": 89
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_status_running",
+    "line": 127
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_status_stale",
+    "line": 148
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_stop",
+    "line": 167
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_tail",
+    "line": 174
+  },
+  {
+    "file": "tests/test_agent_service.py",
+    "class": "TestAgentService",
+    "method": "test_assign_queues_workorder",
+    "line": 185
+  },
+  {
+    "file": "tests/test_auto_op.py",
+    "function": "send_msg",
+    "line": 4
+  },
+  {
+    "file": "tests/test_auto_op_final.py",
+    "function": "main",
+    "line": 4
+  },
+  {
+    "file": "tests/test_botserv.py",
+    "class": "TestBotServ",
+    "method": "setUp",
+    "line": 83
+  },
+  {
+    "file": "tests/test_botserv.py",
+    "function": "_build_mock_server",
+    "line": 40
+  },
+  {
+    "file": "tests/test_botserv.py",
+    "function": "_register_client",
+    "line": 64
+  },
+  {
+    "file": "tests/test_botserv.py",
+    "function": "_sent_lines",
+    "line": 69
+  },
+  {
+    "file": "tests/test_botserv_logread.py",
+    "class": "TestBotservLogread",
+    "method": "setUp",
+    "line": 15
+  },
+  {
+    "file": "tests/test_botserv_logs.py",
+    "class": "TestBotServLogs",
+    "method": "setUp",
+    "line": 77
+  },
+  {
+    "file": "tests/test_botserv_logs.py",
+    "function": "_build_mock_server",
+    "line": 32
+  },
+  {
+    "file": "tests/test_botserv_logs.py",
+    "function": "_register_client",
+    "line": 58
+  },
+  {
+    "file": "tests/test_botserv_logs.py",
+    "function": "_sent_lines",
+    "line": 63
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "__init__",
+    "line": 16
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "connect",
+    "line": 18
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "login",
+    "line": 19
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "set_pasv",
+    "line": 20
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "cwd",
+    "line": 21
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "retrlines",
+    "line": 22
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "quit",
+    "line": 23
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "retrbinary",
+    "line": 24
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "storbinary",
+    "line": 25
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "FakeFTP",
+    "method": "mkd",
+    "line": 26
+  },
+  {
+    "file": "tests/test_builtin_service.py",
+    "class": "TestBuiltinService",
+    "method": "setUp",
+    "line": 31
+  },
+  {
+    "file": "tests/test_chanserv.py",
+    "class": "TestChanServ",
+    "method": "setUp",
+    "line": 85
+  },
+  {
+    "file": "tests/test_chanserv.py",
+    "function": "_build_mock_server",
+    "line": 42
+  },
+  {
+    "file": "tests/test_chanserv.py",
+    "function": "_register_client",
+    "line": 66
+  },
+  {
+    "file": "tests/test_chanserv.py",
+    "function": "_sent_lines",
+    "line": 71
+  },
+  {
+    "file": "tests/test_cryptserv_service.py",
+    "class": "TestCryptServ",
+    "method": "setUp",
+    "line": 26
+  },
+  {
+    "file": "tests/test_cryptserv_service.py",
+    "class": "TestCryptServ",
+    "method": "tearDown",
+    "line": 45
+  },
+  {
+    "file": "tests/test_cryptserv_service.py",
+    "class": "TestCryptServ",
+    "method": "test_request_new_cert",
+    "line": 49
+  },
+  {
+    "file": "tests/test_cryptserv_service.py",
+    "class": "TestCryptServ",
+    "method": "test_request_existing_cert",
+    "line": 74
+  },
+  {
+    "file": "tests/test_cryptserv_service.py",
+    "class": "TestCryptServ",
+    "method": "test_gencert_failure",
+    "line": 90
+  },
+  {
+    "file": "tests/test_cryptserv_service.py",
+    "class": "TestCryptServ",
+    "method": "test_requestor_not_found",
+    "line": 102
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "setUp",
+    "line": 16
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "test_run_get",
+    "line": 23
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "test_run_post_with_data",
+    "line": 37
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "test_run_with_headers",
+    "line": 55
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "test_run_missing_url",
+    "line": 70
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "test_run_exception",
+    "line": 75
+  },
+  {
+    "file": "tests/test_curl_service.py",
+    "class": "TestCurlService",
+    "method": "test_run_http_error",
+    "line": 83
+  },
+  {
+    "file": "tests/test_dcc_system.py",
+    "class": "TestDCCSystem",
+    "method": "setUp",
+    "line": 11
+  },
+  {
+    "file": "tests/test_dcc_system.py",
+    "class": "TestDCCSystem",
+    "method": "tearDown",
+    "line": 54
+  },
+  {
+    "file": "tests/test_dcc_system.py",
+    "class": "TestDCCSystem",
+    "method": "test_dcc_send_receive_full_cycle",
+    "line": 61
+  },
+  {
+    "file": "tests/test_moltbook_cron.py",
+    "class": "MockServer",
+    "method": "log",
+    "line": 32
+  },
+  {
+    "file": "tests/test_nickserv.py",
+    "class": "TestNickServRegistration",
+    "method": "setUp",
+    "line": 113
+  },
+  {
+    "file": "tests/test_nickserv.py",
+    "class": "TestNickServGhost",
+    "method": "setUp",
+    "line": 326
+  },
+  {
+    "file": "tests/test_nickserv.py",
+    "class": "TestStaleNickCleanup",
+    "method": "setUp",
+    "line": 478
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "setUp",
+    "line": 19
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "tearDown",
+    "line": 48
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_register_flow",
+    "line": 51
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_register_duplicate",
+    "line": 67
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_ident_flow",
+    "line": 72
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_info",
+    "line": 90
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_unregister",
+    "line": 100
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_public_placeholders",
+    "line": 111
+  },
+  {
+    "file": "tests/test_nickserv_service.py",
+    "class": "TestNickservService",
+    "method": "test_persistence",
+    "line": 118
+  },
+  {
+    "file": "tests/test_ntfy_service.py",
+    "class": "TestNtfyService",
+    "method": "setUp",
+    "line": 16
+  },
+  {
+    "file": "tests/test_ntfy_service.py",
+    "class": "TestNtfyService",
+    "method": "test_send_success",
+    "line": 24
+  },
+  {
+    "file": "tests/test_ntfy_service.py",
+    "class": "TestNtfyService",
+    "method": "test_send_missing_curl",
+    "line": 45
+  },
+  {
+    "file": "tests/test_ntfy_service.py",
+    "class": "TestNtfyService",
+    "method": "test_send_missing_args",
+    "line": 52
+  },
+  {
+    "file": "tests/test_ntfy_service.py",
+    "class": "TestNtfyService",
+    "method": "test_default",
+    "line": 56
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestFindAnchor",
+    "method": "setUp",
+    "line": 59
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestApplyHunks",
+    "method": "setUp",
+    "line": 180
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestFormatDetection",
+    "method": "test_loose",
+    "line": 325
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestFormatDetection",
+    "method": "test_unified",
+    "line": 331
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestFormatDetection",
+    "method": "test_unknown",
+    "line": 337
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestEndToEndLoose",
+    "method": "setUp",
+    "line": 344
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestEndToEndLoose",
+    "method": "tearDown",
+    "line": 350
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestEndToEndUnified",
+    "method": "setUp",
+    "line": 391
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestEndToEndUnified",
+    "method": "tearDown",
+    "line": 397
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestPatchServiceCommands",
+    "method": "setUp",
+    "line": 433
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestPatchServiceCommands",
+    "method": "tearDown",
+    "line": 453
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestPatchServiceCommands",
+    "method": "test_apply_success",
+    "line": 456
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestPatchServiceCommands",
+    "method": "test_apply_missing_patch",
+    "line": 480
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestPatchServiceCommands",
+    "method": "test_revert",
+    "line": 484
+  },
+  {
+    "file": "tests/test_patch_service.py",
+    "class": "TestPatchServiceCommands",
+    "method": "test_history",
+    "line": 495
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "MockServer",
+    "method": "__init__",
+    "line": 26
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "MockServer",
+    "method": "client_registry",
+    "line": 60
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "MockServer",
+    "method": "oper_credentials",
+    "line": 64
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "MockServer",
+    "method": "opers",
+    "line": 68
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "MockServer",
+    "method": "_persist_session_data",
+    "line": 71
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "TestCompletePersistence",
+    "method": "setUp",
+    "line": 158
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "TestCompletePersistence",
+    "method": "tearDown",
+    "line": 161
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "TestHandlerPersistence",
+    "method": "setUp",
+    "line": 295
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "TestPowerFailure",
+    "method": "setUp",
+    "line": 420
+  },
+  {
+    "file": "tests/test_persistence.py",
+    "class": "TestPowerFailure",
+    "method": "tearDown",
+    "line": 424
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_bytes",
+    "line": 20
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_kilobytes",
+    "line": 23
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_megabytes",
+    "line": 26
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_gigabytes",
+    "line": 29
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_terabytes",
+    "line": 32
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_bare_number",
+    "line": 35
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_whitespace",
+    "line": 38
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_case_insensitive",
+    "line": 41
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestParseSize",
+    "method": "test_parse_invalid",
+    "line": 44
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_hardware_has_cpu_cores",
+    "line": 66
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_hardware_has_architecture",
+    "line": 72
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_os_has_system",
+    "line": 77
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_os_has_python_version",
+    "line": 82
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_software_detection",
+    "line": 87
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_software_has_installed_flag",
+    "line": 93
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_docker_structure",
+    "line": 99
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_ai_agents_structure",
+    "line": 105
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_resource_assessment",
+    "line": 111
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformDetection",
+    "method": "test_geography_has_timezone",
+    "line": 116
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformCapabilityChecks",
+    "method": "setUpClass",
+    "line": 162
+  },
+  {
+    "file": "tests/test_platform.py",
+    "class": "TestPlatformRefresh",
+    "method": "test_refresh_returns_data",
+    "line": 230
+  },
+  {
+    "file": "tests/test_platform_android.py",
+    "class": "TestAndroidPlatformDetection",
+    "method": "setUpClass",
+    "line": 24
+  },
+  {
+    "file": "tests/test_platform_docker.py",
+    "class": "TestDockerPlatformDetection",
+    "method": "setUpClass",
+    "line": 24
+  },
+  {
+    "file": "tests/test_platform_enhanced.py",
+    "class": "TestPlatformEnhanced",
+    "method": "test_new_fields_present",
+    "line": 8
+  },
+  {
+    "file": "tests/test_platform_macos.py",
+    "class": "TestMacOSPlatformDetection",
+    "method": "setUpClass",
+    "line": 24
+  },
+  {
+    "file": "tests/test_platform_windows.py",
+    "class": "TestWindowsPlatformDetection",
+    "method": "setUpClass",
+    "line": 24
+  },
+  {
+    "file": "tests/test_platform_wsl.py",
+    "class": "TestWSLPlatformDetection",
+    "method": "setUpClass",
+    "line": 24
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_test_fix",
+    "line": 57
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_run_test",
+    "line": 60
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_simple_fix",
+    "line": 63
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_docs",
+    "line": 66
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_docstring",
+    "line": 69
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_audit",
+    "line": 72
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_debug",
+    "line": 75
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_refactor",
+    "line": 78
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestClassify",
+    "method": "test_feature_default",
+    "line": 81
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_urgent_is_p0",
+    "line": 92
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_fix_test_is_p0",
+    "line": 95
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_fix_is_p0",
+    "line": 98
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_security_is_p0",
+    "line": 101
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_infra_is_p1",
+    "line": 104
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_pm_is_p1",
+    "line": 107
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_docs_is_p3",
+    "line": 110
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestPrioritize",
+    "method": "test_feature_is_p2",
+    "line": 113
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestAgentSelection",
+    "method": "test_human_override_haiku",
+    "line": 128
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMetrics",
+    "method": "test_record_assignment",
+    "line": 229
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMetrics",
+    "method": "test_record_completion",
+    "line": 234
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMetrics",
+    "method": "test_record_failure",
+    "line": 240
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMetrics",
+    "method": "test_completion_rate",
+    "line": 245
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMetrics",
+    "method": "test_metrics_summary",
+    "line": 257
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestAPIKeys",
+    "method": "test_record_api_key_use",
+    "line": 273
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestAPIKeys",
+    "method": "test_mark_exhausted",
+    "line": 278
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestAPIKeys",
+    "method": "test_reset_api_key",
+    "line": 283
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestAPIKeys",
+    "method": "test_available_agent_kind_both",
+    "line": 290
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestAPIKeys",
+    "method": "test_available_agent_kind_google_only",
+    "line": 295
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestJournal",
+    "method": "test_journal_write",
+    "line": 393
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestJournal",
+    "method": "test_journal_decision",
+    "line": 400
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestFeatureHold",
+    "method": "test_infra_in_progress_holds_features",
+    "line": 417
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestFeatureHold",
+    "method": "test_no_infra_no_hold",
+    "line": 428
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestState",
+    "method": "test_load_empty_state",
+    "line": 447
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestState",
+    "method": "test_save_and_load_state",
+    "line": 454
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestStatusReport",
+    "method": "test_status_report_structure",
+    "line": 478
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMarkCompletedFailed",
+    "method": "test_mark_completed_records_metrics",
+    "line": 499
+  },
+  {
+    "file": "tests/test_pm.py",
+    "class": "TestMarkCompletedFailed",
+    "method": "test_mark_failed_records_metrics",
+    "line": 514
+  },
+  {
+    "file": "tests/test_prompt_capabilities.py",
+    "class": "TestCapabilityChecking",
+    "method": "_write_temp",
+    "line": 139
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "setUp",
+    "line": 20
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "tearDown",
+    "line": 35
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_add",
+    "line": 38
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_list",
+    "line": 49
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_move",
+    "line": 63
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_read",
+    "line": 73
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_edit",
+    "line": 81
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_delete",
+    "line": 90
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_status",
+    "line": 100
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_error_file_not_found",
+    "line": 110
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_error_invalid_move",
+    "line": 114
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_archive_success_verified_complete",
+    "line": 119
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_archive_success_dead_end",
+    "line": 131
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_archive_failure_not_in_done",
+    "line": 143
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_archive_failure_invalid_last_line",
+    "line": 152
+  },
+  {
+    "file": "tests/test_prompts_service.py",
+    "class": "TestPromptsService",
+    "method": "test_archive_failure_empty_file",
+    "line": 161
+  },
+  {
+    "file": "tests/test_remote_execution.py",
+    "class": "TestRemoteExecution",
+    "method": "setUp",
+    "line": 9
+  },
+  {
+    "file": "tests/test_remote_execution.py",
+    "class": "TestRemoteExecution",
+    "method": "tearDown",
+    "line": 52
+  },
+  {
+    "file": "tests/test_remote_execution.py",
+    "class": "TestRemoteExecution",
+    "method": "test_remote_builtin_command",
+    "line": 57
+  },
+  {
+    "file": "tests/test_remote_execution.py",
+    "class": "TestRemoteExecution",
+    "method": "test_remote_inline_upload_and_exec",
+    "line": 66
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockServer",
+    "method": "__init__",
+    "line": 23
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockServer",
+    "method": "log",
+    "line": 48
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockServer",
+    "method": "broadcast_to_channel",
+    "line": 52
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockServer",
+    "method": "send_to_nick",
+    "line": 55
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockServer",
+    "method": "broadcast",
+    "line": 59
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockServer",
+    "method": "sock_send",
+    "line": 62
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockChannel",
+    "method": "__init__",
+    "line": 67
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "class": "MockChannel",
+    "method": "has_member",
+    "line": 72
+  },
+  {
+    "file": "tests/test_s2s_federation.py",
+    "function": "s2s_env",
+    "line": 77
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestWakewordService",
+    "method": "setUp",
+    "line": 118
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestWakewordService",
+    "method": "tearDown",
+    "line": 129
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestWakewordCommand",
+    "method": "setUp",
+    "line": 228
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestMessageFiltering",
+    "method": "setUp",
+    "line": 294
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestFilteredBroadcast",
+    "method": "setUp",
+    "line": 407
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestBackwardCompatibility",
+    "method": "setUp",
+    "line": 522
+  },
+  {
+    "file": "tests/test_wakeword.py",
+    "class": "TestAIResponsePrefixing",
+    "method": "setUp",
+    "line": 562
+  },
+  {
+    "file": "tests/test_workorders_migration.py",
+    "function": "bootstrap_csc_shared_package",
+    "line": 7
+  },
+  {
+    "file": "tests/test_workorders_migration.py",
+    "function": "load_queue_worker_module",
+    "line": 21
+  },
+  {
+    "file": "tests/test_workorders_migration.py",
+    "function": "test_queue_worker_prefers_workorders_base",
+    "line": 31
+  },
+  {
+    "file": "tests/test_workorders_migration.py",
+    "function": "test_queue_worker_falls_back_to_prompts_base",
+    "line": 47
+  },
+  {
+    "file": "tests/test_workorders_migration.py",
+    "function": "test_prompts_service_uses_workorders_when_present",
+    "line": 62
+  }
+]

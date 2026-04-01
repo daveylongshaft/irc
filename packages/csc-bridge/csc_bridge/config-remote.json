@@ -1,0 +1,10 @@
+{
+  "server_host": "facingaddictionwithhope.com",
+  "server_port": 9525,
+  "tcp_listen_host": "0.0.0.0",
+  "tcp_listen_port": 9666,
+  "udp_listen_host": "0.0.0.0",
+  "udp_listen_port": 9528,
+  "encryption_enabled": true,
+  "session_timeout": 300
+}
