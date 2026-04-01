@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csc-loop"
+version = "0.1.0"
+description = "Orchestrator polling loop and infrastructure for CSC system."
+requires-python = ">=3.8"
+dependencies = [
+    "csc-platform>=0.1.0",
+    "csc-services>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
