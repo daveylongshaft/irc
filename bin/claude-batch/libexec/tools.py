@@ -7,9 +7,19 @@ from pathlib import Path
 
 
 def read_file(path: str) -> str:
-    """Read file contents."""
+    """Read file contents. Handles both absolute and relative paths."""
     try:
-        p = Path(path).resolve()
+        p = Path(path)
+
+        # If path is absolute but doesn't exist, try as relative
+        if p.is_absolute() and not p.exists():
+            # Try stripping leading slashes and treating as relative
+            rel_path = path.lstrip('/')
+            p = Path.cwd() / rel_path
+
+        # Resolve to absolute for consistency
+        p = p.resolve()
+
         if not p.exists():
             return f"ERROR: File not found: {path}"
         return p.read_text(encoding='utf-8')
@@ -18,9 +28,16 @@ def read_file(path: str) -> str:
 
 
 def write_file(path: str, content: str) -> str:
-    """Write/overwrite file."""
+    """Write/overwrite file. Handles both absolute and relative paths."""
     try:
-        p = Path(path).resolve()
+        p = Path(path)
+
+        # If path is absolute, try as-is; if not absolute or parent doesn't exist, try relative
+        if p.is_absolute():
+            p = p.resolve()
+        else:
+            p = (Path.cwd() / p).resolve()
+
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding='utf-8')
         return f"OK: Wrote {len(content)} bytes to {path}"
@@ -29,9 +46,17 @@ def write_file(path: str, content: str) -> str:
 
 
 def delete_file(path: str) -> str:
-    """Delete a file."""
+    """Delete a file. Handles both absolute and relative paths."""
     try:
-        p = Path(path).resolve()
+        p = Path(path)
+
+        # If path is absolute but doesn't exist, try as relative
+        if p.is_absolute() and not p.exists():
+            rel_path = path.lstrip('/')
+            p = Path.cwd() / rel_path
+
+        p = p.resolve()
+
         if not p.exists():
             return f"ERROR: File not found: {path}"
         p.unlink()
@@ -64,9 +89,17 @@ def run_command(command: str, cwd: str = None) -> str:
 
 
 def list_directory(path: str) -> str:
-    """List directory contents."""
+    """List directory contents. Handles both absolute and relative paths."""
     try:
-        p = Path(path).resolve()
+        p = Path(path)
+
+        # If path is absolute but doesn't exist, try as relative
+        if p.is_absolute() and not p.exists():
+            rel_path = path.lstrip('/')
+            p = Path.cwd() / rel_path
+
+        p = p.resolve()
+
         if not p.is_dir():
             return f"ERROR: Not a directory: {path}"
         items = sorted(p.iterdir())
@@ -77,9 +110,18 @@ def list_directory(path: str) -> str:
 
 
 def glob_files(pattern: str, base: str = None) -> str:
-    """Glob file pattern."""
+    """Glob file pattern. Handles both absolute and relative base paths."""
     try:
-        base_path = Path(base or ".").resolve()
+        if base:
+            p = Path(base)
+            # If absolute but doesn't exist, try as relative
+            if p.is_absolute() and not p.exists():
+                rel_path = base.lstrip('/')
+                p = Path.cwd() / rel_path
+            base_path = p.resolve()
+        else:
+            base_path = Path.cwd()
+
         results = list(base_path.glob(pattern))
         lines = [str(p.relative_to(base_path)) for p in sorted(results)]
         return "\n".join(lines) if lines else "(no matches)"
@@ -88,10 +130,19 @@ def glob_files(pattern: str, base: str = None) -> str:
 
 
 def search_files(pattern: str, path: str = None, file_glob: str = "*.py") -> str:
-    """Search file contents with regex."""
+    """Search file contents with regex. Handles both absolute and relative paths."""
     try:
         import re
-        base_path = Path(path or ".").resolve()
+        if path:
+            p = Path(path)
+            # If absolute but doesn't exist, try as relative
+            if p.is_absolute() and not p.exists():
+                rel_path = path.lstrip('/')
+                p = Path.cwd() / rel_path
+            base_path = p.resolve()
+        else:
+            base_path = Path.cwd()
+
         regex = re.compile(pattern)
         results = []
 
