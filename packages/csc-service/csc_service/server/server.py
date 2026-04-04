@@ -15,7 +15,35 @@ from csc_service.shared.channel import ChannelManager
 from csc_service.shared.chat_buffer import ChatBuffer
 from csc_service.shared.irc import SERVER_NAME
 from csc_service.shared.crypto import is_encrypted, decrypt, encrypt
-from .server_s2s import ServerNetwork
+try:
+    from csc_server_core.server_network import ServerNetwork
+except ImportError:
+    from .server_s2s import ServerNetwork
+
+
+class IrcMessageQueue:
+    """Global in-memory FIFO queue for IRC messages."""
+
+    def __init__(self):
+        self.queue = []  # List of (timestamp, addr, msg, nick, channel) tuples
+        self.lock = threading.Lock()
+
+    def enqueue(self, addr, msg, nick, channel=None):
+        """Add a message to the queue."""
+        with self.lock:
+            self.queue.append((time.time(), addr, msg, nick, channel))
+
+    def dequeue(self):
+        """Remove and return the first message from the queue."""
+        with self.lock:
+            if self.queue:
+                return self.queue.pop(0)
+            return None
+
+    def size(self):
+        """Return the current queue size."""
+        with self.lock:
+            return len(self.queue)
 
 
 class Server(Service):
@@ -57,6 +85,10 @@ class Server(Service):
         self.clients_lock = threading.Lock()
 
         self._running = True
+
+        # Initialize message queue for federated execution
+        self.message_queue = IrcMessageQueue()
+        self.queue_processor_running = False
 
         # File and message handling components
         self.file_handler = FileHandler(self)
@@ -130,12 +162,13 @@ class Server(Service):
 
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)
-        self.server_id = self.s2s_network.server_id  # expose for ServerLink
         self.s2s_network.start_listener()
 
-        # Start S2S auto-linking thread (only if ServerNetwork doesn't have its own)
-        if not hasattr(self.s2s_network, '_start_peer_linker'):
-            self._start_s2s_autolink()
+        # Start S2S auto-linking thread (maintains links to configured peers)
+        self._start_s2s_autolink()
+
+        # Start queue processor thread for federated message execution
+        self._start_queue_processor()
 
     @property
     def client_registry(self):
@@ -602,9 +635,8 @@ class Server(Service):
 
         # Check if nick is on a remote server via S2S
         if hasattr(self, 's2s_network'):
-            result = self.s2s_network.get_user_from_network(nick)
-            remote_info = result[1] if isinstance(result, tuple) else result
-            if remote_info is not None and remote_info:
+            _link, remote_info = self.s2s_network.get_user_from_network(nick)
+            if remote_info:
                 # Route via S2S
                 line = message if isinstance(message, str) else message.decode("utf-8", errors="ignore")
                 self.log(f"[S2S] Routing line to remote user {nick} on {remote_info['server_id']}")
@@ -789,6 +821,83 @@ class Server(Service):
                 self.log("[DISCONNECT] Kill switch removed — S2S links may resume.")
 
             stop_event.wait(timeout=20.0)  # disk stat at most every 20s
+
+    # ======================================================================
+    # Queue Processor (Federated Message Execution)
+    # ======================================================================
+
+    def _start_queue_processor(self):
+        """Initialize and start the queue processor thread."""
+        self.queue_processor_running = True
+        processor_thread = threading.Thread(
+            target=self._queue_processor_loop,
+            daemon=True
+        )
+        processor_thread.start()
+        self.log("[QUEUE] Queue processor thread started")
+
+    def _queue_processor_loop(self):
+        """Background thread: process queued messages FIFO."""
+        self.log("[QUEUE] Queue processor loop started")
+        while self._running and self.queue_processor_running:
+            try:
+                # Pull from queue every 100ms
+                msg_tuple = self.message_queue.dequeue()
+                if msg_tuple:
+                    timestamp, addr, msg_text, nick, channel = msg_tuple
+                    # Route to queue execution handler
+                    self._execute_queued_message(timestamp, addr, msg_text, nick, channel)
+            except Exception as e:
+                self.log(f"[QUEUE ERROR] Queue processor error: {e}")
+
+            time.sleep(0.1)  # 100ms polling interval
+
+    def _execute_queued_message(self, timestamp, addr, msg_text, nick, channel):
+        """Execute a queued message: parse, check channel, execute service."""
+        try:
+            # Parse: <prefix> ai token <service> <method> [args...]
+            prefix, service, method, args = self.message_handler._parse_prefixed_command(msg_text)
+            if prefix is None:
+                # Not a prefixed command, shouldn't happen (was filtered in enqueue)
+                self.log(f"[QUEUE WARN] Dequeued non-prefixed message: {msg_text}")
+                return
+
+            # Check if this server has the target channel
+            chan = self.channel_manager.get_channel(channel)
+            if not chan:
+                # This server doesn't have the channel, another linked server has it
+                self.log(f"[QUEUE] Skipping: channel {channel} not on this server")
+                return
+
+            # Check if prefix (target server) matches this server
+            # Supports wildcards: * (any), *pattern*, *start, end*
+            if not self._matches_target_prefix(prefix):
+                self.log(f"[QUEUE] Skipping: target prefix '{prefix}' doesn't match this server")
+                return
+
+            # Execute service method via Service.handle_command()
+            self.log(f"[QUEUE] Executing: service={service}, method={method}, args={args}")
+
+            # Call the service handler - returns result as string
+            result = self.handle_command(service, method, args, nick, addr)
+
+            # Route result back to channel with prefix
+            output = f"{prefix}: {result}"
+            self.broadcast_to_channel(channel, f":{SERVER_NAME} PRIVMSG {channel} :{output}\r\n")
+            self.log(f"[QUEUE] Result sent to {channel}: {output}")
+
+        except Exception as e:
+            self.log(f"[QUEUE ERROR] Failed to execute queued message: {e}")
+
+    def _matches_target_prefix(self, prefix):
+        """Check if target prefix matches this server. Supports wildcards."""
+        if prefix == "*":
+            return True  # Match any server
+        if "*" not in prefix:
+            return prefix.lower() == SERVER_NAME.lower()  # Exact match
+        # Wildcard matching: convert glob to simple pattern
+        import fnmatch
+        return fnmatch.fnmatch(SERVER_NAME.lower(), prefix.lower())
 
     # ======================================================================
     # Helpers for Data layer
