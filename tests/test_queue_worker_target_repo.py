@@ -15,9 +15,9 @@ import os
 # Add packages to path for test imports
 TEST_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TEST_DIR.parent
-sys.path.insert(0, str(REPO_ROOT / "packages" / "csc-service"))
+sys.path.insert(0, str(REPO_ROOT / "packages" / "csc-loop"))
 
-from csc_service.infra.queue_worker import (
+from csc_loop.infra.queue_worker import (
     parse_workorder_frontmatter,
     _get_target_repo_remote,
 )
@@ -120,6 +120,12 @@ Task.
             assert result.get("platform") == ["linux", "macos"]
         finally:
             path.unlink()
+
+    def test_parse_missing_file(self):
+        """Handle missing file gracefully."""
+        nonexistent = Path("/tmp/nonexistent_file_12345.md")
+        result = parse_workorder_frontmatter(nonexistent)
+        assert result == {}
 
 
 class TestGetTargetRepoRemote:

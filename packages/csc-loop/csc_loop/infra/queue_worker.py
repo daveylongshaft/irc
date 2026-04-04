@@ -129,36 +129,137 @@ def _get_irc_remote():
     except Exception: pass
     return "https://github.com/daveylongshaft/irc.git"
 
-def create_agent_temp_repo(agent_name, wo_stem):
+def parse_workorder_frontmatter(workorder_path):
+    """Parse YAML-like front-matter from a workorder file.
+
+    Supports format:
+        ---
+        target_repo: fahu
+        urgency: P1
+        requires: [python, fastapi]
+        ---
+
+    Returns dict of parsed tags, or empty dict if no front-matter.
+    """
+    try:
+        with open(workorder_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except (OSError, UnicodeDecodeError):
+        return {}
+
+    # Check for front-matter delimiters
+    if not content.startswith("---"):
+        return {}
+
+    # Find closing ---
+    end = content.find("---", 3)
+    if end == -1:
+        return {}
+
+    front = content[3:end].strip()
+    tags = {}
+
+    for line in front.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        value = value.strip()
+
+        # Parse list values: [a, b, c]
+        if value.startswith("[") and value.endswith("]"):
+            items = [item.strip().strip("'\"") for item in value[1:-1].split(",")]
+            tags[key] = [i for i in items if i]
+        else:
+            tags[key] = value.strip("'\"")
+
+    return tags
+
+
+def _get_target_repo_remote(target_repo=None):
+    """Get the git remote URL based on target_repo field from workorder frontmatter.
+
+    Args:
+        target_repo: Target repository name ("csc", "fahu", or None). Default: "csc"
+
+    Returns:
+        Git remote URL string for cloning.
+    """
+    if target_repo == "fahu":
+        # Derive fahu.git URL by replacing /csc.git or /irc.git with /facingaddictionwithhope.git
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True, text=True, cwd=str(CSC_ROOT), timeout=10
+            )
+            if result.returncode == 0:
+                origin = result.stdout.strip()
+                # Replace csc.git or irc.git with facingaddictionwithhope.git
+                origin = origin.replace("/csc.git", "/facingaddictionwithhope.git")
+                origin = origin.replace("/irc.git", "/facingaddictionwithhope.git")
+                return origin
+        except Exception:
+            pass
+        # Fallback for fahu
+        return "https://github.com/daveylongshaft/facingaddictionwithhope.git"
+    else:
+        # Default to irc.git for "csc" or None
+        return _get_irc_remote()
+
+
+def create_agent_temp_repo(agent_name, wo_stem, target_repo=None):
+    """Create a unique temp repo for this agent+WO combination.
+
+    Clones the target repository (csc/irc.git or facingaddictionwithhope.git) based
+    on the workorder's target_repo frontmatter field.
+
+    Args:
+        agent_name: Name of the agent (haiku, opus, etc.)
+        wo_stem: Workorder stem name (sanitized filename)
+        target_repo: Target repository ("csc" or "fahu"). Default: "csc" → irc.git
+
+    Purges any stale clone dirs for this agent before creating a new one,
+    keeping disk usage bounded to 1 clone per agent at a time.
+
+    Returns the Path to the newly cloned repo, or None if creation fails.
+    """
     ts = int(time.time())
     safe_stem = re.sub(r'[^\w-]', '_', wo_stem)[:40]
-<<<<<<< HEAD
-    clones_base = CSC_ROOT / "tmp" / "clones"
-    
-=======
     # Use Platform for the clones base — never hardcode /opt
-    from csc_platform import Platform as _Plat
-    _plat = _Plat()
-    clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp") / "clones"
+    try:
+        from csc_platform import Platform as _Plat
+        _plat = _Plat()
+        clones_base = (_plat.agent_work_base or CSC_ROOT / "tmp") / "clones"
+    except Exception:
+        clones_base = CSC_ROOT / "tmp" / "clones"
 
     # Purge stale clones for this agent before creating a new one
->>>>>>> 48e68d09763f0faba18d64b20069444bb0d5a1c8
     agent_clones_dir = clones_base / agent_name
     if agent_clones_dir.exists():
         for stale in agent_clones_dir.iterdir():
             try: shutil.rmtree(str(stale))
             except Exception: pass
-            
+
     repo = clones_base / agent_name / f"{safe_stem}-{ts}" / "repo"
     repo.mkdir(parents=True, exist_ok=True)
-    irc_remote = _get_irc_remote()
-    
-    log(f"Cloning irc.git to {repo} (depth=1)")
+
+    # Get the correct remote URL based on target_repo
+    remote_url = _get_target_repo_remote(target_repo)
+    repo_name = "facingaddictionwithhope.git" if target_repo == "fahu" else "irc.git"
+
+    log(f"Cloning {repo_name} to {repo} (target_repo={target_repo or 'csc'}, depth=1)")
     result = subprocess.run(
-        ["git", "clone", "--depth=1", irc_remote, str(repo)],
+        ["git", "clone", "--depth=1", remote_url, str(repo)],
         capture_output=True, text=True, timeout=120
     )
-    return repo if result.returncode == 0 else None
+    if result.returncode != 0:
+        log(f"ERROR: git clone of {repo_name} failed for {agent_name}: {result.stderr}", "ERROR")
+        return None
+    log(f"Cloned {repo_name} to {repo}")
+    return repo
 
 def git_pull():
     try:
@@ -440,8 +541,10 @@ def process_inbox():
     if meta_in.exists():
         shutil.move(str(meta_in), str(meta_work))
     
-    # Clone
-    clone_path = create_agent_temp_repo(agent_name, Path(filename).stem)
+    # Clone (check frontmatter for target_repo)
+    frontmatter = parse_workorder_frontmatter(wip_path)
+    target_repo = frontmatter.get("target_repo", "csc")  # Default to "csc"
+    clone_path = create_agent_temp_repo(agent_name, Path(filename).stem, target_repo)
     
     # Build Command
     # Use simple run_agent approach for now to ensure non-blocking
@@ -488,15 +591,23 @@ def log(msg, level="INFO"):
     if QUEUE_LOG:
         with open(QUEUE_LOG, 'a', encoding='utf-8') as f: f.write(line + '\n')
 
+def load_env():
+    """Load .env file into os.environ (don't override existing)."""
+    env_file = CSC_ROOT / ".env"
+    if not env_file.exists():
+        return
+    try:
+        for line in env_file.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                k = k.strip()
+                if k not in os.environ:
+                    os.environ[k] = v.strip()
+    except Exception:
+        pass
+
 def main():
-<<<<<<< HEAD
-    if "--daemon" in sys.argv:
-        _initialize_paths()
-        log("Daemon mode started")
-        while True:
-            run_cycle()
-            time.sleep(60)
-=======
     _initialize_paths()
     load_env()
 
@@ -549,7 +660,6 @@ def main():
                 print(f"Or use systemd / --daemon mode.")
         else:
             print(__doc__)
->>>>>>> 48e68d09763f0faba18d64b20069444bb0d5a1c8
     else:
         run_cycle()
 
