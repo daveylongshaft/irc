@@ -223,19 +223,20 @@ class MessagingMixin:
     def _parse_ai_command(self, text):
         """Detect AI command with optional server prefix.
 
+        Delegates to Service.parse_service_command() from the service base layer.
         Returns:
             (target_server, ai_text) if AI command detected, else None.
-            target_server is None for unprefixed "AI ..." commands.
         """
-        upper = text.upper()
-        # Direct AI command: "AI 1 agent status"
-        if upper.startswith("AI "):
+        from csc_service_base import Service
+        parsed = Service.parse_service_command(text)
+        if parsed is None:
+            return None
+        # Return in legacy format: (target, full_text_without_target)
+        if parsed["target"] is None:
             return (None, text)
-        # Server-prefixed: "haven.ef6e AI 1 agent status"
+        # Strip the target prefix: return remaining text starting at keyword
         parts = text.split(None, 1)
-        if len(parts) == 2 and parts[1].upper().startswith("AI "):
-            return (parts[0], parts[1])
-        return None
+        return (parsed["target"], parts[1] if len(parts) > 1 else text)
 
     def _parse_file_command(self, text):
         """Detect file upload command with optional server prefix.
