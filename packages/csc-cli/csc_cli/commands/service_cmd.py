@@ -11,14 +11,24 @@ from pathlib import Path
 
 IS_WINDOWS = os.name == 'nt'
 
-# Windows service name -> (python module, display name)
+# Windows service name -> (python module, display name, extra_env)
 WIN_SERVICES = {
-    "CSC-SERVER": ("csc_server_core.server",      "CSC IRC Server"),
-    "CSC-LOOP":   ("csc_loop.infra.queue_worker", "CSC Loop Worker"),
-    "CSC-BRIDGE": ("csc_bridge.main",             "CSC Bridge"),
-    "CSC-FTPD":   ("csc_ftpd.ftp_master",         "CSC FTP Daemon"),
-    "CSC-PKI":    ("csc_pki.main",                "CSC PKI Service"),
+    "CSC-SERVER": ("csc_server_core.server",      "CSC IRC Server",  {"CSC_HEADLESS": "true"}),
+    "CSC-LOOP":   ("csc_loop.infra.queue_worker", "CSC Loop Worker", {}),
+    "CSC-BRIDGE": ("csc_bridge.main",             "CSC Bridge",      {}),
+    "CSC-FTPD":   ("csc_ftpd.ftp_master",         "CSC FTP Daemon",  {}),
+    "CSC-PKI":    ("csc_pki.main",                "CSC PKI Service", {}),
 }
+
+# Lowercase aliases: csc-ctl uses short names, Windows services use CSC-* names
+WIN_SERVICE_ALIASES = {v[0].split(".")[0].replace("_", "-"): k for k, v in WIN_SERVICES.items()}
+WIN_SERVICE_ALIASES.update({
+    "server": "CSC-SERVER",
+    "bridge": "CSC-BRIDGE",
+    "loop":   "CSC-LOOP",
+    "ftpd":   "CSC-FTPD",
+    "pki":    "CSC-PKI",
+})
 
 # Old service names to remove during migration
 OLD_WIN_SERVICES = ["CSC-CSC-SERVER", "CSC-CSC-BRIDGE", "CSC-CSC-SERVICE", "csc-service"]
@@ -51,8 +61,32 @@ def _nssm():
 
 
 def _python():
-    """Return path to Python executable (same one running this process)."""
-    return sys.executable
+    """Return path to a Python executable suitable for running as a Windows service.
+
+    Prefers a real (non-WindowsApps/Store) Python install because Windows Store
+    Python is sandboxed and cannot run as a system service.
+    Falls back to sys.executable if no real Python is found.
+    """
+    if not IS_WINDOWS:
+        return sys.executable
+
+    # If the current executable is not in WindowsApps, use it directly
+    if "WindowsApps" not in sys.executable:
+        return sys.executable
+
+    # Search common real-install locations
+    candidates = []
+    local = Path(os.environ.get("LOCALAPPDATA", "C:/Users/Default/AppData/Local"))
+    for py_dir in sorted((local / "Programs" / "Python").glob("Python3*"), reverse=True):
+        exe = py_dir / "python.exe"
+        if exe.exists():
+            candidates.append(str(exe))
+    for drive in ["C:", "D:"]:
+        for py_dir in Path(f"{drive}/").glob("Python3*"):
+            exe = py_dir / "python.exe"
+            if exe.exists():
+                candidates.append(str(exe))
+    return candidates[0] if candidates else sys.executable
 
 
 def _project_root():
@@ -68,15 +102,26 @@ def _project_root():
     return Path("C:/csc")
 
 
+def _sudo_run(cmd_str):
+    """Run a shell command with elevation via sudo.py if available, else direct."""
+    sudo = _project_root() / "tmp" / "sudo.py"
+    if sudo.exists():
+        r = subprocess.run([sys.executable, str(sudo), cmd_str],
+                           capture_output=True, text=True, timeout=30)
+        return r.returncode == 0, (r.stdout + r.stderr).strip()
+    # No sudo.py — try direct (may fail without admin)
+    r = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=30)
+    return r.returncode == 0, (r.stdout + r.stderr).strip()
+
+
 def _nssm_run(*args, check=False):
     nssm = _nssm()
-    r = subprocess.run([nssm] + list(args), capture_output=True, text=True, timeout=30)
-    return r.returncode == 0, (r.stdout + r.stderr).strip()
+    cmd = " ".join([f'"{nssm}"'] + [f'"{a}"' if " " in str(a) else str(a) for a in args])
+    return _sudo_run(cmd)
 
 
 def _net(action, svc_name):
-    r = subprocess.run(["net", action, svc_name], capture_output=True, text=True, timeout=30)
-    return r.returncode == 0, (r.stdout + r.stderr).strip()
+    return _sudo_run(f"net {action} {svc_name}")
 
 
 def _systemctl(scope, *args):
@@ -96,7 +141,14 @@ def _win_remove_service(svc_name, silent=False):
         print(f"  {'OK' if ok else 'SKIP'} remove {svc_name}: {msg}")
 
 
-def _win_install_service(svc_name, module, display):
+def _win_resolve(service_name):
+    """Resolve a short or full service name to the WIN_SERVICES key."""
+    if service_name in WIN_SERVICES:
+        return service_name
+    return WIN_SERVICE_ALIASES.get(service_name.lower())
+
+
+def _win_install_service(svc_name, module, display, extra_env=None):
     root = _project_root()
     logs_dir = root / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -120,6 +172,11 @@ def _win_install_service(svc_name, module, display):
     _nssm_run("set", svc_name, "Start",              "SERVICE_AUTO_START")
     _nssm_run("set", svc_name, "AppRestartDelay",    "5000")   # 5s before restart
     _nssm_run("set", svc_name, "AppThrottle",        "1500")   # slow restart loop
+
+    if extra_env:
+        env_str = " ".join(f"{k}={v}" for k, v in extra_env.items())
+        _nssm_run("set", svc_name, "AppEnvironmentExtra", env_str)
+
     print(f"  OK install {svc_name} -> {module}")
     return True
 
@@ -131,11 +188,17 @@ def install(args, config_manager):
     list_only = getattr(args, "list_only", False)
 
     if IS_WINDOWS:
-        targets = WIN_SERVICES.items() if service == "all" else \
-            [(service, WIN_SERVICES[service])] if service in WIN_SERVICES else []
+        if service == "all":
+            targets = list(WIN_SERVICES.items())
+        else:
+            resolved = _win_resolve(service)
+            targets = [(resolved, WIN_SERVICES[resolved])] if resolved else []
+            if not targets:
+                print(f"  Unknown service: {service}")
+                return
 
         if list_only:
-            for svc, (module, display) in targets:
+            for svc, (module, display, _env) in targets:
                 print(f"  {svc}: python -m {module}  ({display})")
             return
 
@@ -146,8 +209,8 @@ def install(args, config_manager):
                 _win_remove_service(old, silent=False)
 
         print("\n[Step 2] Installing new services...")
-        for svc, (module, display) in targets:
-            _win_install_service(svc, module, display)
+        for svc, (module, display, extra_env) in targets:
+            _win_install_service(svc, module, display, extra_env)
 
         print("\n[Step 3] Starting services...")
         for svc, _ in targets:
@@ -172,11 +235,14 @@ def remove(args, config_manager):
     service = getattr(args, "service", "all") or "all"
 
     if IS_WINDOWS:
-        targets = list(WIN_SERVICES.keys()) if service == "all" else \
-            [service] if service in WIN_SERVICES else []
-
         if service == "all":
-            targets += OLD_WIN_SERVICES
+            targets = list(WIN_SERVICES.keys()) + OLD_WIN_SERVICES
+        else:
+            resolved = _win_resolve(service)
+            targets = [resolved] if resolved else []
+            if not targets:
+                print(f"  Unknown service: {service}")
+                return
 
         for svc in targets:
             _win_remove_service(svc)
@@ -194,8 +260,14 @@ def restart(args, config_manager):
     service = args.service
 
     if IS_WINDOWS:
-        targets = list(WIN_SERVICES.keys()) if service == "all" else \
-            [service] if service in WIN_SERVICES else []
+        if service == "all":
+            targets = list(WIN_SERVICES.keys())
+        else:
+            resolved = _win_resolve(service)
+            targets = [resolved] if resolved else []
+            if not targets:
+                print(f"  Unknown service: {service}")
+                return
 
         for svc in targets:
             _net("stop", svc)

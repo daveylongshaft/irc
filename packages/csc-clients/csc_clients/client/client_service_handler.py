@@ -25,20 +25,21 @@ class ClientServiceHandler:
 
     def execute(self, cmd_text, nick):
         """
-        Parses and executes an AI command locally.
-        Syntax: AI <token> <plugin> <method> [args...]
+        Parses and executes a service command locally.
+        Uses Service.parse_service_command() from csc_service_base for shared parsing.
+        Accepts both forms:
+          AI <token> <plugin> <method> [args...]
+          <target> AI <token> <plugin> <method> [args...]
         """
-        parts = cmd_text.split()
-        if len(parts) < 3:
-            # Special case for 'AI <token> help'
-            if len(parts) == 3 and parts[2].lower() == "help":
-                return parts[1], self.get_help()
-            return "0", "Error: Invalid local AI command. Expected: AI <token> <plugin> <method> [args...]"
+        from csc_service_base import Service
+        parsed = Service.parse_service_command(cmd_text)
+        if parsed is None:
+            return "0", "Error: Invalid service command. Expected: AI <token> <plugin> <method> [args...]"
 
-        token = parts[1]
-        plugin_name_raw = parts[2]
-        method_name_raw = parts[3] if len(parts) > 3 else "default"
-        args = parts[4:] if len(parts) > 4 else []
+        token = parsed["token"]
+        plugin_name_raw = parsed["class_name"]
+        method_name_raw = parsed["method"]
+        args = parsed["args"]
 
         # Built-in handlers (echo, time, ping)
         if plugin_name_raw.lower() == "builtin":

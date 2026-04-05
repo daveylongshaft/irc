@@ -3,8 +3,10 @@
 import ast
 import shlex
 import importlib
+import importlib.util
 import sys
 import inspect
+from pathlib import Path
 from csc_network import Network
 
 
@@ -15,6 +17,54 @@ class Service( Network ):
         self.loaded_modules = {}
         self.server = server_instance
         #print(f"{self.name}->",end=None)
+
+    # Service command keywords that trigger local execution
+    SERVICE_KEYWORDS = {"ai"}
+
+    @staticmethod
+    def parse_service_command(text):
+        """Parse a service command from channel text.
+
+        Accepts two forms:
+          <keyword> <token> <class> <method> [args...]
+          <target> <keyword> <token> <class> <method> [args...]
+
+        Returns a dict with keys: target, keyword, token, class_name, method, args
+        or None if the text is not a service command.
+        """
+        parts = text.split()
+        if not parts:
+            return None
+
+        # Determine if first token is a target (contains a dot) or a keyword
+        first = parts[0].lower()
+        if first in Service.SERVICE_KEYWORDS:
+            # <keyword> <token> <class> [method] [args...]
+            if len(parts) < 3:
+                return None
+            return {
+                "target": None,
+                "keyword": first,
+                "token": parts[1],
+                "class_name": parts[2],
+                "method": parts[3] if len(parts) > 3 else "default",
+                "args": parts[4:] if len(parts) > 4 else [],
+                "raw": text,
+            }
+        elif len(parts) >= 2 and parts[1].lower() in Service.SERVICE_KEYWORDS:
+            # <target> <keyword> <token> <class> [method] [args...]
+            if len(parts) < 4:
+                return None
+            return {
+                "target": parts[0],
+                "keyword": parts[1].lower(),
+                "token": parts[2],
+                "class_name": parts[3],
+                "method": parts[4] if len(parts) > 4 else "default",
+                "args": parts[5:] if len(parts) > 5 else [],
+                "raw": text,
+            }
+        return None
 
     def default(self, *args):
         """
@@ -55,13 +105,28 @@ class Service( Network ):
         self.log( f"Handling command for service '{class_name_raw}' from {source_name}@{source_address}" )
 
         module_name = f"csc_service.shared.services.{class_name_raw.lower()}_service"
+        local_module_name = f"{class_name_raw.lower()}_service"
 
         try:
-            # Dynamically import the module
+            # First try: standard package import
             if module_name in sys.modules:
                 module = importlib.reload( sys.modules[module_name] )
             else:
-                module = importlib.import_module( module_name )
+                try:
+                    module = importlib.import_module( module_name )
+                except ImportError:
+                    # Fallback: look in local services/ directory relative to cwd
+                    services_path = Path(getattr(self, "project_root_dir", Path.cwd())) / "services" / f"{local_module_name}.py"
+                    if not services_path.exists():
+                        services_path = Path.cwd() / "services" / f"{local_module_name}.py"
+                    if services_path.exists():
+                        spec = importlib.util.spec_from_file_location(local_module_name, services_path)
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[local_module_name] = module
+                        spec.loader.exec_module(module)
+                        module_name = local_module_name
+                    else:
+                        raise
 
             # Try multiple name variants: raw, lowercase, capitalize, then case-insensitive scan
             class_name = None
