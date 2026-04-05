@@ -3,8 +3,10 @@
 import ast
 import shlex
 import importlib
+import importlib.util
 import sys
 import inspect
+from pathlib import Path
 from csc_network import Network
 
 
@@ -55,13 +57,28 @@ class Service( Network ):
         self.log( f"Handling command for service '{class_name_raw}' from {source_name}@{source_address}" )
 
         module_name = f"csc_service.shared.services.{class_name_raw.lower()}_service"
+        local_module_name = f"{class_name_raw.lower()}_service"
 
         try:
-            # Dynamically import the module
+            # First try: standard package import
             if module_name in sys.modules:
                 module = importlib.reload( sys.modules[module_name] )
             else:
-                module = importlib.import_module( module_name )
+                try:
+                    module = importlib.import_module( module_name )
+                except ImportError:
+                    # Fallback: look in local services/ directory relative to cwd
+                    services_path = Path(getattr(self, "project_root_dir", Path.cwd())) / "services" / f"{local_module_name}.py"
+                    if not services_path.exists():
+                        services_path = Path.cwd() / "services" / f"{local_module_name}.py"
+                    if services_path.exists():
+                        spec = importlib.util.spec_from_file_location(local_module_name, services_path)
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[local_module_name] = module
+                        spec.loader.exec_module(module)
+                        module_name = local_module_name
+                    else:
+                        raise
 
             # Try multiple name variants: raw, lowercase, capitalize, then case-insensitive scan
             class_name = None

@@ -39,6 +39,10 @@ class FileHandler:
         if raw_filename.endswith(".py"):
             target_base_dir = self.services_dir
             filename_for_path = raw_filename
+        elif "." not in raw_filename and self.PYTHON_MODULE_RE.match(raw_filename):
+            # Class name only (no extension) -- treat as service module
+            target_base_dir = self.services_dir
+            filename_for_path = raw_filename + "_service.py"
         else:
             filename_for_path = Path(raw_filename).name
             target_base_dir = self.staging_dir
@@ -47,7 +51,7 @@ class FileHandler:
 
         # Security: prevent out-of-root
         if not str(final_target_path).startswith(str(self.project_root.resolve())):
-            self.server.log(f"[SECURITY] 🚫 Rejecting out-of-root path from {addr}: {final_target_path}")
+            self.server.log(f"[SECURITY] [BLOCKED] Rejecting out-of-root path from {addr}: {final_target_path}")
             return
 
         self.sessions[addr] = {
@@ -86,8 +90,8 @@ class FileHandler:
             with open(path, mode, encoding="utf-8", newline="") as f:
                 f.write(full_content)
 
-            self.server.log(f"[FileHandler] ✅ WROTE {len(full_content)} chars to {path} (mode={mode})")
+            self.server.log(f"[FileHandler] [OK] WROTE {len(full_content)} chars to {path} (mode={mode})")
             return f"File '{session['original_filename']}' saved successfully."
         except Exception as e:
-            self.server.log(f"[FileHandler ERROR] ❌ Exception while writing: {e}")
+            self.server.log(f"[FileHandler ERROR] [FAIL] Exception while writing: {e}")
             return f"Error saving file: {e}"
