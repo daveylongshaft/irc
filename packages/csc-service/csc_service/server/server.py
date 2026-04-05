@@ -22,26 +22,23 @@ except ImportError:
 
 
 class IrcMessageQueue:
-    """Global in-memory FIFO queue for IRC messages."""
+    """Separate FIFO queue for AI/service command execution."""
 
     def __init__(self):
-        self.queue = []  # List of (timestamp, addr, msg, nick, channel) tuples
+        self.queue = []
         self.lock = threading.Lock()
 
     def enqueue(self, addr, msg, nick, channel=None):
-        """Add a message to the queue."""
         with self.lock:
             self.queue.append((time.time(), addr, msg, nick, channel))
 
     def dequeue(self):
-        """Remove and return the first message from the queue."""
         with self.lock:
             if self.queue:
                 return self.queue.pop(0)
             return None
 
     def size(self):
-        """Return the current queue size."""
         with self.lock:
             return len(self.queue)
 
@@ -85,9 +82,7 @@ class Server(Service):
         self.clients_lock = threading.Lock()
 
         self._running = True
-
-        # Initialize message queue for federated execution
-        self.message_queue = IrcMessageQueue()
+        self.ai_queue = IrcMessageQueue()  # Separate queue for AI command execution
         self.queue_processor_running = False
 
         # File and message handling components
@@ -837,15 +832,13 @@ class Server(Service):
         self.log("[QUEUE] Queue processor thread started")
 
     def _queue_processor_loop(self):
-        """Background thread: process queued messages FIFO."""
+        """Background thread: process queued AI commands FIFO."""
         self.log("[QUEUE] Queue processor loop started")
         while self._running and self.queue_processor_running:
             try:
-                # Pull from queue every 100ms
-                msg_tuple = self.message_queue.dequeue()
+                msg_tuple = self.ai_queue.dequeue()
                 if msg_tuple:
                     timestamp, addr, msg_text, nick, channel = msg_tuple
-                    # Route to queue execution handler
                     self._execute_queued_message(timestamp, addr, msg_text, nick, channel)
             except Exception as e:
                 self.log(f"[QUEUE ERROR] Queue processor error: {e}")

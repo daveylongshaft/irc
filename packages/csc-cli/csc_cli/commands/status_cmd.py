@@ -223,7 +223,7 @@ def _server_stats():
                     connected.add(nick)
             stats["clients"] = len(connected)
 
-        # S2S links — check for a links state file
+        # S2S links - check for a links state file
         links_file = run_dir / "links.json"
         if links_file.exists():
             d = json.loads(links_file.read_text())
@@ -250,7 +250,7 @@ def _net_info_server(state):
 
     s = _server_stats()
     uptime_str = f"  up {s['uptime']}" if s["uptime"] else ""
-    lines.append(f"    {s['shortname']}  — "
+    lines.append(f"    {s['shortname']}  "
                  f"{s['clients']} client(s)  {s['channels']} channel(s)  "
                  f"{s['links']} link(s){uptime_str}")
     return lines
@@ -282,14 +282,14 @@ def _net_info_bridge(state):
     if raw:
         for proto, local in raw:
             if proto == "tcp":
-                lines.append(f"    TCP {local}  →  UDP {upstream}")
+                lines.append(f"    TCP {local}  ->  UDP {upstream}")
             elif proto == "udp":
-                lines.append(f"    UDP {local}  →  UDP {upstream}")
+                lines.append(f"    UDP {local}  ->  UDP {upstream}")
     else:
         lines = [
-            f"    TCP 0.0.0.0:9667  →  UDP {upstream}  (IRC clients)",
-            f"    TCP 0.0.0.0:9666  →  UDP {upstream}  (IRC clients)",
-            f"    UDP 127.0.0.1:9526  →  UDP {upstream}  (native CSC)",
+            f"    TCP 0.0.0.0:9667  ->  UDP {upstream}  (IRC clients)",
+            f"    TCP 0.0.0.0:9666  ->  UDP {upstream}  (IRC clients)",
+            f"    UDP 127.0.0.1:9526  ->  UDP {upstream}  (native CSC)",
         ]
     return lines
 
@@ -366,7 +366,7 @@ def _fifo_clients():
 
 
 def status(args, config_manager):
-    """Show service status — real runtime state from systemd."""
+    """Show service status - real runtime state from systemd."""
     try:
         _do_status(args, config_manager)
     except Exception as e:
@@ -436,7 +436,7 @@ def _do_status(args, config_manager):
         print()
         print("  FIFO Clients:")
         for c in fifo_clients:
-            print(f"    PID {c['pid']:8s}  connected → {c['server']}")
+            print(f"    PID {c['pid']:8s}  connected -> {c['server']}")
             if c['infile']:
                 print(f"               in:  {c['infile']}")
             if c['outfile']:

@@ -2,6 +2,8 @@
 
 """Messaging handlers: PRIVMSG, NOTICE, wakeword filtering, buffer replay."""
 
+import re
+
 from csc_service.shared.irc import (
     format_irc_message, SERVER_NAME,
     ERR_NORECIPIENT, ERR_NOTEXTTOSEND, ERR_NOSUCHCHANNEL,
@@ -66,7 +68,7 @@ class MessagingMixin:
                 prefix_cmd, service, method, args = self._parse_prefixed_command(text)
                 if prefix_cmd:
                     # Enqueue the message for FIFO execution via queue processor
-                    self.server.message_queue.enqueue(addr, text, nick, normalized_target)
+                    self.server.ai_queue.enqueue(addr, text, nick, normalized_target)
                     self.server.log(f"[QUEUE] Enqueued command from {nick} for {normalized_target}: {text}")
                     return  # Don't process further, queue processor will handle it
 
@@ -79,14 +81,19 @@ class MessagingMixin:
                         self._handle_service_via_chatline(ai_text, addr, nick, normalized_target)
                     else:
                         self._forward_ai_command(target_server, ai_text, nick, normalized_target, addr)
-                # Check for embedded file upload start
-                elif text.startswith("<begin file=") or text.startswith("<append file="):
-                    # Require ircop or chanop for file uploads
-                    if not self._is_authorized(nick, normalized_target):
-                        self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
-                        self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
-                        return
-                    self.file_handler.start_session(normalized_target, nick, addr, text)
+                # Check for file upload start (bare or server-prefixed)
+                # Formats: "<begin file=name>" or "<server> <begin file=name>"
+                else:
+                    file_info = self._parse_file_command(text)
+                    if file_info:
+                        target_server, file_text = file_info
+                        local_id = self._get_local_server_id()
+                        if target_server is None or target_server.lower() == local_id.lower():
+                            if not self._is_authorized(nick, normalized_target):
+                                self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
+                                self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
+                                return
+                            self.file_handler.start_session(normalized_target, nick, addr, file_text)
             else:
                 # Private message to a nick
                 self._maybe_replay_pm_buffer(target, nick)
@@ -227,6 +234,29 @@ class MessagingMixin:
         if hasattr(self.server, 's2s_network'):
             return self.server.s2s_network.server_id
         return SERVER_NAME
+
+    def _parse_file_command(self, text):
+        """Detect file upload command with optional server prefix.
+
+        Formats:
+            <begin file=name>           -> (None, text)
+            <append file=name>          -> (None, text)
+            haven.4346 <begin file=name> -> ('haven.4346', '<begin file=name>')
+
+        Returns:
+            (target_server, file_text) if file command detected, else None.
+            target_server is None for unprefixed commands.
+        """
+        # Bare: "<begin file=..." or "<append file=..."
+        if text.startswith("<begin file=") or text.startswith("<append file="):
+            return (None, text)
+        # Server-prefixed: "haven.4346 <begin file=..." or "haven.4346 <append file=..."
+        parts = text.split(None, 1)
+        if len(parts) == 2:
+            rest = parts[1]
+            if rest.startswith("<begin file=") or rest.startswith("<append file="):
+                return (parts[0], rest)
+        return None
 
     def _parse_ai_command(self, text):
         """Detect AI command with optional server prefix.
