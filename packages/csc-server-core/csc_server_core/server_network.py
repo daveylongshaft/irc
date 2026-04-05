@@ -702,6 +702,78 @@ class ServerLink:
             self.local_server.log(f"[S2S:{self.remote_server_id or '?'}] {message}")
 
 
+    # ========== Keep-Alive PING/PONG (Workorder 03) ==========
+    
+    def send_ping(self):
+        """Send PING to remote server."""
+        with self._ping_lock:
+            if not self.is_authenticated:
+                return False
+            if not self.socket:
+                return False
+            try:
+                timestamp = time.time()
+                ping_msg = {"type": "S2S_PING", "timestamp": timestamp}
+                self.socket.sendall(json.dumps(ping_msg).encode() + b"\n")
+                self._last_ping_sent = timestamp
+                return True
+            except Exception:
+                return False
+    
+    def _handle_s2s_ping(self, timestamp):
+        """Reply to incoming PING with PONG."""
+        try:
+            pong_msg = {"type": "S2S_PONG", "timestamp": timestamp}
+            self.socket.sendall(json.dumps(pong_msg).encode() + b"\n")
+        except Exception:
+            pass
+    
+    def _handle_s2s_pong(self, timestamp):
+        """Handle incoming PONG response."""
+        with self._ping_lock:
+            # Verify PONG matches our PING
+            if abs(timestamp - self._last_ping_sent) < 0.1:
+                self._last_pong_received = time.time()
+                self._missed_pings = 0
+    
+    def is_alive(self):
+        """Check if link is alive based on PING/PONG health."""
+        with self._ping_lock:
+            return self._missed_pings < 3
+    
+    def mark_ping_missed(self):
+        """Increment missed PING counter for dead link detection."""
+        with self._ping_lock:
+            self._missed_pings += 1
+    
+    # ========== AES Key Cache for Fast Reconnect (Workorder 04) ==========
+    
+    def cache_aes_key(self, peer_id, key):
+        """Cache AES key to skip DH on reconnect."""
+        if not key or len(key) != 32:
+            return False
+        self._aes_key_cache[peer_id] = {
+            "key": key,
+            "timestamp": time.time()
+        }
+        return True
+    
+    def get_cached_aes_key(self, peer_id):
+        """Retrieve cached AES key if not expired (30 days)."""
+        if peer_id not in self._aes_key_cache:
+            return None
+        cached = self._aes_key_cache[peer_id]
+        age = time.time() - cached["timestamp"]
+        if age > 86400 * 30:  # 30 days
+            del self._aes_key_cache[peer_id]
+            return None
+        return cached["key"]
+    
+    def clear_cached_key(self, peer_id):
+        """Remove cached key for this peer."""
+        self._aes_key_cache.pop(peer_id, None)
+
+
 class ServerNetwork:
     """Manages all linked servers and network-wide operations."""
 
@@ -768,6 +840,12 @@ class ServerNetwork:
             # Load s2s_password from config if not already set from environment
             if not self.s2s_password:
                 self.s2s_password = cfg.get("s2s_password", "")
+            
+            # Load S2S role (default: 'leaf', 'hub' for hub nodes)
+            self.s2s_role = cfg.get('s2s_role', 'leaf')
+            if self.s2s_role not in ('hub', 'leaf'):
+                raise ValueError(f"Invalid s2s_role '{self.s2s_role}': must be 'hub' or 'leaf'")
+            self._log(f"S2S role configured as: {self.s2s_role}")
             if self.s2s_cert_path:
                 self._log(f"Cert auth configured: {Path(self.s2s_cert_path).name}")
             if self.s2s_password:
@@ -794,7 +872,11 @@ class ServerNetwork:
             )
             self._listener_thread.start()
             self._log(f"S2S UDP listener started on port {self.s2s_port}")
-            self._start_peer_linker()
+            # Only leaf nodes initiate peer linking to hub
+            if self.s2s_role == 'leaf':
+                self._start_peer_linker()
+            else:
+                self._log("Hub node: peer linker disabled")
             return True
         except Exception as e:
             self._log(f"Failed to start S2S listener: {e}")
@@ -802,6 +884,11 @@ class ServerNetwork:
 
     def _start_peer_linker(self):
         """Start a thread that periodically tries to link to configured S2S peers."""
+        # Hub nodes don't initiate peer linking
+        if self.s2s_role == 'hub':
+            self._log("Hub node: skipping peer linker initialization")
+            return
+
         if not self.s2s_peers:
             return
         self._peer_link_thread = threading.Thread(target=self._peer_link_loop, daemon=True)
@@ -1086,21 +1173,15 @@ class ServerNetwork:
                         with self._lock:
                             existing = self._links.get(remote_id)
                             if existing and existing.is_connected():
-                                local_id_check = self._get_local_server_id()
-                                if local_id_check < remote_id:
-                                    # We are designated connector — reject inbound
-                                    self._log(f"Tiebreaker: rejecting inbound cert link from {remote_id}")
-                                    link._authenticated = False
-                                    link._connected = False
-                                    reply = "ERROR Already linked"
-                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                    self._listener_sock.sendto(reply_data, addr)
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # They are designated connector — close our outbound, accept theirs
-                                    self._log(f"Tiebreaker: closing outbound to {remote_id}, accepting inbound")
-                                    existing.close()
+                                # Reject duplicate - never close existing link
+                                self._log(f"Rejecting duplicate connection from {remote_id} - existing link active")
+                                link._authenticated = False
+                                link._connected = False
+                                reply = "ERROR Already linked"
+                                reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                self._listener_sock.sendto(reply_data, addr)
+                                peer_links.pop(addr, None)
+                                continue
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
@@ -1133,21 +1214,15 @@ class ServerNetwork:
                         with self._lock:
                             existing = self._links.get(remote_id)
                             if existing and existing.is_connected():
-                                local_id_check = self._get_local_server_id()
-                                if local_id_check < remote_id:
-                                    # We are designated connector — reject inbound
-                                    self._log(f"Tiebreaker: rejecting inbound link from {remote_id}")
-                                    link._authenticated = False
-                                    link._connected = False
-                                    reply = "ERROR Already linked"
-                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                    self._listener_sock.sendto(reply_data, addr)
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # They are designated connector — close our outbound, accept theirs
-                                    self._log(f"Tiebreaker: closing outbound to {remote_id}, accepting inbound")
-                                    existing.close()
+                                # Reject duplicate - never close existing link
+                                self._log(f"Rejecting duplicate connection from {remote_id} - existing link active")
+                                link._authenticated = False
+                                link._connected = False
+                                reply = "ERROR Already linked"
+                                reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                self._listener_sock.sendto(reply_data, addr)
+                                peer_links.pop(addr, None)
+                                continue
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
