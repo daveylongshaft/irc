@@ -9,12 +9,12 @@ import traceback
 import subprocess
 from pathlib import Path
 from csc_service_base import Service
-from csc_service.server.server_message_handler import MessageHandler
-from csc_service.server.server_file_handler import FileHandler
-from csc_service.shared.channel import ChannelManager
-from csc_service.shared.chat_buffer import ChatBuffer
-from csc_service.shared.irc import SERVER_NAME
-from csc_service.shared.crypto import is_encrypted, decrypt, encrypt
+from csc_server_core.message_handler import MessageHandler
+from csc_server_core.file_handler import FileHandler
+from csc_server_core.channel_manager import ChannelManager
+from csc_server_core.chat_buffer import ChatBuffer
+from csc_server_core.irc import SERVER_NAME
+from csc_server_core.crypto import is_encrypted, decrypt, encrypt
 from csc_server_core.server_network import ServerNetwork
 
 
@@ -623,7 +623,7 @@ class Server(Service):
         if is_interactive:
             self.log("[STARTUP] TTY detected, spawning csc-client interface.")
             try:
-                from csc_service.client import Client
+                from csc_clients.client import Client
                 client = Client()
                 client.server_host = self.server_addr[0]
                 client.server_port = self.server_addr[1]

@@ -15,7 +15,7 @@ S2S Commands (encrypted with AES-256-GCM):
   SYNCNICK <old> <new>            - Sync a nickname change
   SYNCCHAN <channel> <modes> <members_json> - Sync channel state
   SYNCTOPIC <channel> <topic>     - Sync a channel topic
-  SYNCMSG <source> <target> <text> - Route a message between servers
+  SYNCMSG <origin> <source> <target> <text> - Route a message between servers (origin prevents loops)
   SYNCLINE <target> <line>        - Route a raw IRC line to a user
   DESYNC <nick|channel>           - Remove a nick or channel from remote
   SQUIT <server_id> <reason>      - Server disconnect notification
@@ -156,6 +156,16 @@ class ServerLink:
         self.remote_users = {}   # nick_lower -> {nick, server_id, host, modes, connect_time, channels}
         self.remote_channels = {}  # chan_lower -> {name, server_id, modes, members}
         self._state_lock = threading.Lock()  # Lock for accessing remote_users/remote_channels
+
+        # Keep-alive PING/PONG monitoring
+        self._ping_lock = threading.Lock()
+        self._last_ping_sent = 0.0
+        self._last_pong_received = time.time()
+        self._missed_pings = 0
+
+        # AES key caching (in-memory + disk persistence)
+        self._aes_key_cache = {}  # peer_id -> {key, timestamp}
+        self._peer_id = None  # Will be set after auth
 
     def connect(self):
         """Establish UDP connection to remote server and initiate DH key exchange.
@@ -702,6 +712,159 @@ class ServerLink:
             self.local_server.log(f"[S2S:{self.remote_server_id or '?'}] {message}")
 
 
+    # ========== Keep-Alive PING/PONG (Workorder 03) ==========
+    
+    def send_ping(self):
+        """Send PING to remote server."""
+        with self._ping_lock:
+            if not self.is_authenticated:
+                return False
+            if not self.socket:
+                return False
+            try:
+                timestamp = time.time()
+                ping_msg = {"type": "S2S_PING", "timestamp": timestamp}
+                self.socket.sendall(json.dumps(ping_msg).encode() + b"\n")
+                self._last_ping_sent = timestamp
+                return True
+            except Exception:
+                return False
+    
+    def _handle_s2s_ping(self, timestamp):
+        """Reply to incoming PING with PONG."""
+        try:
+            pong_msg = {"type": "S2S_PONG", "timestamp": timestamp}
+            self.socket.sendall(json.dumps(pong_msg).encode() + b"\n")
+        except Exception:
+            pass
+    
+    def _handle_s2s_pong(self, timestamp):
+        """Handle incoming PONG response."""
+        with self._ping_lock:
+            # Verify PONG matches our PING
+            if abs(timestamp - self._last_ping_sent) < 0.1:
+                self._last_pong_received = time.time()
+                self._missed_pings = 0
+    
+    def is_alive(self):
+        """Check if link is alive based on PING/PONG health."""
+        with self._ping_lock:
+            return self._missed_pings < 3
+    
+    def mark_ping_missed(self):
+        """Increment missed PING counter for dead link detection."""
+        with self._ping_lock:
+            self._missed_pings += 1
+    
+    # ========== AES Key Cache for Fast Reconnect (Workorder 04) ==========
+    
+    def cache_aes_key(self, peer_id, key):
+        """Cache AES key to skip DH on reconnect."""
+        if not key or len(key) != 32:
+            return False
+        self._aes_key_cache[peer_id] = {
+            "key": key,
+            "timestamp": time.time()
+        }
+        return True
+    
+    def get_cached_aes_key(self, peer_id):
+        """Retrieve cached AES key if not expired (30 days)."""
+        if peer_id not in self._aes_key_cache:
+            return None
+        cached = self._aes_key_cache[peer_id]
+        age = time.time() - cached["timestamp"]
+        if age > 86400 * 30:  # 30 days
+            del self._aes_key_cache[peer_id]
+            return None
+        return cached["key"]
+    
+    def clear_cached_key(self, peer_id):
+        """Remove cached key for this peer."""
+        self._aes_key_cache.pop(peer_id, None)
+
+    # ========== Persistent Key Storage (Workorder 04) ==========
+
+    KEYS_DIR = None  # Will be set by ServerNetwork during init
+
+    def _save_aes_key(self) -> bool:
+        """Save AES key to disk after successful authentication.
+
+        Returns:
+            bool: True if saved, False on error
+        """
+        if not self._aes_key or not self._peer_id or not self.KEYS_DIR:
+            return False
+
+        try:
+            import json
+            self.KEYS_DIR.mkdir(parents=True, exist_ok=True)
+            key_file = self.KEYS_DIR / f"{self._peer_id}.key"
+            meta_file = self.KEYS_DIR / f"{self._peer_id}.key.meta"
+
+            # Write key (binary)
+            key_file.write_bytes(self._aes_key)
+            key_file.chmod(0o600)
+
+            # Write metadata
+            meta = {
+                "created": time.time(),
+                "peer_addr": f"{self.remote_host}:{self.remote_port}",
+                "peer_id": self._peer_id,
+            }
+            meta_file.write_text(json.dumps(meta, indent=2))
+            meta_file.chmod(0o600)
+
+            self.local_server._log(f"Saved AES key for peer {self._peer_id}")
+            return True
+
+        except Exception as e:
+            self.local_server._log(f"Failed to save AES key: {e}")
+            return False
+
+    def _load_aes_key(self, peer_id: str) -> bytes:
+        """Load cached AES key from disk.
+
+        Args:
+            peer_id: Peer identifier (hostname or cert fingerprint)
+
+        Returns:
+            bytes: 32-byte AES key, or None if not found/expired
+        """
+        if not self.KEYS_DIR:
+            return None
+
+        try:
+            import json
+            key_file = self.KEYS_DIR / f"{peer_id}.key"
+            meta_file = self.KEYS_DIR / f"{peer_id}.key.meta"
+
+            if not key_file.exists() or not meta_file.exists():
+                return None
+
+            # Check expiry (30 days)
+            meta = json.loads(meta_file.read_text())
+            created = meta.get("created", 0)
+            age = time.time() - created
+            if age > 86400 * 30:  # 30 days
+                key_file.unlink(missing_ok=True)
+                meta_file.unlink(missing_ok=True)
+                self.local_server._log(f"Expired AES key for peer {peer_id}")
+                return None
+
+            key = key_file.read_bytes()
+            if len(key) != 32:
+                self.local_server._log(f"Invalid key size for peer {peer_id}: {len(key)} bytes")
+                return None
+
+            self.local_server._log(f"Loaded AES key for peer {peer_id}")
+            return key
+
+        except Exception as e:
+            self.local_server._log(f"Failed to load AES key: {e}")
+            return None
+
+
 class ServerNetwork:
     """Manages all linked servers and network-wide operations."""
 
@@ -768,6 +931,12 @@ class ServerNetwork:
             # Load s2s_password from config if not already set from environment
             if not self.s2s_password:
                 self.s2s_password = cfg.get("s2s_password", "")
+            
+            # Load S2S role (default: 'leaf', 'hub' for hub nodes)
+            self.s2s_role = cfg.get('s2s_role', 'leaf')
+            if self.s2s_role not in ('hub', 'leaf'):
+                raise ValueError(f"Invalid s2s_role '{self.s2s_role}': must be 'hub' or 'leaf'")
+            self._log(f"S2S role configured as: {self.s2s_role}")
             if self.s2s_cert_path:
                 self._log(f"Cert auth configured: {Path(self.s2s_cert_path).name}")
             if self.s2s_password:
@@ -794,7 +963,11 @@ class ServerNetwork:
             )
             self._listener_thread.start()
             self._log(f"S2S UDP listener started on port {self.s2s_port}")
-            self._start_peer_linker()
+            # Only leaf nodes initiate peer linking to hub
+            if self.s2s_role == 'leaf':
+                self._start_peer_linker()
+            else:
+                self._log("Hub node: peer linker disabled")
             return True
         except Exception as e:
             self._log(f"Failed to start S2S listener: {e}")
@@ -802,6 +975,11 @@ class ServerNetwork:
 
     def _start_peer_linker(self):
         """Start a thread that periodically tries to link to configured S2S peers."""
+        # Hub nodes don't initiate peer linking
+        if self.s2s_role == 'hub':
+            self._log("Hub node: skipping peer linker initialization")
+            return
+
         if not self.s2s_peers:
             return
         self._peer_link_thread = threading.Thread(target=self._peer_link_loop, daemon=True)
@@ -1086,21 +1264,15 @@ class ServerNetwork:
                         with self._lock:
                             existing = self._links.get(remote_id)
                             if existing and existing.is_connected():
-                                local_id_check = self._get_local_server_id()
-                                if local_id_check < remote_id:
-                                    # We are designated connector — reject inbound
-                                    self._log(f"Tiebreaker: rejecting inbound cert link from {remote_id}")
-                                    link._authenticated = False
-                                    link._connected = False
-                                    reply = "ERROR Already linked"
-                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                    self._listener_sock.sendto(reply_data, addr)
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # They are designated connector — close our outbound, accept theirs
-                                    self._log(f"Tiebreaker: closing outbound to {remote_id}, accepting inbound")
-                                    existing.close()
+                                # Reject duplicate - never close existing link
+                                self._log(f"Rejecting duplicate connection from {remote_id} - existing link active")
+                                link._authenticated = False
+                                link._connected = False
+                                reply = "ERROR Already linked"
+                                reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                self._listener_sock.sendto(reply_data, addr)
+                                peer_links.pop(addr, None)
+                                continue
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
@@ -1133,21 +1305,15 @@ class ServerNetwork:
                         with self._lock:
                             existing = self._links.get(remote_id)
                             if existing and existing.is_connected():
-                                local_id_check = self._get_local_server_id()
-                                if local_id_check < remote_id:
-                                    # We are designated connector — reject inbound
-                                    self._log(f"Tiebreaker: rejecting inbound link from {remote_id}")
-                                    link._authenticated = False
-                                    link._connected = False
-                                    reply = "ERROR Already linked"
-                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                    self._listener_sock.sendto(reply_data, addr)
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # They are designated connector — close our outbound, accept theirs
-                                    self._log(f"Tiebreaker: closing outbound to {remote_id}, accepting inbound")
-                                    existing.close()
+                                # Reject duplicate - never close existing link
+                                self._log(f"Rejecting duplicate connection from {remote_id} - existing link active")
+                                link._authenticated = False
+                                link._connected = False
+                                reply = "ERROR Already linked"
+                                reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                self._listener_sock.sendto(reply_data, addr)
+                                peer_links.pop(addr, None)
+                                continue
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
@@ -1351,12 +1517,14 @@ class ServerNetwork:
             text: Message text.
             exclude_server: Server to exclude from broadcast.
         """
-        args = f"{source_nick} {target} :{text}"
+        # Include origin server ID to prevent message loops in non-mesh topologies
+        args = f"{self.server_id} {source_nick} {target} :{text}"
         self.broadcast_to_network("SYNCMSG", args, exclude_server=exclude_server)
 
     def route_notice(self, source_nick, target, text, exclude_server=None):
         """Route a NOTICE across the network."""
-        args = f"{source_nick} {target} :{text}"
+        # Include origin server ID to prevent message loops in non-mesh topologies
+        args = f"{self.server_id} {source_nick} {target} :{text}"
         self.broadcast_to_network("SYNCNOTICE", args, exclude_server=exclude_server)
 
     def sync_line(self, target_nick, line, exclude_server=None):
@@ -1522,12 +1690,54 @@ class ServerNetwork:
                 display_nick = member_info.get("nick", nick_lower)
                 member_modes = list(member_info.get("modes", set()))
                 members[display_nick] = member_modes
-            members_json = json.dumps(members)
-            link.send_message("SYNCCHAN", ch.name, modes_str, members_json)
+
+            # Split large member lists across multiple SYNCCHAN messages
+            # IRC message limit is ~512 bytes, reserve ~100 for overhead
+            max_json_size = 400
+            self._send_syncchan_multi(link, ch.name, modes_str, members, max_json_size)
 
             # Sync topic if set
             if ch.topic:
                 link.send_message("SYNCTOPIC", ch.name, ":" + ch.topic)
+
+    def _send_syncchan_multi(self, link, channel_name, modes_str, members, max_json_size):
+        """Send SYNCCHAN message(s), splitting large member lists across multiple lines.
+
+        Args:
+            link: The ServerLink to send to
+            channel_name: Name of the channel
+            modes_str: Channel modes string
+            members: Dict of {nick: [modes]}
+            max_json_size: Maximum JSON payload size per message
+        """
+        if not members:
+            # Empty channel
+            link.send_message("SYNCCHAN", channel_name, modes_str, "{}")
+            return
+
+        # Try to fit all members in one message
+        members_json = json.dumps(members)
+        if len(members_json) <= max_json_size:
+            link.send_message("SYNCCHAN", channel_name, modes_str, members_json)
+            return
+
+        # Split members across multiple messages
+        member_items = list(members.items())
+        chunk_size = max(1, len(member_items) // ((len(members_json) // max_json_size) + 1))
+
+        for i in range(0, len(member_items), chunk_size):
+            chunk = dict(member_items[i:i + chunk_size])
+            chunk_json = json.dumps(chunk)
+
+            # Add metadata about continuation
+            is_final = (i + chunk_size >= len(member_items))
+            continuation = "+" if not is_final else "*"
+
+            # Send as: SYNCCHAN #channel modes_str continuation chunk_json
+            link.send_message("SYNCCHAN", channel_name, modes_str, continuation, chunk_json)
+
+            self._log(f"SYNCCHAN chunk for {channel_name}: {len(chunk)}/{len(member_items)} members "
+                     f"({len(chunk_json)} bytes, {'final' if is_final else 'continues'})")
 
     def _dispatch_s2s_message(self, link, command, rest):
         """Route an incoming S2S command to the appropriate handler.
@@ -1747,20 +1957,58 @@ class ServerNetwork:
     def _handle_syncchan(self, link, rest):
         """Handle SYNCCHAN: merge remote channel state.
 
-        Format: SYNCCHAN <channel> <modes> <members_json>
+        Format:
+          - Single: SYNCCHAN <channel> <modes> <members_json>
+          - Multi:  SYNCCHAN <channel> <modes> + <chunk_json>  (continues)
+          - Multi:  SYNCCHAN <channel> <modes> * <chunk_json>  (final)
         """
-        parts = rest.split(" ", 2)
+        parts = rest.split(" ", 3)
         if len(parts) < 3:
             return
 
         channel_name = parts[0]
         modes_str = parts[1]
-        try:
-            members = json.loads(parts[2])
-        except (json.JSONDecodeError, IndexError):
-            members = {}
 
+        # Check if this is a chunked message (continuation marker present)
+        is_chunked = len(parts) >= 4 and parts[2] in ('+', '*')
+        is_final = is_chunked and parts[2] == '*'
+
+        if is_chunked:
+            # Chunked format: extract JSON from part 3
+            try:
+                chunk = json.loads(parts[3])
+            except (json.JSONDecodeError, IndexError):
+                chunk = {}
+        else:
+            # Single-line format: extract JSON from part 2
+            try:
+                chunk = json.loads(parts[2])
+            except (json.JSONDecodeError, IndexError):
+                chunk = {}
+
+        # Accumulate chunks if not final
+        if not is_chunked or is_final:
+            # Either single message or final chunk
+            members = chunk
+        else:
+            # Accumulate partial chunk
+            chan_lower = channel_name.lower()
+            if not hasattr(link, '_syncchan_buffer'):
+                link._syncchan_buffer = {}
+
+            if chan_lower not in link._syncchan_buffer:
+                link._syncchan_buffer[chan_lower] = {}
+
+            link._syncchan_buffer[chan_lower].update(chunk)
+            return  # Wait for final chunk
+
+        # Merge accumulated chunks if this is final
         chan_lower = channel_name.lower()
+        if hasattr(link, '_syncchan_buffer') and chan_lower in link._syncchan_buffer:
+            members = {**link._syncchan_buffer[chan_lower], **members}
+            del link._syncchan_buffer[chan_lower]
+
+        # Store channel state
         with link._state_lock:
             link.remote_channels[chan_lower] = {
                 "name": channel_name,
@@ -1825,17 +2073,22 @@ class ServerNetwork:
         self.broadcast_to_network("SYNCTOPIC", rest, exclude_server=link.remote_server_id)
 
     def _handle_syncmsg(self, link, rest):
-        """Handle SYNCMSG: deliver a message from the network locally.
+        """Handle SYNCMSG: deliver a message from the network locally and re-broadcast to other peers.
 
-        Format: SYNCMSG <source_nick> <target> :<text>
+        Format: SYNCMSG <origin_server_id> <source_nick> <target> :<text>
+
+        The origin_server_id prevents message loops in non-mesh topologies:
+        - Don't re-broadcast back to origin server
+        - Do re-broadcast to all other linked servers
         """
-        parts = rest.split(" ", 2)
-        if len(parts) < 3:
+        parts = rest.split(" ", 3)
+        if len(parts) < 4:
             return
 
-        source_nick = parts[0]
-        target = parts[1]
-        text = parts[2]
+        origin_server_id = parts[0]
+        source_nick = parts[1]
+        target = parts[2]
+        text = parts[3]
         if text.startswith(":"):
             text = text[1:]
 
@@ -1858,22 +2111,31 @@ class ServerNetwork:
             pm_key = "".join(sorted([source_nick.lower(), target.lower()]))
             server.chat_buffer.append(pm_key, source_nick, "PRIVMSG", text)
 
-        # NOTE: Do NOT re-broadcast SYNCMSG to other peers
-        # User messages route only to their destination, not flooded across the network
-        # State messages (SYNCUSER, SYNPART, etc.) are re-broadcast, but not SYNCMSG
+        # Re-broadcast to other peers (not origin, not incoming link)
+        # This ensures all servers in non-mesh topologies see the message
+        if origin_server_id != self.server_id:
+            # We're not the origin, so forward to other peers
+            self.broadcast_to_network("SYNCMSG", rest, exclude_server=origin_server_id)
+            self._log(f"SYNCMSG re-broadcast: from {origin_server_id} via {link.remote_server_id} "
+                     f"to {source_nick} → {target}")
 
     def _handle_syncnotice(self, link, rest):
-        """Handle SYNCNOTICE: deliver a NOTICE from the network locally.
+        """Handle SYNCNOTICE: deliver a NOTICE from the network locally and re-broadcast to other peers.
 
-        Format: SYNCNOTICE <source_nick> <target> :<text>
+        Format: SYNCNOTICE <origin_server_id> <source_nick> <target> :<text>
+
+        The origin_server_id prevents message loops in non-mesh topologies:
+        - Don't re-broadcast back to origin server
+        - Do re-broadcast to all other linked servers
         """
-        parts = rest.split(" ", 2)
-        if len(parts) < 3:
+        parts = rest.split(" ", 3)
+        if len(parts) < 4:
             return
 
-        source_nick = parts[0]
-        target = parts[1]
-        text = parts[2]
+        origin_server_id = parts[0]
+        source_nick = parts[1]
+        target = parts[2]
+        text = parts[3]
         if text.startswith(":"):
             text = text[1:]
 
@@ -1886,6 +2148,14 @@ class ServerNetwork:
             server.broadcast_to_channel(target, irc_msg)
         else:
             server.send_to_nick(target, irc_msg)
+
+        # Re-broadcast to other peers (not origin, not incoming link)
+        # This ensures all servers in non-mesh topologies see the notice
+        if origin_server_id != self.server_id:
+            # We're not the origin, so forward to other peers
+            self.broadcast_to_network("SYNCNOTICE", rest, exclude_server=origin_server_id)
+            self._log(f"SYNCNOTICE re-broadcast: from {origin_server_id} via {link.remote_server_id} "
+                     f"to {source_nick} → {target}")
 
     def _handle_syncmode(self, link, rest):
         """Handle SYNCMODE: apply a remote channel mode change.

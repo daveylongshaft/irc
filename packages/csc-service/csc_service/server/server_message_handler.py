@@ -91,9 +91,18 @@ class MessageHandler(
             line_stripped = line.strip()
 
             # Active file upload sessions take priority
-            # Check if user has an active session (key is now (channel, nick))
+            # Check by (channel, nick) - works for both local clients and S2S relayed messages
             nick = self._get_nick(addr)
             channel = self._get_client_channel(addr)
+
+            # Also try to extract channel+nick from PRIVMSG if client lookup fails
+            if (not channel or not nick) and line_stripped.upper().startswith("PRIVMSG "):
+                msg_peek = parse_irc_message(line_stripped)
+                if msg_peek and msg_peek.params:
+                    channel_candidate = msg_peek.params[0]
+                    if channel_candidate.startswith("#"):
+                        channel = channel_candidate.lower()
+
             session_key = (channel, nick) if channel and nick else None
             if session_key and session_key in self.file_handler.sessions:
                 self._handle_file_session_line(addr, line_stripped, raw_line)

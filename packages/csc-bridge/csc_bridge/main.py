@@ -74,6 +74,7 @@ import sys
 import os
 import json
 import logging
+from pathlib import Path
 
 # Ensure CWD is the bridge directory for data files
 _bridge_dir = os.path.dirname(os.path.abspath(__file__))
@@ -107,141 +108,178 @@ logging.basicConfig(
 )
 
 def main():
-    """Load configuration, create transports, start bridge, and block indefinitely.
+    """Load configuration from etc/csc-service.json via Platform, create transports, start bridge.
+
+    Configuration is loaded from the Platform data layer (etc/csc-service.json) which
+    handles cross-platform path resolution (Windows, Linux, Mac, etc.).
 
     Args:
-        None: Configuration is read from config.json in the working directory.
+        None: Configuration is read from etc/csc-service.json via Platform.get_etc_dir().
 
     Returns:
         None: Does not return; blocks indefinitely until process is killed.
 
     Raises:
         ImportError: If csc_bridge modules cannot be imported.
-        json.JSONDecodeError: If config.json is malformed (falls back to defaults).
+        json.JSONDecodeError: If csc-service.json is malformed (falls back to defaults).
         OSError: If network sockets cannot be created (port in use, permission denied).
         Exception: Any exception from transport or bridge initialization propagates.
 
     Data:
-        - Reads: config.json (optional, falls back to defaults if missing)
+        - Reads: etc/csc-service.json (via Platform.get_etc_dir())
         - Writes: None
         - Mutates:
-            - Creates transport instances (tcp_inbound, udp_inbound, outbound)
+            - Creates transport instances (tcp_inbound, tcp_tunnel_inbound, udp_inbound, outbound)
             - Creates bridge instance
             - Starts daemon threads for transports and bridge
 
-    Side effects:
-        - Logging: Bridge and transports log via logging module (INFO level)
-        - Network I/O:
-            - TCP listener binds to tcp_listen_host:tcp_listen_port (default 0.0.0.0:9667)
-            - UDP listener binds to udp_listen_host:udp_listen_port (default 127.0.0.1:9526)
-            - UDP outbound connects to server_host:server_port (default 127.0.0.1:9525)
-        - Disk writes: None (logging may write to stdout/stderr)
-        - Thread safety: Main thread blocks; all work done in daemon threads.
-          threading.Event().wait() blocks main thread indefinitely.
-
-    Children:
-        - json.load(): Reads config.json
-        - TCPInbound.__init__(): Creates TCP listener transport
-        - UDPInbound.__init__(): Creates UDP listener transport
-        - UDPOutbound.__init__(): Creates UDP outbound transport
-        - Bridge.__init__(): Creates bridge instance with transports
-        - Bridge.start(): Starts all daemon threads (listeners, session manager)
-        - threading.Event().wait(): Blocks main thread indefinitely
-
-    Parents:
-        - __main__ block: Calls this when script is executed directly
-        - systemd service: May call this as entry point for daemon
-
     Execution Flow:
-        1. Load config.json (fall back to defaults if missing)
-        2. Create TCPInbound transport with config params
-        3. Create UDPInbound transport with config params
-        4. Create UDPOutbound transport with server params
-        5. Create Bridge with transports list and config options
-        6. Call bridge.start() to launch daemon threads
-        7. Block main thread on threading.Event().wait()
-        8. Never returns; process must be killed (SIGTERM, SIGINT, SIGKILL)
+        1. Import Platform and get etc directory
+        2. Load csc-service.json from etc/ (fall back to defaults if missing)
+        3. Extract bridge configuration from json
+        4. Create TCPInbound for local clients (local_tcp_port)
+        5. Create TCPInbound for remote tunnel (remote_tcp_port → remote server)
+        6. Create UDPInbound for UDP clients
+        7. Create UDPOutbound for server communication
+        8. Create Bridge with transports list and config options
+        9. Call bridge.start() to launch daemon threads
+        10. Block main thread on threading.Event().wait()
+        11. Never returns; process must be killed (SIGTERM, SIGINT, SIGKILL)
 
-    Configuration Options:
+    Configuration (from etc/csc-service.json "bridge" section):
         - server_host (str): CSC server IP address (default: "127.0.0.1")
         - server_port (int): CSC server UDP port (default: 9525)
-        - tcp_listen_host (str): TCP listener bind address (default: "0.0.0.0")
-        - tcp_listen_port (int): TCP listener port (default: 9667)
-        - udp_listen_host (str): UDP listener bind address (default: "127.0.0.1")
-        - udp_listen_port (int): UDP listener port (default: 9526)
+        - local_tcp_port (int): Local TCP listener port (default: 9667)
+        - remote_tcp_port (int): Remote/tunnel TCP listener port (default: 9666)
+        - remote_host (str): Remote server host for tunnel (default: "haven")
         - session_timeout (int): Session idle timeout in seconds (default: 300)
         - encryption_enabled (bool): Enable encryption (default: False)
         - gateway_mode (str|null): Protocol normalization mode (default: null)
-
-    Session Management:
-        Bridge maintains mapping of client addresses to server sessions.
-        Inactive sessions are cleaned up after session_timeout seconds.
-        Each inbound message creates/refreshes a session.
-        Outbound messages are routed back to the correct client based on session.
-
-    Daemon Behavior:
-        All worker threads are daemon threads (daemon=True).
-        Main thread must stay alive to keep daemon threads running.
-        threading.Event().wait() blocks indefinitely with no timeout.
-        Process termination (SIGTERM/SIGINT) kills all threads immediately.
     """
     from .bridge import Bridge
     from .transports.tcp_inbound import TCPInbound
     from .transports.udp_inbound import UDPInbound
     from .transports.udp_outbound import UDPOutbound
     from csc_platform.subprocess_wrapper import patch_subprocess
+    from csc_platform import Platform
 
     # Patch subprocess to auto-hide windows on Windows
     patch_subprocess()
 
-    # Load configuration
-    config_file = "config.json"
-    try:
-        with open(config_file, 'r') as f:
-            config = json.load(f)
-    except FileNotFoundError:
-        print(f"Config file {config_file} not found, using defaults")
-        config = {
-            "server_host": "127.0.0.1",
-            "server_port": 9525,
-            "tcp_listen_host": "0.0.0.0",
-            "tcp_listen_port": 9667,
-            "session_timeout": 300,
-        }
+    # Load configuration from etc/csc-service.json via Platform
+    plat = Platform()
+    config_file = plat.get_etc_dir() / "csc-service.json"
+
+    # Fallback to csc-service.json in project root if etc doesn't have it
+    if not config_file.exists():
+        csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')
+        if csc_root:
+            config_file = Path(csc_root) / "csc-service.json"
+
+    config = {}
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+        except Exception as e:
+            print(f"WARNING: Failed to load {config_file}: {e}")
+    else:
+        print(f"No config file found at {config_file}, using defaults")
+
+    # Extract bridge-specific configuration
+    # Bridge config can be in top-level or under "bridge" key
+    bridge_config = config.get("bridge", config)
+
+    # Default server configuration
+    server_host = config.get("server_host", "127.0.0.1")
+    server_port = config.get("server_port", 9525)
+
+    # Local bridge configuration (local_tcp_port -> server_host:server_port)
+    local_tcp_host = bridge_config.get("local_tcp_host", "0.0.0.0")
+    local_tcp_port = bridge_config.get("local_tcp_port", 9667)
+
+    # Remote bridge configuration (remote_tcp_port -> remote_host:server_port)
+    remote_tcp_host = bridge_config.get("remote_tcp_host", "0.0.0.0")
+    remote_tcp_port = bridge_config.get("remote_tcp_port", 9666)
+    remote_host = bridge_config.get("remote_host", "haven")
+
+    # UDP listener configuration
+    udp_host = bridge_config.get("local_udp_host", "127.0.0.1")
+    udp_port = bridge_config.get("local_udp_port", 9526)
+
+    # Other options
+    session_timeout = config.get("session_timeout", 300)
+    encryption_enabled = config.get("bridge_encryption_enabled", False)
+    gateway_mode = config.get("gateway_mode", None)
+
+    print(f"[Bridge] Config loaded from {config_file}")
+    print(f"[Bridge] Local:  TCP {local_tcp_host}:{local_tcp_port} -> {server_host}:{server_port}")
+    print(f"[Bridge] Remote: TCP {remote_tcp_host}:{remote_tcp_port} -> {remote_host}:{server_port}")
+    print(f"[Bridge] UDP:    {udp_host}:{udp_port}")
 
     # Create transports
+    # Local bridge: clients connect on local_tcp_port, forwards to local server
     tcp_inbound = TCPInbound(
-        host=config.get("tcp_listen_host", "0.0.0.0"),
-        port=config.get("tcp_listen_port", 9667)
+        host=local_tcp_host,
+        port=local_tcp_port
     )
+
+    # Remote/tunnel bridge: clients connect on remote_tcp_port, forwards to remote server
     tcp_tunnel_inbound = TCPInbound(
-        host=config.get("tcp_tunnel_listen_host", "0.0.0.0"),
-        port=config.get("tcp_tunnel_listen_port", 9666)
+        host=remote_tcp_host,
+        port=remote_tcp_port
     )
+
     udp_inbound = UDPInbound(
-        host=config.get("udp_listen_host", "127.0.0.1"),
-        port=config.get("udp_listen_port", 9526)
+        host=udp_host,
+        port=udp_port
     )
+
+    # Outbound transport for local server
     outbound = UDPOutbound(
-        server_host=config.get("server_host", "127.0.0.1"),
-        server_port=config.get("server_port", 9525)
+        server_host=server_host,
+        server_port=server_port
     )
 
     # Create and start bridge
     bridge = Bridge(
         inbound_transports=[tcp_inbound, tcp_tunnel_inbound, udp_inbound],
         outbound_transport=outbound,
-        session_timeout=config.get("session_timeout", 300),
-        encrypt=config.get("bridge_encryption_enabled", True),
-        normalize_mode=config.get("gateway_mode", None),
+        session_timeout=session_timeout,
+        encrypt=encryption_enabled,
+        normalize_mode=gateway_mode,
     )
 
     bridge.start()
 
     # Keep the process running - background threads are daemon threads
     # so we need to block the main thread to keep them alive
+    # Also check for SHUTDOWN file to allow graceful termination
     import threading
-    threading.Event().wait()
+    from pathlib import Path
+
+    # Find project root for SHUTDOWN file
+    csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')
+    if not csc_root:
+        csc_root = Path(__file__).resolve().parent
+        for _ in range(10):
+            if (csc_root / "SHUTDOWN").exists() or (csc_root / "csc-service.json").exists():
+                break
+            csc_root = csc_root.parent
+            if csc_root == csc_root.parent:
+                break
+
+    shutdown_file = Path(csc_root) / "SHUTDOWN"
+    stop_event = threading.Event()
+
+    # Wait for shutdown signal or SHUTDOWN file
+    while not stop_event.is_set():
+        if shutdown_file.exists():
+            print("[Bridge] SHUTDOWN file detected. Shutting down gracefully.")
+            break
+        stop_event.wait(timeout=1.0)  # Check every 1 second
+
+    print("[Bridge] Exiting.")
 
 if __name__ == "__main__":
     main()

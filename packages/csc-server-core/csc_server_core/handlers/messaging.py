@@ -71,14 +71,18 @@ class MessagingMixin:
                         self._handle_service_via_chatline(ai_text, addr, nick, normalized_target)
                     else:
                         self._forward_ai_command(target_server, ai_text, nick, normalized_target, addr)
-                # Check for embedded file upload start
-                elif text.startswith("<begin file=") or text.startswith("<append file="):
-                    # Require ircop or chanop for file uploads
-                    if not self._is_authorized(nick, normalized_target):
-                        self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
-                        self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
-                        return
-                    self.file_handler.start_session(addr, text)
+                # Check for embedded file upload start (bare or server-prefixed)
+                else:
+                    file_info = self._parse_file_command(text)
+                    if file_info:
+                        target_server, file_text = file_info
+                        local_id = self._get_local_server_id()
+                        if target_server is None or target_server.lower() == local_id.lower():
+                            if not self._is_authorized(nick, normalized_target):
+                                self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
+                                self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
+                                return
+                            self.file_handler.start_session(addr, file_text)
             else:
                 # Private message to a nick
                 self._maybe_replay_pm_buffer(target, nick)
@@ -219,18 +223,35 @@ class MessagingMixin:
     def _parse_ai_command(self, text):
         """Detect AI command with optional server prefix.
 
+        Delegates to Service.parse_service_command() from the service base layer.
         Returns:
             (target_server, ai_text) if AI command detected, else None.
-            target_server is None for unprefixed "AI ..." commands.
         """
-        upper = text.upper()
-        # Direct AI command: "AI 1 agent status"
-        if upper.startswith("AI "):
+        from csc_service_base import Service
+        parsed = Service.parse_service_command(text)
+        if parsed is None:
+            return None
+        # Return in legacy format: (target, full_text_without_target)
+        if parsed["target"] is None:
             return (None, text)
-        # Server-prefixed: "haven.ef6e AI 1 agent status"
+        # Strip the target prefix: return remaining text starting at keyword
         parts = text.split(None, 1)
-        if len(parts) == 2 and parts[1].upper().startswith("AI "):
-            return (parts[0], parts[1])
+        return (parsed["target"], parts[1] if len(parts) > 1 else text)
+
+    def _parse_file_command(self, text):
+        """Detect file upload command with optional server prefix.
+
+        Returns:
+            (target_server, file_text) if file command detected, else None.
+            target_server is None for unprefixed commands.
+        """
+        if text.startswith("<begin file=") or text.startswith("<append file="):
+            return (None, text)
+        parts = text.split(None, 1)
+        if len(parts) == 2:
+            rest = parts[1]
+            if rest.startswith("<begin file=") or rest.startswith("<append file="):
+                return (parts[0], rest)
         return None
 
     def _forward_ai_command(self, target_server, ai_text, nick, channel, addr):
