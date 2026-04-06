@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csc-claude"
+version = "0.1.0"
+description = "Claude AI IRC client for CSC system."
+requires-python = ">=3.8"
+dependencies = [
+    "csc-ai-api>=0.1.0",
+    "anthropic>=0.20.0",
+]
+
+[project.scripts]
+csc-claude = "csc_claude.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
