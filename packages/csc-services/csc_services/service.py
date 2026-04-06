@@ -49,8 +49,8 @@ class Service(Network):
             }
         return None
 
-    def __init__(self, server_instance=None):
-        super().__init__()
+    def __init__(self, server_instance=None, **kwargs):
+        super().__init__(**kwargs)
         self.name = "service"
         self.server = server_instance
         self._dispatcher = None
