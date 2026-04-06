@@ -12,5 +12,8 @@ dependencies = [
     "csc-services>=0.1.0",
 ]
 
+[project.scripts]
+csc-client = "csc_clients.main:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
