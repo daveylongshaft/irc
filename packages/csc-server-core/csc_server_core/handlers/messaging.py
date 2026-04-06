@@ -227,7 +227,7 @@ class MessagingMixin:
         Returns:
             (target_server, ai_text) if AI command detected, else None.
         """
-        from csc_service_base import Service
+        from csc_services import Service
         parsed = Service.parse_service_command(text)
         if parsed is None:
             return None

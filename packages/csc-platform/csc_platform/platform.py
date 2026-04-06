@@ -831,6 +831,22 @@ class Platform(Version):
         return p
 
     @classmethod
+    def get_services_dir(cls) -> Path:
+        """Return PROJECT_ROOT/services and ensure it is on sys.path.
+
+        Shared service modules (uploaded or installed) live here so both
+        client and server apps on the same project root can import them by
+        bare name regardless of platform.
+        """
+        import sys as _sys
+        p = cls.PROJECT_ROOT / "services"
+        p.mkdir(parents=True, exist_ok=True)
+        p_str = str(p)
+        if p_str not in _sys.path:
+            _sys.path.insert(0, p_str)
+        return p
+
+    @classmethod
     def get_tools_dir(cls) -> Path:
         """Return the tools/ code maps directory (irc/docs/tools), creating it if needed."""
         p = cls.PROJECT_ROOT / "irc" / "docs" / "tools"
