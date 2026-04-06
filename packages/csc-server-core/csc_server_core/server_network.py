@@ -1298,8 +1298,19 @@ class ServerNetwork:
 
                         with self._lock:
                             existing = self._links.get(remote_id)
-                            if existing:
-                                # Replace stale link (handles server restart reconnection)
+                            if existing and existing.is_connected():
+                                local_id = self._get_local_server_id()
+                                if local_id < remote_id:
+                                    # We are the designated connector; reject inbound duplicate
+                                    self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
+                                    link.close()
+                                    peer_links.pop(addr, None)
+                                    continue
+                                else:
+                                    # Remote wins as connector; accept inbound, drop our outbound
+                                    self._log(f"Tiebreaker: accepting inbound from {remote_id}, closing outbound")
+                                    existing.close()
+                            elif existing:
                                 self._log(f"Replacing stale link from {remote_id} with new connection")
                                 existing.close()
                             self._links[remote_id] = link
@@ -1333,8 +1344,19 @@ class ServerNetwork:
 
                         with self._lock:
                             existing = self._links.get(remote_id)
-                            if existing:
-                                # Replace stale link (handles server restart reconnection)
+                            if existing and existing.is_connected():
+                                local_id = self._get_local_server_id()
+                                if local_id < remote_id:
+                                    # We are the designated connector; reject inbound duplicate
+                                    self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
+                                    link.close()
+                                    peer_links.pop(addr, None)
+                                    continue
+                                else:
+                                    # Remote wins as connector; accept inbound, drop our outbound
+                                    self._log(f"Tiebreaker: accepting inbound from {remote_id}, closing outbound")
+                                    existing.close()
+                            elif existing:
                                 self._log(f"Replacing stale link from {remote_id} with new connection")
                                 existing.close()
                             self._links[remote_id] = link
