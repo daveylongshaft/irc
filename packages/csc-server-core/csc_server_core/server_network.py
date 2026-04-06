@@ -1762,6 +1762,11 @@ class ServerNetwork:
             self._log(f"SYNCCHAN chunk for {channel_name}: {len(chunk)}/{len(member_items)} members "
                      f"({len(chunk_json)} bytes, {'final' if is_final else 'continues'})")
 
+    def attach_fxp_bridge(self, bridge):
+        """Attach an FtpS2sBridge to receive SYNCFILE/RSYNCFILE/SYNCINVENTORY messages."""
+        self._fxp_bridge = bridge
+        self._log("FXP bridge attached")
+
     def _dispatch_s2s_message(self, link, command, rest):
         """Route an incoming S2S command to the appropriate handler.
 
@@ -1792,6 +1797,15 @@ class ServerNetwork:
             "ERROR":    self._handle_error,
             "SYNCCMD":  self._handle_synccmd,
         }
+        bridge = getattr(self, '_fxp_bridge', None)
+        if bridge:
+            handlers.update({
+                "SYNCFILE":      bridge.handle_syncfile,
+                "RSYNCFILE":     bridge.handle_rsyncfile,
+                "SYNCFILE_ACK":  bridge.handle_syncfile_ack,
+                "SYNCINVENTORY": bridge.handle_syncinventory,
+                "SYNCRENAME":    bridge.handle_syncrename,
+            })
         handler = handlers.get(command)
         if handler:
             try:
