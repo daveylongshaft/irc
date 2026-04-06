@@ -8,7 +8,7 @@ import time
 import traceback
 import subprocess
 from pathlib import Path
-from csc_services import Service
+from csc_services.service import Service
 from csc_server_core.message_handler import MessageHandler
 from csc_server_core.file_handler import FileHandler
 from csc_server_core.channel_manager import ChannelManager
@@ -354,12 +354,6 @@ class Server(Service):
                 for nick in list(ch.members.keys()):
                     # Skip if nick has a live connection
                     if nick.lower() in active_nicks:
-                        continue
-
-                    # Skip S2S remote members - they are managed by DESYNC/SQUIT,
-                    # not by local cleanup logic
-                    member_info = ch.members.get(nick, {})
-                    if member_info.get("remote_server"):
                         continue
 
                     # Check last_seen from users.json (client_registry property reads disk)
