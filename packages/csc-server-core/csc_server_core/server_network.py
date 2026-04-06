@@ -1020,10 +1020,10 @@ class ServerNetwork:
         """Attempt to establish an outbound S2S link to a peer."""
         peer_key = f"{host}:{port}"
         try:
-            # Check if we're already linked
+            # Check if we're already linked and connected
             with self._lock:
                 for link in self._links.values():
-                    if (link.remote_host, link.remote_port) == (host, port):
+                    if (link.remote_host, link.remote_port) == (host, port) and link.is_connected():
                         return  # Already linked
 
             # Create ServerLink for outbound connection
@@ -2271,6 +2271,12 @@ class ServerNetwork:
 
         self._log(f"Server {server_id} quit: {reason}")
         self._remove_server_state(server_id)
+
+        # If the SQUIT is from our direct peer, remove the link so reconnect can happen
+        if link.remote_server_id == server_id:
+            with self._lock:
+                self._links.pop(server_id, None)
+            link._connected = False
 
         # Re-broadcast
         self.broadcast_to_network(
