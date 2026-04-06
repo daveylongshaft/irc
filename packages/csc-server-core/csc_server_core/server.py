@@ -530,7 +530,7 @@ class Server(Service):
 
         return False
 
-    def send_wallops(self, message):
+    def send_wallops(self, message, propagate=True):
         """Send a WALLOPS message to all connected IRC operators."""
         wallops_msg = f":{SERVER_NAME} WALLOPS :{message}\r\n"
         for addr, info in list(self.clients.items()):
@@ -540,6 +540,45 @@ class Server(Service):
                     self.sock_send(wallops_msg.encode(), addr)
                 except Exception as e:
                     self.log(f"[WALLOPS] Error sending to {nick}@{addr}: {e}")
+        if propagate and hasattr(self, 's2s_network'):
+            self.s2s_network.broadcast_wallops(message)
+
+    def kill_nick_local(self, target_nick, reason="Killed"):
+        """Disconnect a local client by nick without requiring handler state.
+
+        Used by the S2S layer (REMOTEKILL). Returns True if found and disconnected.
+        """
+        from csc_server_core.irc import SERVER_NAME as _SRV, format_irc_message
+        target_addr = None
+        actual_nick = None
+        for a, info in list(self.clients.items()):
+            if info.get("name", "").lower() == target_nick.lower():
+                target_addr = a
+                actual_nick = info.get("name")
+                break
+        if not target_addr:
+            return False
+        nick = actual_nick or target_nick
+        prefix = f"{nick}!{nick}@{_SRV}"
+        quit_msg = format_irc_message(prefix, "QUIT", [], reason) + "\r\n"
+        if hasattr(self, 's2s_network'):
+            self.s2s_network.sync_user_quit(nick, reason)
+        channels = self.channel_manager.find_channels_for_nick(nick)
+        notified = set()
+        for ch in channels:
+            for m_nick, m_info in list(ch.members.items()):
+                m_addr = m_info.get("addr")
+                if m_addr and m_addr != target_addr and m_addr not in notified:
+                    self.sock_send(quit_msg.encode(), m_addr)
+                    notified.add(m_addr)
+        self.channel_manager.remove_nick_from_all(nick)
+        self.sock_send(f"ERROR :Closing Link: {nick} ({reason})\r\n".encode(), target_addr)
+        if nick.lower() in self.opers:
+            self.remove_active_oper(nick.lower())
+        self.clients.pop(target_addr, None)
+        self.nickserv_identified.pop(target_addr, None)
+        self.log(f"[REMOTEKILL] {nick} disconnected: {reason}")
+        return True
 
     def old_broadcast(self, message, exclude=None):
         """

@@ -749,12 +749,22 @@ class ServerData:
             channel.ban_list = set(ch_data.get("ban_list", []))
             channel.invite_list = set(ch_data.get("invite_list", []))
             channel.created = ch_data.get("created", time.time())
+            # Preserve remote S2S members (addr=None) — they are not on disk
+            # and would be lost if restore_all is called while S2S links are up.
+            remote_members = {
+                k: v for k, v in channel.members.items()
+                if v.get("addr") is None
+            }
             channel.members.clear()
             for nick, member_data in ch_data.get("members", {}).items():
                 addr = tuple(member_data.get("addr", ()))
                 modes = set(member_data.get("modes", []))
                 if addr:
                     channel.add_member(nick, addr, modes)
+            # Re-insert remote members not displaced by disk data
+            for nick_key, info in remote_members.items():
+                if nick_key not in channel.members:
+                    channel.members[nick_key] = info
             count += 1
 
         chanserv_data = self.load_chanserv()

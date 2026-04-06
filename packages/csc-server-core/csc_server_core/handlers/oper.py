@@ -166,9 +166,18 @@ class OperMixin:
 
             kill_reason = f"Killed by {nick}: {reason}"
             if not self._server_kill(target_nick, kill_reason):
-                self._send_numeric(addr, ERR_NOSUCHNICK, nick,
-                                   f"{target_nick} :No such nick/channel")
-                return
+                # Not local — try remote kill if global oper
+                if hasattr(self.server, 's2s_network') and self.server.is_global_oper(nick):
+                    sent = self.server.s2s_network.broadcast_remotekill(
+                        nick, target_nick, kill_reason)
+                    if not sent:
+                        self._send_numeric(addr, ERR_NOSUCHNICK, nick,
+                                           f"{target_nick} :No such nick/channel")
+                        return
+                else:
+                    self._send_numeric(addr, ERR_NOSUCHNICK, nick,
+                                       f"{target_nick} :No such nick/channel")
+                    return
 
             self.server.log(f"[KILL] {nick} killed {target_nick}: {reason}")
             self.server.send_wallops(f"{nick} killed {target_nick}: {reason}")

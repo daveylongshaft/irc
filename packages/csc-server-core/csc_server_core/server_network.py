@@ -1378,6 +1378,11 @@ class ServerNetwork:
                                     self._log(f"Tiebreaker (inbound cert): closing outbound to {remote_id}, accepting their inbound")
                                     existing.close()
                                     # Fall through to register inbound below
+                                elif remote_ts > (getattr(existing, 'remote_timestamp', 0) or 0):
+                                    # Remote restarted (newer startup_time) — stale link, accept reconnect
+                                    self._log(f"Remote {remote_id} restarted (ts {remote_ts} > {existing.remote_timestamp}), replacing stale cert link")
+                                    existing.close()
+                                    # Fall through to register inbound below
                                 else:
                                     self._log(f"Tiebreaker (inbound cert): keeping outbound to {remote_id}, rejecting their inbound")
                                     link._authenticated = False
@@ -1424,6 +1429,11 @@ class ServerNetwork:
                                 # outbound and accept their inbound so bidirectional relay works.
                                 if remote_id > local_id:
                                     self._log(f"Tiebreaker (inbound pw): closing outbound to {remote_id}, accepting their inbound")
+                                    existing.close()
+                                    # Fall through to register inbound below
+                                elif remote_ts > (getattr(existing, 'remote_timestamp', 0) or 0):
+                                    # Remote restarted (newer startup_time) — stale link, accept reconnect
+                                    self._log(f"Remote {remote_id} restarted (ts {remote_ts} > {existing.remote_timestamp}), replacing stale pw link")
                                     existing.close()
                                     # Fall through to register inbound below
                                 else:
@@ -1708,6 +1718,33 @@ class ServerNetwork:
             args += f" :{reason}"
         self.broadcast_to_network("SYNPART", args, exclude_server=exclude_server)
 
+    def broadcast_remotekill(self, oper_nick, target_nick, reason, exclude_server=None):
+        """Send REMOTEKILL to all peers. Returns True if at least one peer was notified."""
+        args = f"{oper_nick} {target_nick} :{reason}"
+        with self._lock:
+            peers = [lnk for lnk in self._links.values() if lnk.is_connected()]
+        if not peers:
+            return False
+        for lnk in peers:
+            if getattr(lnk, 'remote_server_id', None) != exclude_server:
+                lnk.send_message("REMOTEKILL", oper_nick, target_nick, ":" + reason)
+        return True
+
+    def broadcast_wallops(self, text, origin_server=None, exclude_server=None):
+        """Forward WALLOPS to all peers."""
+        origin = origin_server or self._get_local_server_id()
+        self.broadcast_to_network(
+            "SYNCWALLOPS", f"{origin} :{text}", exclude_server=exclude_server)
+
+    def broadcast_kline(self, mask, duration, reason, exclude_server=None):
+        """Propagate a KLINE to all peers."""
+        self.broadcast_to_network(
+            "SYNCKLINE", f"{mask} {duration} :{reason}", exclude_server=exclude_server)
+
+    def broadcast_unkline(self, mask, exclude_server=None):
+        """Propagate an UNKLINE to all peers."""
+        self.broadcast_to_network("SYNCUNKLINE", mask, exclude_server=exclude_server)
+
     def sync_nick_change(self, old_nick, new_nick, exclude_server=None):
         """Notify the network that a user changed their nickname.
 
@@ -1831,6 +1868,9 @@ class ServerNetwork:
         self._flush_pending_services(link)
         self._send_services_sync(link)
 
+        # Update links.json for csc-ctl
+        self._write_links_json()
+
     def _send_syncchan_multi(self, link, channel_name, modes_str, members, max_json_size):
         """Send SYNCCHAN message(s), splitting large member lists across multiple lines.
 
@@ -1902,6 +1942,10 @@ class ServerNetwork:
             "DESYNC":         self._handle_desync,
             "SQUIT":          self._handle_squit,
             "ERROR":          self._handle_error,
+            "REMOTEKILL":     self._handle_remotekill,
+            "SYNCWALLOPS":    self._handle_syncwallops,
+            "SYNCKLINE":      self._handle_synckline,
+            "SYNCUNKLINE":    self._handle_syncunkline,
         }
         handler = handlers.get(command)
         if handler:
@@ -2442,6 +2486,87 @@ class ServerNetwork:
         """Handle ERROR message from a peer."""
         self._log(f"Error from {link.remote_server_id}: {rest}")
 
+    def _handle_remotekill(self, link, rest):
+        """Handle REMOTEKILL <oper> <target> :<reason> — kill a local user on behalf of a remote global oper."""
+        parts = rest.split(" ", 2)
+        if len(parts) < 2:
+            return
+        oper_nick = parts[0]
+        target_nick = parts[1]
+        reason = parts[2].lstrip(":") if len(parts) > 2 else "Killed by remote operator"
+
+        killed = None
+        for a, info in list(self.local_server.clients.items()):
+            if info.get("name", "").lower() == target_nick.lower():
+                killed = info.get("name")
+                break
+
+        if killed:
+            self._log(f"[REMOTEKILL] {oper_nick}@{link.remote_server_id} killing local {killed}: {reason}")
+            self.local_server.kill_nick_local(killed, f"Killed by {oper_nick}: {reason}")
+        else:
+            # Not local — relay to other peers
+            self.broadcast_to_network(
+                "REMOTEKILL", rest, exclude_server=link.remote_server_id)
+
+    def _handle_syncwallops(self, link, rest):
+        """Handle SYNCWALLOPS <origin> :<text> — deliver to local opers and relay."""
+        parts = rest.split(" ", 1)
+        if len(parts) < 2:
+            return
+        origin = parts[0]
+        text = parts[1].lstrip(":")
+
+        # Relay to other peers
+        self.broadcast_to_network(
+            "SYNCWALLOPS", rest, exclude_server=link.remote_server_id)
+
+        # Deliver to local opers (propagate=False to avoid re-broadcast loop)
+        server = self.local_server
+        server.send_wallops(text, propagate=False)
+
+    def _handle_synckline(self, link, rest):
+        """Handle SYNCKLINE <mask> <duration> :<reason> — apply ban locally and relay."""
+        parts = rest.split(" ", 2)
+        if len(parts) < 3:
+            return
+        mask = parts[0]
+        try:
+            duration = int(parts[1])
+        except ValueError:
+            duration = 0
+        reason = parts[2].lstrip(":")
+
+        # Relay first
+        self.broadcast_to_network(
+            "SYNCKLINE", rest, exclude_server=link.remote_server_id)
+
+        # Apply locally
+        server = self.local_server
+        if hasattr(server, 'add_kline'):
+            server.add_kline(mask, duration, reason)
+        elif hasattr(server, 'bans'):
+            # Fallback: add to server ban list
+            server.bans[mask] = {"duration": duration, "reason": reason,
+                                 "set_by": link.remote_server_id, "set_at": time.time()}
+
+    def _handle_syncunkline(self, link, rest):
+        """Handle SYNCUNKLINE <mask> — remove ban locally and relay."""
+        mask = rest.strip()
+        if not mask:
+            return
+
+        # Relay first
+        self.broadcast_to_network(
+            "SYNCUNKLINE", mask, exclude_server=link.remote_server_id)
+
+        # Remove locally
+        server = self.local_server
+        if hasattr(server, 'remove_kline'):
+            server.remove_kline(mask)
+        elif hasattr(server, 'bans'):
+            server.bans.pop(mask, None)
+
     # ==================================================================
     # Services federation: SYNCSERVICES, SERVICESUPDATE, SYNCREQUEST
     # ==================================================================
@@ -2669,6 +2794,30 @@ class ServerNetwork:
                 # Origin not reachable — send full sync as fallback
                 self._send_services_sync(link)
 
+    def _write_links_json(self):
+        """Write current link state to links.json in the run dir for csc-ctl."""
+        try:
+            temp_root = os.environ.get("TEMP") or os.environ.get("TMP") or "/tmp"
+            run_dir = Path(temp_root) / "csc" / "run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            with self._lock:
+                links_data = {
+                    sid: {
+                        "server_id": sid,
+                        "direction": getattr(lnk, "direction", "unknown"),
+                        "authenticated": getattr(lnk, "_authenticated", False),
+                        "connected": getattr(lnk, "_connected", False),
+                        "link_time": getattr(lnk, "link_time", 0),
+                    }
+                    for sid, lnk in self._links.items()
+                    if getattr(lnk, "_authenticated", False)
+                }
+            tmp = run_dir / "links.json.tmp"
+            tmp.write_text(json.dumps({"links": links_data}))
+            tmp.replace(run_dir / "links.json")
+        except Exception as e:
+            self._log(f"Failed to write links.json: {e}")
+
     def _handle_link_lost(self, link):
         """Called when a link's reader thread detects a disconnect."""
         server_id = link.remote_server_id
@@ -2683,6 +2832,7 @@ class ServerNetwork:
             if self._links.get(server_id) is link:
                 self._links.pop(server_id, None)
 
+        self._write_links_json()
         self._remove_server_state(server_id)
 
         # Notify remaining peers
