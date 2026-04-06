@@ -9,11 +9,19 @@ from csc_server_core.irc import SERVER_NAME
 class FileHandler:
     """Handles <begin file> ... <end file> uploads via IRC.
 
-    All uploads go to staging first. On completion the content is validated:
-      - file= value (strip .py if present) must be a valid Python identifier -> expected class name
-      - content must contain exactly that class name as a top-level class definition
+    Sessions are keyed by nick so multiple users can upload simultaneously
+    without collision. All uploads go to staging first. On completion the
+    content is validated:
+      - file= value (strip .py if present) must be a valid Python identifier
+        -> that becomes the expected class name
+      - content must contain a class definition matching that identifier
     On success the staged file is moved to services/<ClassName>_service.py.
-    On failure the staged file is deleted and the rejection reason is returned.
+    On failure the staged file is deleted and a specific rejection reason is
+    returned to the sender.
+
+    Uploads require an explicit target server prefix in the upload command.
+    Bare <begin file=...> without a target is rejected by the caller before
+    this handler is reached.
     """
 
     PYTHON_MODULE_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -21,7 +29,7 @@ class FileHandler:
 
     def __init__(self, server):
         self.server = server
-        self.sessions = {}
+        self.sessions = {}   # keyed by nick
         self.project_root = Platform.PROJECT_ROOT
 
         self.services_dir = Platform.get_services_dir()
@@ -29,7 +37,10 @@ class FileHandler:
 
         self.staging_dir.mkdir(parents=True, exist_ok=True)
 
-    def start_session(self, addr, line):
+    def has_session(self, nick):
+        return nick in self.sessions
+
+    def start_session(self, nick, line):
         text = line.strip()
         mode = "w"
 
@@ -50,18 +61,18 @@ class FileHandler:
 
         if not self.PYTHON_MODULE_RE.match(stem):
             reason = f"Invalid module name '{raw_filename}': must be a valid Python identifier (optionally ending in .py)"
-            self.server.log(f"[FileHandler] REJECTED from {addr}: {reason}")
-            self.sessions[addr] = {"rejected": True, "reason": reason}
+            self.server.log(f"[FileHandler] REJECTED from {nick}: {reason}")
+            self.sessions[nick] = {"rejected": True, "reason": reason}
             return
 
         staging_path = (self.staging_dir / f"{stem}.py").resolve()
 
         # Security: prevent out-of-root
         if not str(staging_path).startswith(str(self.project_root.resolve())):
-            self.server.log(f"[SECURITY] [BLOCKED] out-of-root staging path from {addr}: {staging_path}")
+            self.server.log(f"[SECURITY] [BLOCKED] out-of-root staging path from {nick}: {staging_path}")
             return
 
-        self.sessions[addr] = {
+        self.sessions[nick] = {
             "path": staging_path,
             "stem": stem,
             "original_filename": raw_filename,
@@ -69,23 +80,22 @@ class FileHandler:
             "mode": mode,
             "start_time": time.time(),
         }
-        self.server.log(f"[FileHandler] BEGIN {mode.upper()} from {addr} -> staging/{stem}.py (expect class {stem})")
+        self.server.log(f"[FileHandler] BEGIN {mode.upper()} from {nick} -> staging/{stem}.py (expect class {stem})")
 
-    def abort_session(self, addr):
-        session = self.sessions.pop(addr, None)
+    def abort_session(self, nick):
+        session = self.sessions.pop(nick, None)
         if session and not session.get("rejected"):
             staging = Path(session["path"])
-            if staging.exists():
-                staging.unlink(missing_ok=True)
+            staging.unlink(missing_ok=True)
 
-    def process_chunk(self, addr, line):
-        session = self.sessions.get(addr)
+    def process_chunk(self, nick, line):
+        session = self.sessions.get(nick)
         if not session or session.get("rejected"):
             return
         session["content"].append(line.rstrip("\r\n") + "\n")
 
-    def complete_session(self, addr):
-        session = self.sessions.pop(addr, None)
+    def complete_session(self, nick):
+        session = self.sessions.pop(nick, None)
         if not session:
             return "No active session."
 
@@ -116,7 +126,7 @@ class FileHandler:
         except Exception as e:
             return f"Error writing to staging: {e}"
 
-        # Validate: must contain class <stem>
+        # Validate: content must define class <stem>
         classes_found = self.CLASS_RE.findall(full_content)
         if not classes_found:
             staging_path.unlink(missing_ok=True)

@@ -90,9 +90,10 @@ class MessageHandler(
             raw_line = line
             line_stripped = line.strip()
 
-            # Active file upload sessions take priority
-            if addr in self.file_handler.sessions:
-                self._handle_file_session_line(addr, line_stripped, raw_line)
+            # Active file upload sessions take priority (keyed by nick)
+            _session_nick = self._get_nick(addr)
+            if _session_nick and self.file_handler.has_session(_session_nick):
+                self._handle_file_session_line(_session_nick, addr, line_stripped, raw_line)
                 continue
 
             if not line_stripped:
@@ -108,9 +109,8 @@ class MessageHandler(
     # File Session Handling (transparent)
     # ======================================================================
 
-    def _handle_file_session_line(self, addr, line_stripped, raw_line):
+    def _handle_file_session_line(self, nick, addr, line_stripped, raw_line):
         """Handle a line while in an active file upload session."""
-        nick = self._get_nick(addr)
         channel = self._get_client_channel(addr)
         prefix = f"{nick}!{nick}@{SERVER_NAME}" if nick else None
 
@@ -126,7 +126,7 @@ class MessageHandler(
                 content_stripped = content.strip()
 
         if content_stripped.startswith("<begin file=") or content_stripped.startswith("<append file="):
-            self.file_handler.abort_session(addr)
+            self.file_handler.abort_session(nick)
             error_msg = "[Server] Error: Nested file uploads are not supported. Session aborted.\n"
             self.server.sock_send(error_msg.encode(), addr)
         elif content_stripped.startswith("<end file>"):
@@ -135,7 +135,7 @@ class MessageHandler(
                 broadcast_msg = format_irc_message(prefix, "PRIVMSG", [channel], content_stripped)
                 self.server.broadcast_to_channel(channel, broadcast_msg + "\r\n", exclude=addr)
 
-            result = self.file_handler.complete_session(addr)
+            result = self.file_handler.complete_session(nick)
             # Send result to sender
             self.server.sock_send(f"[Server] {result}\n".encode(), addr)
             # Broadcast result from ServiceBot
@@ -146,7 +146,7 @@ class MessageHandler(
                 self.server.broadcast_to_channel(channel, result_msg + "\r\n")
         else:
             # Use extracted content (preserves indentation)
-            self.file_handler.process_chunk(addr, content)
+            self.file_handler.process_chunk(nick, content)
             # Broadcast file chunk to channel (transparency)
             if nick and channel:
                 chunk_text = content.rstrip("\r\n")
@@ -264,21 +264,26 @@ class MessageHandler(
             self._handle_service_via_chatline(raw_line, addr, nick)
             return
 
-        # File upload start
-        if raw_line.startswith("<begin file=") or raw_line.startswith("<append file="):
-            # Require ircop or chanop for file uploads
+        # File upload start -- requires explicit target prefix (bare <begin file=...> rejected)
+        file_info = self._parse_file_command(raw_line) if hasattr(self, '_parse_file_command') else None
+        if file_info:
+            target_server, file_text = file_info
+            local_id = self._get_local_server_id()
+            if target_server is None:
+                self.server.sock_send(b"[Server] Error: File uploads require a target prefix, e.g.: haven.4346 <begin file=MyClass>\n", addr)
+                return
+            if target_server.lower() != local_id.lower():
+                return  # not for us; no S2S forwarding of raw uploads
             channel = self._get_client_channel(addr)
             if not self._is_authorized(nick, channel):
                 self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
                 self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                 return
-
-            # Broadcast start marker
             if nick and channel:
-                prefix = f"{nick}!{nick}@{SERVER_NAME}"
-                broadcast_msg = format_irc_message(prefix, "PRIVMSG", [channel], raw_line)
+                prefix_str = f"{nick}!{nick}@{SERVER_NAME}"
+                broadcast_msg = format_irc_message(prefix_str, "PRIVMSG", [channel], raw_line)
                 self.server.broadcast_to_channel(channel, broadcast_msg + "\r\n", exclude=addr)
-            self.file_handler.start_session(addr, raw_line)
+            self.file_handler.start_session(nick, file_text)
             return
 
         # Fallback: treat unrecognized text from registered client as PRIVMSG to current channel

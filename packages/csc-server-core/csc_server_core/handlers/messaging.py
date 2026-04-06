@@ -78,12 +78,15 @@ class MessagingMixin:
                     if file_info:
                         target_server, file_text = file_info
                         local_id = self._get_local_server_id()
-                        if target_server is None or target_server.lower() == local_id.lower():
+                        if target_server is None:
+                            self.server.sock_send(b"[Server] Error: File uploads require a target prefix, e.g.: haven.4346 <begin file=MyClass>\n", addr)
+                            return
+                        if target_server.lower() == local_id.lower():
                             if not self._is_authorized(nick, normalized_target):
                                 self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
                                 self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                                 return
-                            self.file_handler.start_session(addr, file_text)
+                            self.file_handler.start_session(nick, file_text)
             else:
                 # Private message to a nick
                 self._maybe_replay_pm_buffer(target, nick)
