@@ -12,8 +12,5 @@ dependencies = [
     "csc-log>=0.1.0",
 ]
 
-[project.scripts]
-csc-platform = "csc_platform.platform:_platform_cli"
-
 [tool.setuptools.packages.find]
 where = ["."]
