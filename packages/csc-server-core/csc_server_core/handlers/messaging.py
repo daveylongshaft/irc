@@ -62,14 +62,15 @@ class MessagingMixin:
                 if hasattr(self.server, 's2s_network'):
                     self.server.s2s_network.route_message(nick, normalized_target, text)
 
-                # Check for embedded service command (AI ... or <server> AI ...)
+                # Check for embedded service command (<server> AI ...)
+                # Requires explicit target prefix -- bare "ai ..." passes through as chat
                 ai_info = self._parse_ai_command(text)
                 if ai_info:
                     target_server, ai_text = ai_info
                     local_id = self._get_local_server_id()
-                    if target_server is None or target_server.lower() == local_id.lower():
+                    if target_server is not None and target_server.lower() == local_id.lower():
                         self._handle_service_via_chatline(ai_text, addr, nick, normalized_target)
-                    else:
+                    elif target_server is not None:
                         self._forward_ai_command(target_server, ai_text, nick, normalized_target, addr)
                 # Check for embedded file upload start (bare or server-prefixed)
                 else:
