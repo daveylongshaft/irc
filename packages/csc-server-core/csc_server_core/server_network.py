@@ -1792,6 +1792,15 @@ class ServerNetwork:
             "ERROR":    self._handle_error,
             "SYNCCMD":  self._handle_synccmd,
         }
+        bridge = getattr(self, '_fxp_bridge', None)
+        if bridge:
+            handlers.update({
+                "SYNCFILE":      bridge.handle_syncfile,
+                "RSYNCFILE":     bridge.handle_rsyncfile,
+                "SYNCFILE_ACK":  bridge.handle_syncfile_ack,
+                "SYNCINVENTORY": bridge.handle_syncinventory,
+                "SYNCRENAME":    bridge.handle_syncrename,
+            })
         handler = handlers.get(command)
         if handler:
             try:
@@ -2447,6 +2456,11 @@ class ServerNetwork:
                         member_info["nick"] = new_nick
                         ch.members[new_lower] = member_info
                 break
+
+    def attach_fxp_bridge(self, bridge):
+        """Attach an FtpS2sBridge to receive SYNCFILE/RSYNCFILE/SYNCINVENTORY messages."""
+        self._fxp_bridge = bridge
+        self._log("FXP bridge attached")
 
     def shutdown(self):
         """Shut down all S2S connections and the listener."""
