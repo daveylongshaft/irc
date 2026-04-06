@@ -258,17 +258,8 @@ def main():
     import threading
 
     # Find project root for SHUTDOWN file
-    csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')
-    if not csc_root:
-        csc_root = Path(__file__).resolve().parent
-        for _ in range(10):
-            if (csc_root / "SHUTDOWN").exists() or (csc_root / "csc-service.json").exists():
-                break
-            csc_root = csc_root.parent
-            if csc_root == csc_root.parent:
-                break
-
-    shutdown_file = Path(csc_root) / "SHUTDOWN"
+    from csc_platform import Platform
+    shutdown_file = Platform.PROJECT_ROOT / "SHUTDOWN"
     stop_event = threading.Event()
 
     # Wait for shutdown signal or SHUTDOWN file

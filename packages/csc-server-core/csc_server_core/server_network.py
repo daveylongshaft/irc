@@ -706,6 +706,15 @@ class ServerLink:
             return self.local_server.server_id
         if os.environ.get('CSC_SERVER_ID'):
             return os.environ['CSC_SERVER_ID']
+        # Derive from our own cert CN — guaranteed to match what we present in cert auth
+        if getattr(self, 'cert_path', '') and getattr(self, 'ca_path', ''):
+            try:
+                cert_pem = Path(self.cert_path).read_text()
+                ok, cn, _ = _verify_cert_pem(cert_pem, self.ca_path)
+                if ok and cn:
+                    return cn
+            except Exception:
+                pass
         try:
             from csc_platform import Platform
             return Platform.get_server_shortname()
@@ -904,6 +913,26 @@ class ServerNetwork:
             debug_file.write_text(f"Config loaded: {len(self.s2s_peers)} peers, cert={bool(self.s2s_cert_path)}\n")
         except Exception as e:
             debug_file.write_text(f"Config load error: {e}\n")
+
+        # Derive server_id from cert CN if still default — cert CN must match what we present
+        if self.server_id == 'server_001' and self.s2s_cert_path and self.s2s_ca_path:
+            try:
+                cert_pem = Path(self.s2s_cert_path).read_text()
+                ok, cn, _ = _verify_cert_pem(cert_pem, self.s2s_ca_path)
+                if ok and cn:
+                    self.server_id = cn
+            except Exception:
+                pass
+
+        # Final fallback: Platform shortname
+        if self.server_id == 'server_001':
+            try:
+                from csc_platform import Platform
+                shortname = Platform.get_server_shortname()
+                if shortname:
+                    self.server_id = shortname
+            except Exception:
+                pass
 
         # Track which servers have been seen (loop prevention)
         self._seen_servers = {self.server_id}
