@@ -32,29 +32,17 @@ if sys.platform == "win32":
 
 # CSC paths - try to use Platform object for intelligent resolution
 try:
-    from csc_service.shared.platform import Platform
-    _platform = Platform()
-    CSC_ROOT = Path(_platform.get_abs_root_path([]))
+    from csc_platform import Platform
+    CSC_ROOT = Platform.PROJECT_ROOT
 except Exception:
     CSC_ROOT = Path(__file__).resolve().parents[2]
 
-# Add CSC packages to path for Service access
-sys.path.insert(0, str(CSC_ROOT / "irc" / "packages" / "csc-service"))
-sys.path.insert(0, str(CSC_ROOT / "irc" / "packages" / "csc-shared"))
-
-# Import CSC service layer for consistent logging
 try:
-    # Import just the logging utilities, don't instantiate full Service
-    from csc_service.shared.logging import CSCLogger
+    from csc_log import Log as CSCLogger
     HAS_SERVICE = True
 except ImportError:
-    try:
-        # Fallback: import what we can
-        CSCLogger = None
-        HAS_SERVICE = False
-    except:
-        CSCLogger = None
-        HAS_SERVICE = False
+    CSCLogger = None
+    HAS_SERVICE = False
 
 # Model escalation chain: start with cheapest, escalate to more capable
 ESCALATION_CHAIN = [

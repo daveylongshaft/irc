@@ -17,8 +17,8 @@ def test_layer_packages_use_package_chain_imports():
         "packages/csc-version/csc_version/version.py": "from csc_data import Data",
         "packages/csc-platform/csc_platform/platform.py": "from csc_version import Version",
         "packages/csc-network/csc_network/network.py": "from csc_platform import Platform",
-        "packages/csc-service-base/csc_service_base/service.py": "from csc_network import Network",
-        "packages/csc-server-core/csc_server_core/server.py": "from csc_service_base import Service",
+        "packages/csc-services/csc_services/service.py": "from csc_network import Network",
+        "packages/csc-server-core/csc_server_core/server.py": "from csc_services.service import Service",
     }
     for path, expected in expected_imports.items():
         assert expected in _read(path), path
@@ -40,8 +40,8 @@ def test_layer_package_manifests_require_lower_layers():
         "packages/csc-version/pyproject.toml": ["csc-data>=0.1.0"],
         "packages/csc-platform/pyproject.toml": ["csc-version>=0.1.0"],
         "packages/csc-network/pyproject.toml": ["csc-platform>=0.1.0"],
-        "packages/csc-service-base/pyproject.toml": ["csc-network>=0.1.0"],
-        "packages/csc-server-core/pyproject.toml": ["csc-service-base>=0.1.0"],
+        "packages/csc-services/pyproject.toml": ["csc-network>=0.1.0"],
+        "packages/csc-server-core/pyproject.toml": ["csc-services>=0.1.0"],
     }
     for path, dependencies in expected_dependencies.items():
         contents = _read(path)

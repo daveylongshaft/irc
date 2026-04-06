@@ -62,15 +62,14 @@ class MessagingMixin:
                 if hasattr(self.server, 's2s_network'):
                     self.server.s2s_network.route_message(nick, normalized_target, text)
 
-                # Check for embedded service command (<server> AI ...)
-                # Requires explicit target prefix -- bare "ai ..." passes through as chat
+                # Check for embedded service command (AI ... or <server> AI ...)
                 ai_info = self._parse_ai_command(text)
                 if ai_info:
                     target_server, ai_text = ai_info
                     local_id = self._get_local_server_id()
-                    if target_server is not None and target_server.lower() == local_id.lower():
+                    if target_server is None or target_server.lower() == local_id.lower():
                         self._handle_service_via_chatline(ai_text, addr, nick, normalized_target)
-                    elif target_server is not None:
+                    else:
                         self._forward_ai_command(target_server, ai_text, nick, normalized_target, addr)
                 # Check for embedded file upload start (bare or server-prefixed)
                 else:
@@ -78,15 +77,12 @@ class MessagingMixin:
                     if file_info:
                         target_server, file_text = file_info
                         local_id = self._get_local_server_id()
-                        if target_server is None:
-                            self.server.sock_send(b"[Server] Error: File uploads require a target prefix, e.g.: haven.4346 <begin file=MyClass>\n", addr)
-                            return
-                        if target_server.lower() == local_id.lower():
+                        if target_server is None or target_server.lower() == local_id.lower():
                             if not self._is_authorized(nick, normalized_target):
                                 self.server.log(f"[SECURITY] [BLOCKED] File upload blocked from unauthorized user {nick}@{addr}")
                                 self.server.sock_send(b"[Server] Error: IRC operator or channel operator status required for file uploads.\n", addr)
                                 return
-                            self.file_handler.start_session(nick, file_text)
+                            self.file_handler.start_session(addr, file_text)
             else:
                 # Private message to a nick
                 self._maybe_replay_pm_buffer(target, nick)

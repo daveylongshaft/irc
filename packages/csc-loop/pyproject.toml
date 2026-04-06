@@ -12,8 +12,5 @@ dependencies = [
     "csc-services>=0.1.0",
 ]
 
-[project.scripts]
-csc-webhook = "csc_loop.webhook_listener:main"
-
 [tool.setuptools.packages.find]
 where = ["."]

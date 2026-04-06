@@ -19,11 +19,9 @@ from pathlib import Path
 from datetime import datetime
 
 try:
-    from csc_service.shared.platform import Platform
-    PLATFORM = Platform()
-    CSC_ROOT = Path(PLATFORM.get_abs_root_path([]))
+    from csc_platform import Platform
+    CSC_ROOT = Platform.PROJECT_ROOT
 except Exception:
-    PLATFORM = None
     CSC_ROOT = Path(__file__).resolve().parents[2]
 
 def get_api_key():

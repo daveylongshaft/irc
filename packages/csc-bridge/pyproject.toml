@@ -11,8 +11,5 @@ dependencies = [
     "csc-network>=0.1.0",
 ]
 
-[project.scripts]
-csc-bridge = "csc_bridge.main:main"
-
 [tool.setuptools.packages.find]
 where = ["."]
