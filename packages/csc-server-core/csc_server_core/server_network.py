@@ -532,6 +532,12 @@ class ServerLink:
                     self._handle_slinkack_response(line)
                     continue
 
+                if line.startswith("ERROR ") and not self._authenticated:
+                    # Handshake rejected by remote (e.g. tiebreaker)
+                    self._slinkack_error = line[6:].strip()
+                    self._slinkack_received.set()
+                    continue
+
                 # Parse S2S line: COMMAND arg1 arg2 ... :trailing
                 parts = line.split(" ", 1)
                 command = parts[0]
@@ -1286,6 +1292,26 @@ class ServerNetwork:
                             self._listener_sock.sendto(reply_data, addr)
                             continue
 
+                        # Tiebreaker: check before sending SLINKACK so remote knows early
+                        with self._lock:
+                            existing = self._links.get(remote_id)
+                            if existing and existing.is_connected():
+                                if local_id < remote_id:
+                                    # We are the designated connector; reject inbound duplicate
+                                    self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
+                                    reply = "ERROR Tiebreaker: designated connector owns link"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
+                                    peer_links.pop(addr, None)
+                                    continue
+                                else:
+                                    # Remote wins as connector; accept inbound, drop our outbound
+                                    self._log(f"Tiebreaker: accepting inbound from {remote_id}, closing outbound")
+                                    existing.close()
+                            elif existing:
+                                self._log(f"Replacing stale link from {remote_id} with new connection")
+                                existing.close()
+
                         link.remote_server_id = remote_id
                         link.remote_timestamp = remote_ts
                         link._authenticated = True
@@ -1297,22 +1323,6 @@ class ServerNetwork:
                         self._listener_sock.sendto(reply_data, addr)
 
                         with self._lock:
-                            existing = self._links.get(remote_id)
-                            if existing and existing.is_connected():
-                                local_id = self._get_local_server_id()
-                                if local_id < remote_id:
-                                    # We are the designated connector; reject inbound duplicate
-                                    self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
-                                    link.close()
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # Remote wins as connector; accept inbound, drop our outbound
-                                    self._log(f"Tiebreaker: accepting inbound from {remote_id}, closing outbound")
-                                    existing.close()
-                            elif existing:
-                                self._log(f"Replacing stale link from {remote_id} with new connection")
-                                existing.close()
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
@@ -1334,22 +1344,16 @@ class ServerNetwork:
                             self._listener_sock.sendto(reply_data, addr)
                             continue
 
-                        link.remote_server_id = remote_id
-                        link.remote_timestamp = remote_ts
-                        link._authenticated = True
-
-                        reply = f"SLINKACK {local_id} {local_ts}"
-                        reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                        self._listener_sock.sendto(reply_data, addr)
-
+                        # Tiebreaker: check before sending SLINKACK so remote knows early
                         with self._lock:
                             existing = self._links.get(remote_id)
                             if existing and existing.is_connected():
-                                local_id = self._get_local_server_id()
                                 if local_id < remote_id:
                                     # We are the designated connector; reject inbound duplicate
                                     self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
-                                    link.close()
+                                    reply = "ERROR Tiebreaker: designated connector owns link"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
                                     peer_links.pop(addr, None)
                                     continue
                                 else:
@@ -1359,6 +1363,16 @@ class ServerNetwork:
                             elif existing:
                                 self._log(f"Replacing stale link from {remote_id} with new connection")
                                 existing.close()
+
+                        link.remote_server_id = remote_id
+                        link.remote_timestamp = remote_ts
+                        link._authenticated = True
+
+                        reply = f"SLINKACK {local_id} {local_ts}"
+                        reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                        self._listener_sock.sendto(reply_data, addr)
+
+                        with self._lock:
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
