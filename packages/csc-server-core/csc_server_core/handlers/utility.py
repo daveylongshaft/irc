@@ -113,6 +113,17 @@ class UtilityMixin:
             else:
                 names_list.append(display_nick)
 
+        # Include remote S2S users who are in this channel
+        if hasattr(self.server, 's2s_network'):
+            chan_lower = channel.name.lower()
+            with self.server.s2s_network._lock:
+                for link in self.server.s2s_network._links.values():
+                    with link._state_lock:
+                        for ru in link.remote_users.values():
+                            ru_chans = [c.lower() for c in ru.get("channels", [])]
+                            if chan_lower in ru_chans:
+                                names_list.append(ru["nick"])
+
         names = " ".join(sorted(names_list))
         reply = f":{SERVER_NAME} {RPL_NAMREPLY} {nick} = {channel.name} :{names}\r\n"
         self.server.sock_send(reply.encode(), addr)

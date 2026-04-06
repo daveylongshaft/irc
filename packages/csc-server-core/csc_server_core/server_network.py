@@ -702,9 +702,15 @@ class ServerLink:
 
     def _get_local_server_id(self):
         """Return the local server's unique ID."""
-        result = getattr(self.local_server, 'server_id',
-                       os.environ.get('CSC_SERVER_ID', 'server_001'))
-        return result
+        if hasattr(self.local_server, 'server_id') and self.local_server.server_id:
+            return self.local_server.server_id
+        if os.environ.get('CSC_SERVER_ID'):
+            return os.environ['CSC_SERVER_ID']
+        try:
+            from csc_platform import Platform
+            return Platform.get_server_shortname()
+        except Exception:
+            return 'server_001'
 
     def _log(self, message):
         """Log via the local server's logger."""
@@ -1263,16 +1269,10 @@ class ServerNetwork:
 
                         with self._lock:
                             existing = self._links.get(remote_id)
-                            if existing and existing.is_connected():
-                                # Reject duplicate - never close existing link
-                                self._log(f"Rejecting duplicate connection from {remote_id} - existing link active")
-                                link._authenticated = False
-                                link._connected = False
-                                reply = "ERROR Already linked"
-                                reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                self._listener_sock.sendto(reply_data, addr)
-                                peer_links.pop(addr, None)
-                                continue
+                            if existing:
+                                # Replace stale link (handles server restart reconnection)
+                                self._log(f"Replacing stale link from {remote_id} with new connection")
+                                existing.close()
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
@@ -1304,16 +1304,10 @@ class ServerNetwork:
 
                         with self._lock:
                             existing = self._links.get(remote_id)
-                            if existing and existing.is_connected():
-                                # Reject duplicate - never close existing link
-                                self._log(f"Rejecting duplicate connection from {remote_id} - existing link active")
-                                link._authenticated = False
-                                link._connected = False
-                                reply = "ERROR Already linked"
-                                reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                self._listener_sock.sendto(reply_data, addr)
-                                peer_links.pop(addr, None)
-                                continue
+                            if existing:
+                                # Replace stale link (handles server restart reconnection)
+                                self._log(f"Replacing stale link from {remote_id} with new connection")
+                                existing.close()
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
@@ -2408,7 +2402,13 @@ class ServerNetwork:
 
     def _get_local_server_id(self):
         """Return the local server's unique ID."""
-        return getattr(self.local_server, 'server_id', self.server_id)
+        if hasattr(self.local_server, 'server_id') and self.local_server.server_id:
+            return self.local_server.server_id
+        try:
+            from csc_platform import Platform
+            return Platform.get_server_shortname()
+        except Exception:
+            return getattr(self, 'server_id', 'server_001')
 
     def _log(self, message):
         """Log via the local server's logger."""
