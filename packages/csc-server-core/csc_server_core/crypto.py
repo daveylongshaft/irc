@@ -299,7 +299,8 @@ def is_encrypted(data: bytes) -> bool:
                          "OPER", "WALLOPS", "KILL", "ISOP", "BUFFER",
                          "MOTD", "CAP", "CRYPTOINIT", "SLINK", "SLINKACK",
                          "SYNCUSER", "SYNPART", "SYNCNICK", "SYNCCHAN",
-                         "SYNCTOPIC", "SYNCMSG", "SYNCLINE", "DESYNC",
+                         "SYNCTOPIC", "SYNCMSG", "SYNCNOTICE", "SYNCMODE",
+                         "SYNCLINE", "SYNCKEY", "DESYNC",
                          "SQUIT", "ERROR"):
             return False
     except (UnicodeDecodeError, IndexError):

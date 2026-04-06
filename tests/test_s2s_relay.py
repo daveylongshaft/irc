@@ -334,5 +334,191 @@ class TestS2STiebreaker:
         )
 
 
+def _cleanup_vfs_key():
+    """Remove vfs.key from cwd if present (test isolation)."""
+    import pathlib
+    vfs_key = pathlib.Path(os.getcwd()) / "vfs.key"
+    if vfs_key.exists():
+        vfs_key.unlink()
+
+
+class TestS2SSyncKey:
+    """VFS cipher key distribution via SYNCKEY."""
+
+    def test_hub_key_delivered_to_leaf(self):
+        """Hub's pre-configured VFS key arrives at leaf after link."""
+        _cleanup_vfs_key()
+        from csc_server_core.server_network import ServerNetwork
+
+        KEY = "dd" * 32
+        port_hub = _free_udp_port()
+        port_leaf = _free_udp_port()
+
+        hub_srv = FakeServer("haven.alpha")
+        leaf_srv = FakeServer("haven.zeta")
+        hub_net = ServerNetwork(hub_srv)
+        leaf_net = ServerNetwork(leaf_srv)
+        hub_srv.s2s_network = hub_net
+        leaf_srv.s2s_network = leaf_net
+
+        _PW = "testpass_keydeliver"
+        for net in (hub_net, leaf_net):
+            net.s2s_password = _PW
+            net.s2s_role = "leaf"
+            net.s2s_peers = []
+
+        hub_net.s2s_port = port_hub
+        leaf_net.s2s_port = port_leaf
+
+        # Pre-configure key on hub BEFORE connecting
+        hub_net.vfs_cipher_key = KEY
+        hub_net._vfs_key_locked = True
+
+        assert hub_net.start_listener()
+        assert leaf_net.start_listener()
+
+        t = threading.Thread(
+            target=lambda: leaf_net._try_link_to_peer("127.0.0.1", port_hub),
+            daemon=True,
+        )
+        t.start()
+
+        # Wait for key to arrive at leaf
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            if leaf_net.vfs_cipher_key:
+                break
+            time.sleep(0.05)
+
+        # Teardown
+        hub_net._running = False
+        leaf_net._running = False
+        if hub_net._listener_sock:
+            hub_net._listener_sock.close()
+        if leaf_net._listener_sock:
+            leaf_net._listener_sock.close()
+        _cleanup_vfs_key()
+
+        assert leaf_net.vfs_cipher_key == KEY, (
+            f"Leaf key={leaf_net.vfs_cipher_key!r} != hub key={KEY!r}"
+        )
+        assert leaf_net._vfs_key_locked, "Leaf key should be locked after adoption"
+
+    def test_key_locked_after_adoption(self):
+        """Once a key is adopted, a conflicting key is rejected."""
+        _cleanup_vfs_key()
+        from csc_server_core.server_network import ServerNetwork
+
+        port_a = _free_udp_port()
+        port_b = _free_udp_port()
+
+        KEY_A = "aa" * 32   # 32-byte key, hex
+        KEY_B = "bb" * 32   # different key
+
+        srv_a = FakeServer("haven.alpha")
+        srv_b = FakeServer("haven.zeta")
+        net_a = ServerNetwork(srv_a)
+        net_b = ServerNetwork(srv_b)
+        srv_a.s2s_network = net_a
+        srv_b.s2s_network = net_b
+
+        _PW = "testpass_synckey"
+        for net in (net_a, net_b):
+            net.s2s_password = _PW
+            net.s2s_role = "leaf"
+            net.s2s_peers = []
+
+        net_a.s2s_port = port_a
+        net_b.s2s_port = port_b
+
+        # Pre-configure key A on net_a
+        net_a.vfs_cipher_key = KEY_A
+        net_a._vfs_key_locked = True
+
+        assert net_a.start_listener()
+        assert net_b.start_listener()
+
+        # b connects to a — b should receive KEY_A
+        t = threading.Thread(target=lambda: net_b._try_link_to_peer("127.0.0.1", port_a), daemon=True)
+        t.start()
+
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            if net_b.vfs_cipher_key:
+                break
+            time.sleep(0.05)
+
+        assert net_b.vfs_cipher_key == KEY_A, f"Expected KEY_A, got {net_b.vfs_cipher_key!r}"
+        assert net_b._vfs_key_locked
+
+        # Now try to push KEY_B to b — should be rejected
+        rejected = not net_b.adopt_vfs_key(KEY_B, source_server_id="attacker")
+        assert rejected, "Key conflict should have been rejected"
+        assert net_b.vfs_cipher_key == KEY_A, "Key should still be KEY_A after rejection"
+
+        # Teardown
+        net_a._running = False; net_b._running = False
+        if net_a._listener_sock: net_a._listener_sock.close()
+        if net_b._listener_sock: net_b._listener_sock.close()
+        _cleanup_vfs_key()
+
+    def test_mesh_key_propagation(self):
+        """Key propagates A->B->C in a chain (mesh routing)."""
+        _cleanup_vfs_key()
+        from csc_server_core.server_network import ServerNetwork
+
+        KEY = "cc" * 32
+
+        ports = [_free_udp_port() for _ in range(3)]
+        servers = [FakeServer(f"haven.node{i}") for i in range(3)]
+        nets = [ServerNetwork(s) for s in servers]
+
+        for srv, net in zip(servers, nets):
+            srv.s2s_network = net
+            net.s2s_password = "testpass_mesh"
+            net.s2s_role = "leaf"
+            net.s2s_peers = []
+
+        for i, (net, port) in enumerate(zip(nets, ports)):
+            net.s2s_port = port
+            assert net.start_listener()
+
+        # Pre-configure key only on node 0 (hub); clear any disk-loaded key from nodes 1,2
+        nets[0].vfs_cipher_key = KEY
+        nets[0]._vfs_key_locked = True
+        for net in nets[1:]:
+            net.vfs_cipher_key = ""
+            net._vfs_key_locked = False
+
+        # Connect: node1 -> node0, node2 -> node1
+        def _connect(leaf_net, hub_port):
+            leaf_net._try_link_to_peer("127.0.0.1", hub_port)
+
+        t1 = threading.Thread(target=_connect, args=(nets[1], ports[0]), daemon=True)
+        t1.start()
+        t1.join(timeout=10)
+
+        t2 = threading.Thread(target=_connect, args=(nets[2], ports[1]), daemon=True)
+        t2.start()
+        t2.join(timeout=10)
+
+        # Wait for key to propagate to node2 via node1
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            if nets[2].vfs_cipher_key:
+                break
+            time.sleep(0.05)
+
+        # Teardown
+        for net in nets:
+            net._running = False
+            if net._listener_sock:
+                net._listener_sock.close()
+        _cleanup_vfs_key()
+
+        assert nets[1].vfs_cipher_key == KEY, f"Node1 missing key: {nets[1].vfs_cipher_key!r}"
+        assert nets[2].vfs_cipher_key == KEY, f"Node2 missing key: {nets[2].vfs_cipher_key!r}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

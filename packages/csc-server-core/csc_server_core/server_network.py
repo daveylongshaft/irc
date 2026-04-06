@@ -909,6 +909,15 @@ class ServerNetwork:
         # Track which servers have been seen (loop prevention)
         self._seen_servers = {self.server_id}
 
+        # VFS cipher key distribution
+        # Loaded from csc-service.json "vfs_cipher_key" (hub pre-configures it).
+        # Leaves start empty and adopt it on first SYNCKEY from any peer.
+        # Persisted to {csc_root}/vfs.key so it survives restarts.
+        # Locked after first receive — won't accept a different key until vfs.key is deleted.
+        self.vfs_cipher_key = ""       # hex-encoded 32-byte AES key
+        self._vfs_key_locked = False   # True once key is set from any source
+        self._load_vfs_key()
+
         # Peer linking
         self._peer_link_thread = None
         self._last_peer_link_attempt = {}
@@ -952,6 +961,97 @@ class ServerNetwork:
                 self._log(f"S2S peers configured: {len(self.s2s_peers)}")
         except Exception as e:
             self._log(f"WARNING: Could not load cert config: {e}")
+
+    # ------------------------------------------------------------------
+    # VFS cipher key management
+    # ------------------------------------------------------------------
+
+    def _vfs_key_path(self):
+        """Path to the persisted VFS key file ({csc_root}/vfs.key)."""
+        csc_root = os.environ.get('CSC_HOME', '') or os.getcwd()
+        return Path(csc_root) / "vfs.key"
+
+    def _load_vfs_key(self):
+        """Load VFS cipher key from csc-service.json or vfs.key file."""
+        import json as _json
+
+        # 1. Check csc-service.json for a pre-configured key (hub)
+        csc_root = os.environ.get('CSC_HOME', '') or os.getcwd()
+        cfg_path = Path(csc_root) / "csc-service.json"
+        if cfg_path.exists():
+            try:
+                cfg = _json.loads(cfg_path.read_text())
+                key = cfg.get("vfs_cipher_key", "").strip()
+                if key:
+                    self.vfs_cipher_key = key
+                    self._vfs_key_locked = True
+                    self._log(f"VFS key loaded from csc-service.json")
+                    return
+            except Exception:
+                pass
+
+        # 2. Check persisted vfs.key file (leaf that already received a key)
+        kp = self._vfs_key_path()
+        if kp.exists():
+            try:
+                key = kp.read_text().strip()
+                if len(bytes.fromhex(key)) == 32:
+                    self.vfs_cipher_key = key
+                    self._vfs_key_locked = True
+                    self._log(f"VFS key loaded from vfs.key")
+            except Exception:
+                pass
+
+    def _save_vfs_key(self):
+        """Persist VFS key to vfs.key file."""
+        try:
+            self._vfs_key_path().write_text(self.vfs_cipher_key)
+        except Exception as e:
+            self._log(f"Failed to save VFS key: {e}")
+
+    def adopt_vfs_key(self, key_hex, source_server_id="?"):
+        """Adopt a VFS cipher key received from a peer.
+
+        Locked after first adoption — subsequent calls with a different key
+        are rejected. Delete vfs.key to reset.
+
+        Returns True if the key was adopted or already matches.
+        """
+        if not key_hex:
+            return False
+        # Validate: must decode to exactly 32 bytes
+        try:
+            if len(bytes.fromhex(key_hex)) != 32:
+                self._log(f"SYNCKEY from {source_server_id}: invalid key length, ignoring")
+                return False
+        except ValueError:
+            self._log(f"SYNCKEY from {source_server_id}: non-hex key, ignoring")
+            return False
+
+        if self._vfs_key_locked:
+            if self.vfs_cipher_key == key_hex:
+                return True  # already have it
+            self._log(
+                f"SYNCKEY from {source_server_id}: key conflict — already locked to a different key. "
+                f"Delete vfs.key to reset."
+            )
+            return False
+
+        self.vfs_cipher_key = key_hex
+        self._vfs_key_locked = True
+        self._save_vfs_key()
+        self._log(f"VFS key adopted from {source_server_id} and locked")
+
+        # Propagate to all currently connected peers (mesh)
+        self._broadcast_synckey(exclude_server=source_server_id)
+        return True
+
+    def _broadcast_synckey(self, exclude_server=None):
+        """Send SYNCKEY to all connected links except exclude_server."""
+        if not self.vfs_cipher_key:
+            return
+        self.broadcast_to_network("SYNCKEY", self.vfs_cipher_key,
+                                  exclude_server=exclude_server)
 
     def start_listener(self):
         """Start the UDP listener for inbound S2S connections with DH encryption."""
@@ -1721,6 +1821,11 @@ class ServerNetwork:
             if ch.topic:
                 link.send_message("SYNCTOPIC", ch.name, ":" + ch.topic)
 
+        # Distribute VFS cipher key to the new peer
+        if self.vfs_cipher_key:
+            link.send_message("SYNCKEY", self.vfs_cipher_key)
+            self._log(f"SYNCKEY sent to {link.remote_server_id}")
+
     def _send_syncchan_multi(self, link, channel_name, modes_str, members, max_json_size):
         """Send SYNCCHAN message(s), splitting large member lists across multiple lines.
 
@@ -1785,6 +1890,7 @@ class ServerNetwork:
             "SYNCNOTICE": self._handle_syncnotice,
             "SYNCMODE": self._handle_syncmode,
             "SYNCLINE": self._handle_syncline,
+            "SYNCKEY":  self._handle_synckey,
             "DESYNC":   self._handle_desync,
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
@@ -2303,6 +2409,27 @@ class ServerNetwork:
         self.broadcast_to_network(
             "SQUIT", rest, exclude_server=link.remote_server_id
         )
+
+    def _handle_synckey(self, link, rest):
+        """Handle SYNCKEY: adopt and propagate the network VFS cipher key.
+
+        Format: SYNCKEY <key_hex>
+
+        A server adopts the key on first receipt and locks it.
+        Subsequent SYNCKEY with a different key is rejected (delete vfs.key to reset).
+        The key is immediately propagated to all other connected peers (mesh).
+        """
+        key_hex = rest.strip()
+        if not self.adopt_vfs_key(key_hex, source_server_id=link.remote_server_id):
+            # Key conflict — disconnect the offending link immediately
+            self._log(
+                f"Disconnecting {link.remote_server_id}: VFS key conflict. "
+                f"Delete vfs.key to reset."
+            )
+            with self._lock:
+                if self._links.get(link.remote_server_id) is link:
+                    self._links.pop(link.remote_server_id, None)
+            link.close()
 
     def _handle_error(self, link, rest):
         """Handle ERROR message from a peer."""
