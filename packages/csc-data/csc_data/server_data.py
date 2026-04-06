@@ -694,12 +694,21 @@ class ServerData:
             channel.ban_list = set(ch_data.get("ban_list", []))
             channel.invite_list = set(ch_data.get("invite_list", []))
             channel.created = ch_data.get("created", time.time())
+            # Preserve remote S2S members before clearing (addr=None, remote_server set)
+            remote_members = {
+                k: v for k, v in channel.members.items()
+                if v.get("addr") is None and v.get("remote_server")
+            }
             channel.members.clear()
             for nick, member_data in ch_data.get("members", {}).items():
                 addr = tuple(member_data.get("addr", ()))
                 modes = set(member_data.get("modes", []))
                 if addr:
                     channel.add_member(nick, addr, modes)
+            # Re-add remote members that were wiped by clear
+            for nick_lower, info in remote_members.items():
+                if nick_lower not in channel.members:
+                    channel.members[nick_lower] = info
             count += 1
 
         chanserv_data = self.load_chanserv()
