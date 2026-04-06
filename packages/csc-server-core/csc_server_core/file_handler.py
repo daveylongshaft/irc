@@ -2,6 +2,7 @@ import os
 import time
 import re
 from pathlib import Path
+from csc_platform import Platform
 from csc_server_core.irc import SERVER_NAME
 
 class FileHandler:
@@ -12,12 +13,11 @@ class FileHandler:
     def __init__(self, server):
         self.server = server
         self.sessions = {}
-        self.project_root = Path(getattr(server, "project_root_dir", Path.cwd()))
+        self.project_root = Platform.PROJECT_ROOT
 
-        self.services_dir = self.project_root / "services"
-        self.staging_dir = self.project_root / "staging_uploads"
+        self.services_dir = Platform.get_services_dir()
+        self.staging_dir = Platform.PROJECT_ROOT / "tmp" / "staging_uploads"
 
-        self.services_dir.mkdir(parents=True, exist_ok=True)
         self.staging_dir.mkdir(parents=True, exist_ok=True)
 
     def start_session(self, addr, line):

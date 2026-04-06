@@ -256,7 +256,6 @@ def main():
     # so we need to block the main thread to keep them alive
     # Also check for SHUTDOWN file to allow graceful termination
     import threading
-    from pathlib import Path
 
     # Find project root for SHUTDOWN file
     csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')

@@ -29,7 +29,7 @@ class AgentExecutor:
         """
         try:
             # Get agent's queue/in/orders.md path
-            from csc_service.shared.platform import Platform
+            from csc_platform import Platform
             queue_in_dir = Platform.get_agent_queue_dir(agent_name, "in")
             orders_path = queue_in_dir / "orders.md"
 
