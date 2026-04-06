@@ -1,0 +1,101 @@
+{
+  "categories": {
+    "user": {
+      "entries": [
+        "davey-collaboration-preferences"
+      ],
+      "updated_at": "2026-04-06T17:51:18Z"
+    },
+    "environment": {
+      "entries": [
+        "server-topology"
+      ],
+      "updated_at": "2026-04-06T17:51:18Z"
+    },
+    "workflow": {
+      "entries": [
+        "temp-clone-git-workflow"
+      ],
+      "updated_at": "2026-04-06T17:51:18Z"
+    },
+    "tasks": {
+      "entries": [
+        "s2s-linking-investigation"
+      ],
+      "updated_at": "2026-04-06T17:52:03Z"
+    }
+  },
+  "entries": {
+    "davey-collaboration-preferences": {
+      "slug": "davey-collaboration-preferences",
+      "title": "Davey Collaboration Preferences",
+      "category": "user",
+      "summary": "Preserve interrupted work, track finished vs unfinished tasks, and avoid rereading irrelevant history.",
+      "status": "reference",
+      "tags": [
+        "context",
+        "user",
+        "workflow"
+      ],
+      "related": [],
+      "path": "user/davey-collaboration-preferences.md",
+      "created_at": "2026-04-06T17:51:18Z",
+      "updated_at": "2026-04-06T17:51:18Z"
+    },
+    "server-topology": {
+      "slug": "server-topology",
+      "title": "Current Server Topology",
+      "category": "environment",
+      "summary": "Local host is haven.4346; remote servers are haven.ef6e, beacon.83eb, and well.b7ea over hosts/VPN.",
+      "status": "reference",
+      "tags": [
+        "environment",
+        "network",
+        "servers"
+      ],
+      "related": [],
+      "path": "environment/server-topology.md",
+      "created_at": "2026-04-06T17:51:18Z",
+      "updated_at": "2026-04-06T17:51:18Z"
+    },
+    "temp-clone-git-workflow": {
+      "slug": "temp-clone-git-workflow",
+      "title": "Temp Clone Git Workflow",
+      "category": "workflow",
+      "summary": "Do implementation work in C:/csc/tmp/irc on a feature branch, open a PR, and keep the main checkout disposable.",
+      "status": "reference",
+      "tags": [
+        "git",
+        "temp-clone",
+        "workflow"
+      ],
+      "related": [
+        "davey-collaboration-preferences"
+      ],
+      "path": "workflow/temp-clone-git-workflow.md",
+      "created_at": "2026-04-06T17:51:18Z",
+      "updated_at": "2026-04-06T17:51:18Z"
+    },
+    "s2s-linking-investigation": {
+      "slug": "s2s-linking-investigation",
+      "title": "S2S Linking Investigation",
+      "category": "tasks",
+      "summary": "Unfinished work to restore haven.4346 <-> haven.ef6e server linking and synchronized #general membership.",
+      "status": "stashed",
+      "tags": [
+        "networking",
+        "resume",
+        "s2s",
+        "unfinished"
+      ],
+      "related": [
+        "server-topology",
+        "temp-clone-git-workflow"
+      ],
+      "path": "tasks/s2s-linking-investigation.md",
+      "created_at": "2026-04-06T17:51:18Z",
+      "updated_at": "2026-04-06T17:52:03Z"
+    }
+  },
+  "updated_at": "2026-04-06T17:52:03Z"
+}

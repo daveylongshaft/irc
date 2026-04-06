@@ -1,0 +1,30 @@
+{
+  "links": [
+    {
+      "source": "s2s-linking-investigation",
+      "target": "server-topology",
+      "relation": "depends-on"
+    },
+    {
+      "source": "s2s-linking-investigation",
+      "target": "temp-clone-git-workflow",
+      "relation": "must-follow"
+    },
+    {
+      "source": "s2s-linking-investigation",
+      "target": "server-topology",
+      "relation": "related"
+    },
+    {
+      "source": "s2s-linking-investigation",
+      "target": "temp-clone-git-workflow",
+      "relation": "related"
+    },
+    {
+      "source": "temp-clone-git-workflow",
+      "target": "davey-collaboration-preferences",
+      "relation": "related"
+    }
+  ],
+  "updated_at": "2026-04-06T17:52:03Z"
+}
