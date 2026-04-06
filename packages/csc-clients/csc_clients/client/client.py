@@ -5,16 +5,15 @@ import time
 import threading
 from pathlib import Path
 import socket
-from csc_network import Network
+from csc_services import Service
 from .aliases import Aliases
 from .macros import Macros
 from .client_file_handler import ClientFileHandler
-from .client_service_handler import ClientServiceHandler
 from csc_data import Data
 from csc_server_core.irc import parse_irc_message, format_irc_message, SERVER_NAME
 
 
-class Client(Network):
+class Client(Service):
     """
     UDP client with IRC protocol support, identity, macros, aliases, and text-file uploads.
     """
@@ -78,7 +77,6 @@ class Client(Network):
         # project_root is /c/csc/irc/packages/csc-service (csc_loop package root)
         self.project_root_dir = Path(__file__).resolve().parent.parent.parent
         self._client_file_handler = ClientFileHandler(self)
-        self._client_service_handler = ClientServiceHandler(self)
 
     # ==========================================================
     # CONFIGURATION
@@ -903,36 +901,32 @@ class Client(Network):
             self._handle_local_file_session_line(nick, text, target)
             return True
 
-        # Check for nick-prefixed command: "<own_nick> AI ..." or "<own_nick> upload ..."
+        # Check for nick-prefixed command: "<own_nick> AI ..." or "<own_nick> <begin file=..."
         nick_prefix = f"{self.name} "
         if text.startswith(nick_prefix):
-            # Authorization check
             if not self._is_authorized(nick, target if target.startswith("#") else None):
-                self.log(f"[SECURITY] 🚫 Command from unauthorized user {nick} ignored: {text}")
+                self.log(f"[SECURITY] Command from unauthorized user {nick} ignored: {text}")
                 return False
 
             cmd_text = text[len(nick_prefix):].strip()
             reply_target = target if target.startswith("#") else nick
 
-            if cmd_text.startswith("AI "):
-                # Local service execution
-                print(f"[LOCAL EXEC] Executing service command from {nick}: {cmd_text}")
-                self.log(f"[LOCAL EXEC] Service command from {nick}: {cmd_text}")
-                token, result = self._client_service_handler.execute(cmd_text, nick)
-                if token != "0":
-                    full_response = f"{token} {result}" if token else result
-                    print(f"[LOCAL RESULT] {full_response}")
-                    self._last_message_sent = f"PRIVMSG {reply_target} :{full_response}\r\n"
-                    super().send(self._last_message_sent)
+            parsed_cmd = self.parse_service_command(cmd_text)
+            if parsed_cmd is not None:
+                token = parsed_cmd["token"]
+                result = self.handle_command(
+                    parsed_cmd["class_name"], parsed_cmd["method"], parsed_cmd["args"],
+                    nick, None
+                )
+                full_response = f"{token} {result}" if token else str(result)
+                self._last_message_sent = f"PRIVMSG {reply_target} :{full_response}\r\n"
+                self.send(self._last_message_sent)
                 return True
 
             elif cmd_text.startswith("<begin file=") or cmd_text.startswith("<append file="):
-                # Local file upload FROM the sender
-                print(f"[LOCAL FILE] Accepting file upload from {nick}: {cmd_text}")
-                self.log(f"[LOCAL FILE] File upload from {nick}: {cmd_text}")
                 self._client_file_handler.start_session(nick, cmd_text)
                 return True
-        
+
         return False
 
     def _handle_local_file_session_line(self, sender_nick, text, target):
