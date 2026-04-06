@@ -54,13 +54,17 @@ class MessagingMixin:
                 # Normalize channel name to lowercase for consistent output (RFC 1459)
                 normalized_target = target.lower()
                 out = format_irc_message(prefix, "PRIVMSG", [normalized_target], text) + "\r\n"
+
+                # S2S: Relay to federation network BEFORE presenting locally.
+                # Remote servers receive and re-relay before presenting, so all
+                # channel members across the network see the message at roughly
+                # the same time (bounded by slowest relay hop, not split T=0/T=N).
+                if hasattr(self.server, 's2s_network'):
+                    self.server.s2s_network.route_message(nick, normalized_target, text)
+
                 # Wakeword-filtered broadcast: check each recipient individually
                 self._broadcast_privmsg_filtered(channel, out, text, nick, exclude=addr)
                 self.server.chat_buffer.append(normalized_target, nick, "PRIVMSG", text)
-
-                # S2S: Route channel message to federation network
-                if hasattr(self.server, 's2s_network'):
-                    self.server.s2s_network.route_message(nick, normalized_target, text)
 
                 # Check for embedded service command (AI ... or <server> AI ...)
                 ai_info = self._parse_ai_command(text)
@@ -123,6 +127,9 @@ class MessagingMixin:
                     # Normalize channel name to lowercase for consistent output (RFC 1459)
                     normalized_target = target.lower()
                     out = format_irc_message(prefix, "NOTICE", [normalized_target], text) + "\r\n"
+                    # Relay to peers before presenting locally (relay-then-present)
+                    if hasattr(self.server, 's2s_network'):
+                        self.server.s2s_network.route_notice(nick, normalized_target, text)
                     self.server.broadcast_to_channel(normalized_target, out, exclude=addr)
                     self.server.chat_buffer.append(normalized_target, nick, "NOTICE", text)
             else:

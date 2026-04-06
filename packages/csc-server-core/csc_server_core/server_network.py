@@ -2226,6 +2226,15 @@ class ServerNetwork:
         source_host = f"{source_nick}!{source_nick}@{link.remote_server_id}"
         irc_msg = format_irc_message(source_host, "PRIVMSG", [target], text) + "\r\n"
 
+        # Re-relay to other peers BEFORE presenting locally (relay-then-present).
+        # Each hop forwards first so all servers in the tree receive and re-relay
+        # before any local members see the message, minimising relative latency
+        # across the network.
+        if origin_server_id != self.server_id:
+            self.broadcast_to_network("SYNCMSG", rest, exclude_server=origin_server_id)
+            self._log(f"SYNCMSG re-broadcast: from {origin_server_id} via {link.remote_server_id} "
+                     f"to {source_nick} -> {target}")
+
         if target.startswith("#") or target.startswith("&"):
             # Channel message - broadcast to local members
             server.broadcast_to_channel(target, irc_msg)
@@ -2237,14 +2246,6 @@ class ServerNetwork:
             # Log to chat buffer
             pm_key = "".join(sorted([source_nick.lower(), target.lower()]))
             server.chat_buffer.append(pm_key, source_nick, "PRIVMSG", text)
-
-        # Re-broadcast to other peers (not origin, not incoming link)
-        # This ensures all servers in non-mesh topologies see the message
-        if origin_server_id != self.server_id:
-            # We're not the origin, so forward to other peers
-            self.broadcast_to_network("SYNCMSG", rest, exclude_server=origin_server_id)
-            self._log(f"SYNCMSG re-broadcast: from {origin_server_id} via {link.remote_server_id} "
-                     f"to {source_nick} → {target}")
 
     def _handle_syncnotice(self, link, rest):
         """Handle SYNCNOTICE: deliver a NOTICE from the network locally and re-broadcast to other peers.
@@ -2271,18 +2272,16 @@ class ServerNetwork:
         source_host = f"{source_nick}!{source_nick}@{link.remote_server_id}"
         irc_msg = format_irc_message(source_host, "NOTICE", [target], text) + "\r\n"
 
+        # Re-relay before presenting locally (relay-then-present)
+        if origin_server_id != self.server_id:
+            self.broadcast_to_network("SYNCNOTICE", rest, exclude_server=origin_server_id)
+            self._log(f"SYNCNOTICE re-broadcast: from {origin_server_id} via {link.remote_server_id} "
+                     f"to {source_nick} -> {target}")
+
         if target.startswith("#") or target.startswith("&"):
             server.broadcast_to_channel(target, irc_msg)
         else:
             server.send_to_nick(target, irc_msg)
-
-        # Re-broadcast to other peers (not origin, not incoming link)
-        # This ensures all servers in non-mesh topologies see the notice
-        if origin_server_id != self.server_id:
-            # We're not the origin, so forward to other peers
-            self.broadcast_to_network("SYNCNOTICE", rest, exclude_server=origin_server_id)
-            self._log(f"SYNCNOTICE re-broadcast: from {origin_server_id} via {link.remote_server_id} "
-                     f"to {source_nick} → {target}")
 
     def _handle_syncmode(self, link, rest):
         """Handle SYNCMODE: apply a remote channel mode change.
