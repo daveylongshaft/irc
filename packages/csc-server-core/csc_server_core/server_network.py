@@ -1761,6 +1761,7 @@ class ServerNetwork:
             "DESYNC":   self._handle_desync,
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
+            "SYNCCMD":  self._handle_synccmd,
         }
         handler = handlers.get(command)
         if handler:
@@ -1910,6 +1911,41 @@ class ServerNetwork:
 
         # Re-broadcast
         self.broadcast_to_network("SYNPART", rest, exclude_server=link.remote_server_id)
+
+    def _handle_synccmd(self, link, rest):
+        """Handle SYNCCMD: execute a remote AI service command on this server.
+
+        Format: SYNCCMD <nick> <channel> <target_server> :<ai_text>
+
+        When a client on a remote server sends an AI command targeted at this
+        server (e.g. "haven.ef6e ai tok class method"), the originating server
+        forwards it here via SYNCCMD. We execute locally and the result is
+        routed back via broadcast_to_channel + route_message (SYNCMSG).
+        """
+        parts = rest.split(" ", 3)
+        if len(parts) < 4:
+            return
+
+        nick = parts[0]
+        channel = parts[1]
+        target_server = parts[2]
+        ai_text = parts[3][1:] if parts[3].startswith(":") else parts[3]
+
+        # Only execute if we are the intended target
+        if target_server.lower() != self.server_id.lower():
+            # Forward to other peers in case we're not directly connected to target
+            self.broadcast_to_network("SYNCCMD", rest, exclude_server=link.remote_server_id)
+            return
+
+        self._log(f"Executing remote command from {nick} via {link.remote_server_id}: {ai_text}")
+
+        # Execute via the local server's message handler on behalf of the remote nick.
+        # addr=None because the client is remote; channel provides the response path.
+        ch_name = channel if (channel and channel != "*") else None
+        try:
+            self.local_server.message_handler._handle_service_via_chatline(ai_text, None, nick, ch_name)
+        except Exception as e:
+            self._log(f"SYNCCMD execution error: {e}")
 
     def _handle_syncnick(self, link, rest):
         """Handle SYNCNICK: remote user changes nickname.
