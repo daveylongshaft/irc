@@ -1892,16 +1892,19 @@ class ServerNetwork:
                     chans.remove(channel_name)
                     link.remote_users[nick_lower]["channels"] = chans
 
-        # Remove from local channel if present
+        # Remove from local channel if present, then notify local clients.
+        # Note: sync_from_disk() (called inside broadcast) can evict remote users
+        # from ch.members before SYNPART arrives, so we always broadcast even if
+        # the remote user is no longer tracked in ch.members.
         ch = self.local_server.channel_manager.get_channel(channel_name)
-        if ch and nick_lower in ch.members:
-            if ch.members[nick_lower].get("remote_server") == link.remote_server_id:
+        if ch:
+            if nick_lower in ch.members and ch.members[nick_lower].get("remote_server") == link.remote_server_id:
                 del ch.members[nick_lower]
-                # Broadcast PART to local clients
-                from csc_server_core.irc import format_irc_message
-                prefix = f"{nick}!{nick}@{link.remote_server_id}"
-                part_msg = format_irc_message(prefix, "PART", [channel_name], reason) + "\r\n"
-                self.local_server.broadcast_to_channel(channel_name, part_msg)
+            # Always notify local clients so they see the PART
+            from csc_server_core.irc import format_irc_message
+            prefix = f"{nick}!{nick}@{link.remote_server_id}"
+            part_msg = format_irc_message(prefix, "PART", [channel_name], reason) + "\r\n"
+            self.local_server.broadcast_to_channel(channel_name, part_msg)
 
         self._log(f"Synced remote PART: {nick} from {channel_name}")
 
