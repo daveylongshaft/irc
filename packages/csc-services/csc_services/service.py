@@ -89,15 +89,18 @@ class Service( Network ):
 
         if not module:
             # Fall back to bare module name from PROJECT_ROOT/services/
+            # Also try {name}_service -- file_handler uploads land as sv<token>_service.py
             bare_name = class_name_raw.lower()
-            try:
-                if bare_name in sys.modules:
-                    module = importlib.reload( sys.modules[bare_name] )
-                else:
-                    module = importlib.import_module( bare_name )
-                module_name_used = bare_name
-            except ImportError:
-                pass
+            for candidate in [bare_name, bare_name + "_service"]:
+                try:
+                    if candidate in sys.modules:
+                        module = importlib.reload( sys.modules[candidate] )
+                    else:
+                        module = importlib.import_module( candidate )
+                    module_name_used = candidate
+                    break
+                except ImportError:
+                    continue
             if not module:
                 return f"Error: Module for '{class_name_raw}' not found in {namespaces} or services dir."
 
