@@ -95,13 +95,14 @@ class FtpProtocol:
         )
 
     @staticmethod
-    def make_register_ack(accepted, master_id, reason=""):
+    def make_register_ack(accepted, master_id, reason="", vfs_cipher_key=""):
         """Build a REGISTER_ACK message."""
         return FtpProtocol.encode(
             FtpProtocol.CMD_REGISTER_ACK,
             accepted=accepted,
             master_id=master_id,
             reason=reason,
+            vfs_cipher_key=vfs_cipher_key,
         )
 
     @staticmethod

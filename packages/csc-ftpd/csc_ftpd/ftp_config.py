@@ -32,6 +32,7 @@ class FtpConfig:
         "inventory_refresh_interval": 300,
         "fxp_enabled": True,
         "tls_required": True,
+        "vfs_cipher_key": "",
     }
 
     def __init__(self, config_dict=None, csc_root=None):

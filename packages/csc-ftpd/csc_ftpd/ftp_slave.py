@@ -93,6 +93,11 @@ class FtpSlave:
         )
         t3.start()
 
+        # Start transparent FTP proxy: client connects to us, we relay to master
+        from .ftp_proxy import FtpProxyListener
+        self._proxy = FtpProxyListener(self.config)
+        self._proxy.start()
+
         log.info("FtpSlave started")
 
     def stop(self):
@@ -203,6 +208,10 @@ class FtpSlave:
             return
 
         self._connected = True
+        vfs_key = msg.get("vfs_cipher_key", "")
+        if vfs_key:
+            self.config.vfs_cipher_key = vfs_key
+            log.info("FtpSlave: received VFS cipher key from master")
         log.info("FtpSlave: registered with master %s (master_id=%s)",
                  self.config.master_host, msg.get("master_id", ""))
 

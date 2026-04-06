@@ -192,10 +192,11 @@ class FtpMaster:
             tls_conn.close()
             return
 
-        # Send ACK
+        # Send ACK (include VFS cipher key so slaves adopt master encryption)
         master_id = socket.gethostname()
+        vfs_key = getattr(self.config, "vfs_cipher_key", "")
         FtpProtocol.send_msg(tls_conn, FtpProtocol.make_register_ack(
-            True, master_id
+            True, master_id, vfs_cipher_key=vfs_key
         ))
 
         # Create slave connection object
