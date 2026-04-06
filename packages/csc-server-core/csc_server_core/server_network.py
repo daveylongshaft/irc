@@ -1826,6 +1826,11 @@ class ServerNetwork:
             link.send_message("SYNCKEY", self.vfs_cipher_key)
             self._log(f"SYNCKEY sent to {link.remote_server_id}")
 
+        # Flush pending services updates (changes made while offline) then send
+        # full authoritative services state so both sides converge.
+        self._flush_pending_services(link)
+        self._send_services_sync(link)
+
     def _send_syncchan_multi(self, link, channel_name, modes_str, members, max_json_size):
         """Send SYNCCHAN message(s), splitting large member lists across multiple lines.
 
@@ -1890,10 +1895,13 @@ class ServerNetwork:
             "SYNCNOTICE": self._handle_syncnotice,
             "SYNCMODE": self._handle_syncmode,
             "SYNCLINE": self._handle_syncline,
-            "SYNCKEY":  self._handle_synckey,
-            "DESYNC":   self._handle_desync,
-            "SQUIT":    self._handle_squit,
-            "ERROR":    self._handle_error,
+            "SYNCKEY":        self._handle_synckey,
+            "SYNCSERVICES":   self._handle_syncservices,
+            "SERVICESUPDATE": self._handle_servicesupdate,
+            "SYNCREQUEST":    self._handle_syncrequest,
+            "DESYNC":         self._handle_desync,
+            "SQUIT":          self._handle_squit,
+            "ERROR":          self._handle_error,
         }
         handler = handlers.get(command)
         if handler:
@@ -2433,6 +2441,233 @@ class ServerNetwork:
     def _handle_error(self, link, rest):
         """Handle ERROR message from a peer."""
         self._log(f"Error from {link.remote_server_id}: {rest}")
+
+    # ==================================================================
+    # Services federation: SYNCSERVICES, SERVICESUPDATE, SYNCREQUEST
+    # ==================================================================
+
+    def _flush_pending_services(self, link):
+        """Send any locally-queued services changes to a newly connected peer."""
+        import json as _json
+        sync = getattr(self.local_server, 'services_sync', None)
+        if not sync:
+            return
+        pending = sync.get_pending()
+        if not pending:
+            return
+        for entry in pending:
+            seq = sync.next_seq()
+            args = (f"{self.server_id} {seq} {entry['type']} {entry['key']} "
+                    f"{entry['timestamp']} {entry['action']} "
+                    f":{_json.dumps(entry['record'] or {})}")
+            sync.record_outbound(self.server_id, seq, args)
+            link.send_message("SERVICESUPDATE", args)
+        sync.clear_all_pending()
+        self._log(f"Flushed {len(pending)} pending services updates to {link.remote_server_id}")
+
+    def _send_services_sync(self, link):
+        """Send full NickServ and ChanServ state to a peer (used on link-up)."""
+        import json as _json
+        server = self.local_server
+        sync = getattr(server, 'services_sync', None)
+        seq = sync.current_seq() if sync else 0
+
+        ns_data = server.load_nickserv()
+        link.send_message("SYNCSERVICES",
+                          f"{self.server_id} {seq} nickserv "
+                          f":{_json.dumps(ns_data.get('nicks', {}))}")
+
+        cs_data = server.load_chanserv()
+        link.send_message("SYNCSERVICES",
+                          f"{self.server_id} {seq} chanserv "
+                          f":{_json.dumps(cs_data.get('channels', {}))}")
+
+        self._log(f"SYNCSERVICES sent to {link.remote_server_id} (seq={seq})")
+
+    def broadcast_services_update(self, stype, key, action, record):
+        """Broadcast a single services record change to all connected peers.
+
+        If no peers are connected the change is queued in the pending file and
+        will be flushed on next link-up.
+
+        Format: SERVICESUPDATE <origin> <seq> <stype> <key> <timestamp> <action> :<json>
+        """
+        import json as _json
+        sync = getattr(self.local_server, 'services_sync', None)
+        ts = record.get("updated_at", time.time()) if record else time.time()
+        seq = sync.next_seq() if sync else 0
+        args = (f"{self.server_id} {seq} {stype} {key} {ts} {action} "
+                f":{_json.dumps(record or {})}")
+        if sync:
+            sync.record_outbound(self.server_id, seq, args)
+
+        sent = False
+        with self._lock:
+            links = list(self._links.values())
+        for link in links:
+            if link.is_connected():
+                link.send_message("SERVICESUPDATE", args)
+                sent = True
+
+        if not sent and sync:
+            sync.record_local_update(stype, key, action, record)
+
+    def _handle_servicesupdate(self, link, rest):
+        """Handle SERVICESUPDATE: relay-then-present single record change.
+
+        Format: SERVICESUPDATE <origin> <seq> <stype> <key> <timestamp> <action> :<json>
+        """
+        import json as _json
+        parts = rest.split(" ", 6)
+        if len(parts) < 7:
+            return
+
+        origin = parts[0]
+        try:
+            seq = int(parts[1])
+        except ValueError:
+            return
+        stype = parts[2]
+        key = parts[3]
+        try:
+            timestamp = float(parts[4])
+        except ValueError:
+            return
+        action = parts[5]
+        json_str = parts[6][1:] if parts[6].startswith(":") else parts[6]
+        try:
+            record = _json.loads(json_str)
+        except _json.JSONDecodeError:
+            record = {}
+
+        # Dedup: ignore if already processed this origin+seq
+        if not hasattr(self, '_seen_service_updates'):
+            self._seen_service_updates = set()
+        update_key = f"{origin}:{seq}"
+        if update_key in self._seen_service_updates:
+            return
+        self._seen_service_updates.add(update_key)
+        if len(self._seen_service_updates) > 10000:
+            self._seen_service_updates.clear()
+
+        # Re-relay to other peers BEFORE applying locally (relay-then-present)
+        if origin != self.server_id:
+            self.broadcast_to_network("SERVICESUPDATE", rest, exclude_server=origin)
+            # Log in replay buffer so we can answer SYNCREQUESTs for this origin
+            sync = getattr(self.local_server, 'services_sync', None)
+            if sync:
+                sync.record_outbound(origin, seq, rest)
+
+        # Gap detection
+        sync = getattr(self.local_server, 'services_sync', None)
+        if sync:
+            gap = sync.check_inbound_seq(origin, seq)
+            if gap:
+                self._log(f"SERVICESUPDATE gap from {origin}: missed seq "
+                          f"{gap[0]}-{gap[1]}, requesting retransmit")
+                link.send_message("SYNCREQUEST", f"{origin} {gap[0] - 1}")
+
+        # Apply to local storage
+        server = self.local_server
+        if action == "upsert":
+            if stype == "nickserv":
+                server.nickserv_apply_remote(key, record, timestamp)
+            elif stype == "chanserv":
+                server.chanserv_apply_remote(key, record, timestamp)
+        elif action == "drop":
+            if stype == "nickserv":
+                server.nickserv_apply_drop(key, timestamp)
+            elif stype == "chanserv":
+                server.chanserv_apply_drop(key, timestamp)
+
+    def _handle_syncservices(self, link, rest):
+        """Handle SYNCSERVICES: full state push, merge per-record by timestamp.
+
+        Format: SYNCSERVICES <origin> <seq> <stype> :<json_records>
+        """
+        import json as _json
+        parts = rest.split(" ", 3)
+        if len(parts) < 4:
+            return
+        origin = parts[0]
+        try:
+            seq = int(parts[1])
+        except ValueError:
+            return
+        stype = parts[2]
+        json_str = parts[3][1:] if parts[3].startswith(":") else parts[3]
+        try:
+            records = _json.loads(json_str)
+        except _json.JSONDecodeError:
+            return
+
+        server = self.local_server
+        applied = 0
+        for key, record in records.items():
+            ts = record.get("updated_at", 0)
+            if stype == "nickserv":
+                if server.nickserv_apply_remote(key, record, ts):
+                    applied += 1
+            elif stype == "chanserv":
+                if server.chanserv_apply_remote(key, record, ts):
+                    applied += 1
+
+        sync = getattr(server, 'services_sync', None)
+        if sync:
+            sync.reset_peer_seq(origin, seq)
+
+        self._log(f"SYNCSERVICES {stype} from {origin} (seq={seq}): "
+                  f"{len(records)} records, {applied} applied")
+
+    def _handle_syncrequest(self, link, rest):
+        """Handle SYNCREQUEST: replay missed updates or fall back to full sync.
+
+        Format: SYNCREQUEST <origin_id> <last_seq>
+        """
+        parts = rest.strip().split(" ", 1)
+        if len(parts) < 2:
+            return
+        origin_id = parts[0]
+        try:
+            last_seq = int(parts[1])
+        except ValueError:
+            return
+
+        sync = getattr(self.local_server, 'services_sync', None)
+
+        if origin_id == self.server_id:
+            # They want our updates — replay from our buffer
+            if not sync:
+                self._send_services_sync(link)
+                return
+            replay = sync.get_replay_since(self.server_id, last_seq)
+            if replay is None:
+                self._log(f"SYNCREQUEST from {link.remote_server_id} for our "
+                          f"seq>{last_seq}: buffer too old, sending SYNCSERVICES")
+                self._send_services_sync(link)
+            else:
+                self._log(f"SYNCREQUEST from {link.remote_server_id}: "
+                          f"replaying {len(replay)} updates (origin={origin_id}, since={last_seq})")
+                for args in replay:
+                    link.send_message("SERVICESUPDATE", args)
+        else:
+            # They want updates from a different origin — check our re-broadcast buffer
+            if sync:
+                replay = sync.get_replay_since(origin_id, last_seq)
+                if replay:
+                    self._log(f"SYNCREQUEST: forwarding {len(replay)} cached "
+                              f"updates from {origin_id} to {link.remote_server_id}")
+                    for args in replay:
+                        link.send_message("SERVICESUPDATE", args)
+                    return
+            # Can't answer from buffer — forward request to the origin if linked
+            with self._lock:
+                origin_link = self._links.get(origin_id)
+            if origin_link and origin_link.is_connected():
+                origin_link.send_message("SYNCREQUEST", rest)
+            else:
+                # Origin not reachable — send full sync as fallback
+                self._send_services_sync(link)
 
     def _handle_link_lost(self, link):
         """Called when a link's reader thread detects a disconnect."""

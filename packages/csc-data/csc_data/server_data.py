@@ -524,9 +524,10 @@ class ServerData:
         key = nick.lower()
         if key in nicks:
             return False
+        now = time.time()
         nicks[key] = {
             "nick": nick, "password": password,
-            "registered_by": registered_by, "registered_at": time.time(),
+            "registered_by": registered_by, "registered_at": now, "updated_at": now,
         }
         return self.save_nickserv(data)
 
@@ -568,13 +569,14 @@ class ServerData:
         key = channel.lower()
         if key in channels:
             return False
+        now = time.time()
         channels[key] = {
             "channel": channel, "owner": owner, "topic": topic,
             "modes": ["t", "n"],
             "oplist": [owner.lower()], "voicelist": [], "banlist": [],
             "enforce_mode": False, "enforce_topic": False,
             "strict_ops": False, "strict_voice": False,
-            "created_at": time.time(),
+            "created_at": now, "updated_at": now,
         }
         return self.save_chanserv(data)
 
@@ -585,6 +587,8 @@ class ServerData:
     def chanserv_update(self, channel, info):
         data = self.load_chanserv()
         channels = data.setdefault("channels", {})
+        if "updated_at" not in info:
+            info["updated_at"] = time.time()
         channels[channel.lower()] = info
         return self.save_chanserv(data)
 
@@ -593,6 +597,58 @@ class ServerData:
         channels = data.get("channels", {})
         key = channel.lower()
         if key not in channels:
+            return False
+        del channels[key]
+        return self.save_chanserv(data)
+
+    # ==================================================================
+    # Remote services apply (S2S timestamp-merge)
+    # ==================================================================
+
+    def nickserv_apply_remote(self, nick, record, timestamp):
+        """Apply a remote NickServ record if it is newer than the local copy."""
+        data = self.load_nickserv()
+        nicks = data.setdefault("nicks", {})
+        key = nick.lower()
+        existing = nicks.get(key)
+        if existing and existing.get("updated_at", 0) >= timestamp:
+            return False  # Local copy is newer or same age
+        nicks[key] = record
+        return self.save_nickserv(data)
+
+    def nickserv_apply_drop(self, nick, drop_timestamp):
+        """Remove a NickServ registration if drop_timestamp is newer than the record."""
+        data = self.load_nickserv()
+        nicks = data.get("nicks", {})
+        key = nick.lower()
+        existing = nicks.get(key)
+        if not existing:
+            return False
+        if existing.get("updated_at", 0) >= drop_timestamp:
+            return False  # Local record is newer; ignore remote drop
+        del nicks[key]
+        return self.save_nickserv(data)
+
+    def chanserv_apply_remote(self, channel, record, timestamp):
+        """Apply a remote ChanServ record if it is newer than the local copy."""
+        data = self.load_chanserv()
+        channels = data.setdefault("channels", {})
+        key = channel.lower()
+        existing = channels.get(key)
+        if existing and existing.get("updated_at", 0) >= timestamp:
+            return False
+        channels[key] = record
+        return self.save_chanserv(data)
+
+    def chanserv_apply_drop(self, channel, drop_timestamp):
+        """Remove a ChanServ registration if drop_timestamp is newer than the record."""
+        data = self.load_chanserv()
+        channels = data.get("channels", {})
+        key = channel.lower()
+        existing = channels.get(key)
+        if not existing:
+            return False
+        if existing.get("updated_at", 0) >= drop_timestamp:
             return False
         del channels[key]
         return self.save_chanserv(data)

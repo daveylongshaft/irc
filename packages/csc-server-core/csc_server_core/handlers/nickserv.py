@@ -67,6 +67,10 @@ class NickServMixin:
             self.server.nickserv_identified[addr] = nick
             self._nickserv_notice(addr, f"Nick {nick} has been registered. You are now identified.")
             self.server.log(f"[NICKSERV] {nick} registered their nick")
+            record = self.server.nickserv_get(nick)
+            if hasattr(self.server, 's2s_network') and record:
+                self.server.s2s_network.broadcast_services_update(
+                    "nickserv", nick.lower(), "upsert", record)
         else:
             self._nickserv_notice(addr, "Registration failed. Nick may already be registered.")
 
@@ -168,6 +172,10 @@ class NickServMixin:
             self.server.nickserv_identified.pop(addr, None)
             self._nickserv_notice(addr, f"Nick {nick} has been dropped.")
             self.server.log(f"[NICKSERV] {nick} dropped their registration")
+            if hasattr(self.server, 's2s_network'):
+                import time as _time
+                self.server.s2s_network.broadcast_services_update(
+                    "nickserv", nick.lower(), "drop", {"updated_at": _time.time()})
         else:
             self._nickserv_notice(addr, "Failed to drop nick.")
 

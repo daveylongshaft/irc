@@ -71,6 +71,7 @@ class ChanServMixin:
 
         info[option_map[option]] = bool_value
         self.server.chanserv_update(chan_name, info)
+        self._chanserv_sync(chan_name)
         self._chanserv_notice(addr, f"Option {option} for {chan_name} set to {'on' if bool_value else 'off'}.")
 
         channel = self.server.channel_manager.get_channel(chan_name)
@@ -126,6 +127,10 @@ class ChanServMixin:
                 prefix = f"ChanServ!ChanServ@{SERVER_NAME}"
                 topic_msg = format_irc_message(prefix, "TOPIC", [chan_name], topic) + "\r\n"
                 self.server.broadcast_to_channel(chan_name, topic_msg)
+            record = self.server.chanserv_get(chan_name)
+            if hasattr(self.server, 's2s_network') and record:
+                self.server.s2s_network.broadcast_services_update(
+                    "chanserv", chan_name.lower(), "upsert", record)
         else:
             self._chanserv_notice(addr, f"Channel {chan_name} is already registered.")
 
@@ -150,6 +155,7 @@ class ChanServMixin:
         if target_nick.lower() not in [n.lower() for n in oplist]:
             oplist.append(target_nick)
             self.server.chanserv_update(chan_name, info)
+            self._chanserv_sync(chan_name)
             self._chanserv_notice(addr, f"{target_nick} added to {chan_name} oplist.")
 
         channel = self.server.channel_manager.get_channel(chan_name)
@@ -183,6 +189,7 @@ class ChanServMixin:
         if len(new_oplist) < len(oplist):
             info["oplist"] = new_oplist
             self.server.chanserv_update(chan_name, info)
+            self._chanserv_sync(chan_name)
             self._chanserv_notice(addr, f"{target_nick} removed from {chan_name} oplist.")
 
         channel = self.server.channel_manager.get_channel(chan_name)
@@ -215,6 +222,7 @@ class ChanServMixin:
         if target_nick.lower() not in [n.lower() for n in voicelist]:
             voicelist.append(target_nick)
             self.server.chanserv_update(chan_name, info)
+            self._chanserv_sync(chan_name)
             self._chanserv_notice(addr, f"{target_nick} added to {chan_name} voicelist.")
 
         channel = self.server.channel_manager.get_channel(chan_name)
@@ -248,6 +256,7 @@ class ChanServMixin:
         if len(new_voicelist) < len(voicelist):
             info["voicelist"] = new_voicelist
             self.server.chanserv_update(chan_name, info)
+            self._chanserv_sync(chan_name)
             self._chanserv_notice(addr, f"{target_nick} removed from {chan_name} voicelist.")
 
         channel = self.server.channel_manager.get_channel(chan_name)
@@ -291,6 +300,7 @@ class ChanServMixin:
         if mask.lower() not in [b.lower() for b in banlist]:
             banlist.append(mask)
             self.server.chanserv_update(chan_name, info)
+            self._chanserv_sync(chan_name)
             self._chanserv_notice(addr, f"Mask {mask} added to {chan_name} banlist.")
 
             channel = self.server.channel_manager.get_channel(chan_name)
@@ -326,6 +336,7 @@ class ChanServMixin:
         if len(new_banlist) < len(banlist):
             info["banlist"] = new_banlist
             self.server.chanserv_update(chan_name, info)
+            self._chanserv_sync(chan_name)
             self._chanserv_notice(addr, f"Mask {mask} removed from {chan_name} banlist.")
 
             channel = self.server.channel_manager.get_channel(chan_name)
@@ -359,6 +370,15 @@ class ChanServMixin:
         self._chanserv_notice(addr, "Registered channels:")
         for name, info in channels.items():
             self._chanserv_notice(addr, f"  {info['channel']} (Owner: {info['owner']})")
+
+    def _chanserv_sync(self, chan_name):
+        """Broadcast a chanserv record update to the federation network."""
+        if not hasattr(self.server, 's2s_network'):
+            return
+        record = self.server.chanserv_get(chan_name)
+        if record:
+            self.server.s2s_network.broadcast_services_update(
+                "chanserv", chan_name.lower(), "upsert", record)
 
     def _chanserv_notice(self, addr, text):
         """Send a NOTICE from ChanServ to a client."""

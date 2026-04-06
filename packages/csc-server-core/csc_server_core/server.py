@@ -119,6 +119,10 @@ class Server(Service):
             self.log(f"[S2S]   csc-ctl enroll https://facingaddictionwithhope.com/csc/pki/")
             self.log(f"[S2S] If not pre-approved, an oper must first run: PKI APPROVE <shortname>")
 
+        # Services sync manager (sequence counter, replay buffer, pending queue)
+        from csc_data.services_sync import ServicesSyncManager
+        self.services_sync = ServicesSyncManager(self.base_path)
+
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)
         self.s2s_network.start_listener()
