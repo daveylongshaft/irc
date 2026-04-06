@@ -2,6 +2,9 @@
 
 Use this file when a topic spans multiple entries.
 
+- `ops-roles-shared-entrypoint` (ops/roles/_shared Entrypoint) --adjacent-to--> `temp-clone-git-workflow` (Temp Clone Git Workflow)
+- `ops-roles-shared-entrypoint` (ops/roles/_shared Entrypoint) --related--> `davey-collaboration-preferences` (Davey Collaboration Preferences)
+- `ops-roles-shared-entrypoint` (ops/roles/_shared Entrypoint) --related--> `temp-clone-git-workflow` (Temp Clone Git Workflow)
 - `s2s-linking-investigation` (S2S Linking Investigation) --depends-on--> `server-topology` (Current Server Topology)
 - `s2s-linking-investigation` (S2S Linking Investigation) --must-follow--> `temp-clone-git-workflow` (Temp Clone Git Workflow)
 - `s2s-linking-investigation` (S2S Linking Investigation) --related--> `server-topology` (Current Server Topology)

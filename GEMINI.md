@@ -322,6 +322,8 @@ User directives are logged to `/opt/csc/instruction_history.log` -- one line per
 
 **On startup:** Do NOT read the full history. But if context feels thin, `tail -5 /opt/csc/instruction_history.log` can help.
 
+Also check `docs/memory/INDEX.md` and `docs/memory/STATUS.md` first. They are the shared durable context map for repo-launched CLI sessions: read those indexes, then open only the specific memory entries that are relevant to the current task.
+
 ---
 
 ## Git Workflow

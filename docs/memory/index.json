@@ -14,9 +14,10 @@
     },
     "workflow": {
       "entries": [
+        "ops-roles-shared-entrypoint",
         "temp-clone-git-workflow"
       ],
-      "updated_at": "2026-04-06T17:51:18Z"
+      "updated_at": "2026-04-06T18:01:23Z"
     },
     "tasks": {
       "entries": [
@@ -95,7 +96,27 @@
       "path": "tasks/s2s-linking-investigation.md",
       "created_at": "2026-04-06T17:51:18Z",
       "updated_at": "2026-04-06T17:52:03Z"
+    },
+    "ops-roles-shared-entrypoint": {
+      "slug": "ops-roles-shared-entrypoint",
+      "title": "ops/roles/_shared Entrypoint",
+      "category": "workflow",
+      "summary": "Shared role guidance exists in the main CSC tree and should be discovered through indexes, not loaded into every session up front.",
+      "status": "reference",
+      "tags": [
+        "context",
+        "roles",
+        "shared",
+        "workflow"
+      ],
+      "related": [
+        "davey-collaboration-preferences",
+        "temp-clone-git-workflow"
+      ],
+      "path": "workflow/ops-roles-shared-entrypoint.md",
+      "created_at": "2026-04-06T18:01:23Z",
+      "updated_at": "2026-04-06T18:01:23Z"
     }
   },
-  "updated_at": "2026-04-06T17:52:03Z"
+  "updated_at": "2026-04-06T18:01:23Z"
 }

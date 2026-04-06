@@ -13,3 +13,4 @@ Read this file first. It lists what memory exists so you can open only relevant 
 
 ## workflow
 - `temp-clone-git-workflow` [reference] - Temp Clone Git Workflow: Do implementation work in C:/csc/tmp/irc on a feature branch, open a PR, and keep the main checkout disposable.
+- `ops-roles-shared-entrypoint` [reference] - ops/roles/_shared Entrypoint: Shared role guidance exists in the main CSC tree and should be discovered through indexes, not loaded into every session up front.

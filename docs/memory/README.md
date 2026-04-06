@@ -1,6 +1,8 @@
 # Durable Memory
 
 This directory is the durable, indexed context store for ongoing collaboration.
+It is the shared memory layer for repo-launched CLI sessions such as Codex,
+Claude, and Gemini when they are run against this checkout.
 
 Use it like this:
 
@@ -14,6 +16,9 @@ Conventions:
 - Each memory entry lives in a category directory such as `user/`, `workflow/`, `environment/`, or `tasks/`.
 - `index.json` is the structured index. `INDEX.md` is the human summary of the same catalog.
 - `xref.json` and `XREF.md` track cross-topic relationships.
+- This shared store is additive. Existing per-agent `memory.db` files are left intact.
+- This store is for cross-CLI collaboration memory, not for changing Anthropic/Google
+  message APIs or the existing `ops/agents/*` execution setup.
 - Task-like entries must use a status from: `active`, `stashed`, `blocked`, `done`, `reference`.
 - Interrupted work should be marked `stashed` with enough summary and update notes to resume without rereading the whole session.
 - Completed work should be marked `done` instead of deleted.
