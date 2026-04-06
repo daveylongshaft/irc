@@ -113,16 +113,22 @@ class UtilityMixin:
             else:
                 names_list.append(display_nick)
 
-        # Include remote S2S users who are in this channel
+        # Include remote S2S users who are in this channel but not yet in ch.members
+        # (can happen when the channel didn't exist locally when SYNCUSER arrived)
         if hasattr(self.server, 's2s_network'):
             chan_lower = channel.name.lower()
+            already_listed = {n.lstrip('@+%').lower() for n in names_list}
             with self.server.s2s_network._lock:
                 for link in self.server.s2s_network._links.values():
                     with link._state_lock:
                         for ru in link.remote_users.values():
+                            ru_nick_lower = ru["nick"].lower()
+                            if ru_nick_lower in already_listed:
+                                continue
                             ru_chans = [c.lower() for c in ru.get("channels", [])]
                             if chan_lower in ru_chans:
                                 names_list.append(ru["nick"])
+                                already_listed.add(ru_nick_lower)
 
         names = " ".join(sorted(names_list))
         reply = f":{SERVER_NAME} {RPL_NAMREPLY} {nick} = {channel.name} :{names}\r\n"

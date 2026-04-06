@@ -356,6 +356,12 @@ class Server(Service):
                     if nick.lower() in active_nicks:
                         continue
 
+                    # Skip S2S remote members - they are managed by DESYNC/SQUIT,
+                    # not by local cleanup logic
+                    member_info = ch.members.get(nick, {})
+                    if member_info.get("remote_server"):
+                        continue
+
                     # Check last_seen from users.json (client_registry property reads disk)
                     user_record = self.client_registry.get(nick, {})
                     last_seen = user_record.get("last_seen", 0)
