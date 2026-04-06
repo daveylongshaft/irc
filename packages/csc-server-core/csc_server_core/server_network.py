@@ -532,8 +532,9 @@ class ServerLink:
                     self._handle_slinkack_response(line)
                     continue
 
+                # ERROR before auth means rejection — signal handshake waiter immediately
+                # instead of letting authenticate() time out after 10 seconds.
                 if line.startswith("ERROR ") and not self._authenticated:
-                    # Handshake rejected by remote (e.g. tiebreaker)
                     self._slinkack_error = line[6:].strip()
                     self._slinkack_received.set()
                     continue
@@ -708,24 +709,9 @@ class ServerLink:
 
     def _get_local_server_id(self):
         """Return the local server's unique ID."""
-        if hasattr(self.local_server, 'server_id') and self.local_server.server_id:
-            return self.local_server.server_id
-        if os.environ.get('CSC_SERVER_ID'):
-            return os.environ['CSC_SERVER_ID']
-        # Derive from our own cert CN — guaranteed to match what we present in cert auth
-        if getattr(self, 'cert_path', '') and getattr(self, 'ca_path', ''):
-            try:
-                cert_pem = Path(self.cert_path).read_text()
-                ok, cn, _ = _verify_cert_pem(cert_pem, self.ca_path)
-                if ok and cn:
-                    return cn
-            except Exception:
-                pass
-        try:
-            from csc_platform import Platform
-            return Platform.get_server_shortname()
-        except Exception:
-            return 'server_001'
+        result = getattr(self.local_server, 'server_id',
+                       os.environ.get('CSC_SERVER_ID', 'server_001'))
+        return result
 
     def _log(self, message):
         """Log via the local server's logger."""
@@ -920,26 +906,6 @@ class ServerNetwork:
         except Exception as e:
             debug_file.write_text(f"Config load error: {e}\n")
 
-        # Derive server_id from cert CN if still default — cert CN must match what we present
-        if self.server_id == 'server_001' and self.s2s_cert_path and self.s2s_ca_path:
-            try:
-                cert_pem = Path(self.s2s_cert_path).read_text()
-                ok, cn, _ = _verify_cert_pem(cert_pem, self.s2s_ca_path)
-                if ok and cn:
-                    self.server_id = cn
-            except Exception:
-                pass
-
-        # Final fallback: Platform shortname
-        if self.server_id == 'server_001':
-            try:
-                from csc_platform import Platform
-                shortname = Platform.get_server_shortname()
-                if shortname:
-                    self.server_id = shortname
-            except Exception:
-                pass
-
         # Track which servers have been seen (loop prevention)
         self._seen_servers = {self.server_id}
 
@@ -1055,11 +1021,11 @@ class ServerNetwork:
         """Attempt to establish an outbound S2S link to a peer."""
         peer_key = f"{host}:{port}"
         try:
-            # Check if we're already linked and connected (by host — inbound links use ephemeral ports)
+            # Check if we're already linked
             with self._lock:
                 for link in self._links.values():
-                    if link.remote_host == host and link.is_connected():
-                        return  # Already linked (inbound or outbound)
+                    if (link.remote_host, link.remote_port) == (host, port):
+                        return  # Already linked
 
             # Create ServerLink for outbound connection
             link = ServerLink(
@@ -1292,26 +1258,6 @@ class ServerNetwork:
                             self._listener_sock.sendto(reply_data, addr)
                             continue
 
-                        # Tiebreaker: check before sending SLINKACK so remote knows early
-                        with self._lock:
-                            existing = self._links.get(remote_id)
-                            if existing and existing.is_connected():
-                                if local_id < remote_id:
-                                    # We are the designated connector; reject inbound duplicate
-                                    self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
-                                    reply = "ERROR Tiebreaker: designated connector owns link"
-                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                    self._listener_sock.sendto(reply_data, addr)
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # Remote wins as connector; accept inbound, drop our outbound
-                                    self._log(f"Tiebreaker: accepting inbound from {remote_id}, closing outbound")
-                                    existing.close()
-                            elif existing:
-                                self._log(f"Replacing stale link from {remote_id} with new connection")
-                                existing.close()
-
                         link.remote_server_id = remote_id
                         link.remote_timestamp = remote_ts
                         link._authenticated = True
@@ -1323,6 +1269,24 @@ class ServerNetwork:
                         self._listener_sock.sendto(reply_data, addr)
 
                         with self._lock:
+                            existing = self._links.get(remote_id)
+                            if existing and existing.is_connected():
+                                # Tiebreaker: lower server_id is the designated connector.
+                                # If the remote wins (remote_id > local_id), close our
+                                # outbound and accept their inbound so bidirectional relay works.
+                                if remote_id > local_id:
+                                    self._log(f"Tiebreaker (inbound cert): closing outbound to {remote_id}, accepting their inbound")
+                                    existing.close()
+                                    # Fall through to register inbound below
+                                else:
+                                    self._log(f"Tiebreaker (inbound cert): keeping outbound to {remote_id}, rejecting their inbound")
+                                    link._authenticated = False
+                                    link._connected = False
+                                    reply = "ERROR Already linked"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
+                                    peer_links.pop(addr, None)
+                                    continue
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
@@ -1344,26 +1308,6 @@ class ServerNetwork:
                             self._listener_sock.sendto(reply_data, addr)
                             continue
 
-                        # Tiebreaker: check before sending SLINKACK so remote knows early
-                        with self._lock:
-                            existing = self._links.get(remote_id)
-                            if existing and existing.is_connected():
-                                if local_id < remote_id:
-                                    # We are the designated connector; reject inbound duplicate
-                                    self._log(f"Tiebreaker: keeping outbound to {remote_id}, rejecting inbound")
-                                    reply = "ERROR Tiebreaker: designated connector owns link"
-                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                                    self._listener_sock.sendto(reply_data, addr)
-                                    peer_links.pop(addr, None)
-                                    continue
-                                else:
-                                    # Remote wins as connector; accept inbound, drop our outbound
-                                    self._log(f"Tiebreaker: accepting inbound from {remote_id}, closing outbound")
-                                    existing.close()
-                            elif existing:
-                                self._log(f"Replacing stale link from {remote_id} with new connection")
-                                existing.close()
-
                         link.remote_server_id = remote_id
                         link.remote_timestamp = remote_ts
                         link._authenticated = True
@@ -1373,6 +1317,24 @@ class ServerNetwork:
                         self._listener_sock.sendto(reply_data, addr)
 
                         with self._lock:
+                            existing = self._links.get(remote_id)
+                            if existing and existing.is_connected():
+                                # Tiebreaker: lower server_id is the designated connector.
+                                # If the remote wins (remote_id > local_id), close our
+                                # outbound and accept their inbound so bidirectional relay works.
+                                if remote_id > local_id:
+                                    self._log(f"Tiebreaker (inbound pw): closing outbound to {remote_id}, accepting their inbound")
+                                    existing.close()
+                                    # Fall through to register inbound below
+                                else:
+                                    self._log(f"Tiebreaker (inbound pw): keeping outbound to {remote_id}, rejecting their inbound")
+                                    link._authenticated = False
+                                    link._connected = False
+                                    reply = "ERROR Already linked"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
+                                    peer_links.pop(addr, None)
+                                    continue
                             self._links[remote_id] = link
                             self._seen_servers.add(remote_id)
                         self._log(f"Inbound link authenticated from {remote_id}")
@@ -1826,17 +1788,7 @@ class ServerNetwork:
             "DESYNC":   self._handle_desync,
             "SQUIT":    self._handle_squit,
             "ERROR":    self._handle_error,
-            "SYNCCMD":  self._handle_synccmd,
         }
-        bridge = getattr(self, '_fxp_bridge', None)
-        if bridge:
-            handlers.update({
-                "SYNCFILE":      bridge.handle_syncfile,
-                "RSYNCFILE":     bridge.handle_rsyncfile,
-                "SYNCFILE_ACK":  bridge.handle_syncfile_ack,
-                "SYNCINVENTORY": bridge.handle_syncinventory,
-                "SYNCRENAME":    bridge.handle_syncrename,
-            })
         handler = handlers.get(command)
         if handler:
             try:
@@ -1967,59 +1919,21 @@ class ServerNetwork:
                     chans.remove(channel_name)
                     link.remote_users[nick_lower]["channels"] = chans
 
-        # Remove from local channel if present, then notify local clients.
-        # Note: sync_from_disk() (called inside broadcast) can evict remote users
-        # from ch.members before SYNPART arrives, so we always broadcast even if
-        # the remote user is no longer tracked in ch.members.
+        # Remove from local channel if present
         ch = self.local_server.channel_manager.get_channel(channel_name)
-        if ch:
-            if nick_lower in ch.members and ch.members[nick_lower].get("remote_server") == link.remote_server_id:
+        if ch and nick_lower in ch.members:
+            if ch.members[nick_lower].get("remote_server") == link.remote_server_id:
                 del ch.members[nick_lower]
-            # Always notify local clients so they see the PART
-            from csc_server_core.irc import format_irc_message
-            prefix = f"{nick}!{nick}@{link.remote_server_id}"
-            part_msg = format_irc_message(prefix, "PART", [channel_name], reason) + "\r\n"
-            self.local_server.broadcast_to_channel(channel_name, part_msg)
+                # Broadcast PART to local clients
+                from csc_server_core.irc import format_irc_message
+                prefix = f"{nick}!{nick}@{link.remote_server_id}"
+                part_msg = format_irc_message(prefix, "PART", [channel_name], reason) + "\r\n"
+                self.local_server.broadcast_to_channel(channel_name, part_msg)
 
         self._log(f"Synced remote PART: {nick} from {channel_name}")
 
         # Re-broadcast
         self.broadcast_to_network("SYNPART", rest, exclude_server=link.remote_server_id)
-
-    def _handle_synccmd(self, link, rest):
-        """Handle SYNCCMD: execute a remote AI service command on this server.
-
-        Format: SYNCCMD <nick> <channel> <target_server> :<ai_text>
-
-        When a client on a remote server sends an AI command targeted at this
-        server (e.g. "haven.ef6e ai tok class method"), the originating server
-        forwards it here via SYNCCMD. We execute locally and the result is
-        routed back via broadcast_to_channel + route_message (SYNCMSG).
-        """
-        parts = rest.split(" ", 3)
-        if len(parts) < 4:
-            return
-
-        nick = parts[0]
-        channel = parts[1]
-        target_server = parts[2]
-        ai_text = parts[3][1:] if parts[3].startswith(":") else parts[3]
-
-        # Only execute if we are the intended target
-        if target_server.lower() != self.server_id.lower():
-            # Forward to other peers in case we're not directly connected to target
-            self.broadcast_to_network("SYNCCMD", rest, exclude_server=link.remote_server_id)
-            return
-
-        self._log(f"Executing remote command from {nick} via {link.remote_server_id}: {ai_text}")
-
-        # Execute via the local server's message handler on behalf of the remote nick.
-        # addr=None because the client is remote; channel provides the response path.
-        ch_name = channel if (channel and channel != "*") else None
-        try:
-            self.local_server.message_handler._handle_service_via_chatline(ai_text, None, nick, ch_name)
-        except Exception as e:
-            self._log(f"SYNCCMD execution error: {e}")
 
     def _handle_syncnick(self, link, rest):
         """Handle SYNCNICK: remote user changes nickname.
@@ -2385,12 +2299,6 @@ class ServerNetwork:
         self._log(f"Server {server_id} quit: {reason}")
         self._remove_server_state(server_id)
 
-        # If the SQUIT is from our direct peer, remove the link so reconnect can happen
-        if link.remote_server_id == server_id:
-            with self._lock:
-                self._links.pop(server_id, None)
-            link._connected = False
-
         # Re-broadcast
         self.broadcast_to_network(
             "SQUIT", rest, exclude_server=link.remote_server_id
@@ -2408,7 +2316,11 @@ class ServerNetwork:
 
         self._log(f"Link lost to {server_id}")
         with self._lock:
-            self._links.pop(server_id, None)
+            # Only remove if this specific link is still the registered one.
+            # If the link was replaced (e.g. tiebreaker accepted a new inbound),
+            # don't evict the replacement.
+            if self._links.get(server_id) is link:
+                self._links.pop(server_id, None)
 
         self._remove_server_state(server_id)
 
@@ -2493,11 +2405,6 @@ class ServerNetwork:
                         ch.members[new_lower] = member_info
                 break
 
-    def attach_fxp_bridge(self, bridge):
-        """Attach an FtpS2sBridge to receive SYNCFILE/RSYNCFILE/SYNCINVENTORY messages."""
-        self._fxp_bridge = bridge
-        self._log("FXP bridge attached")
-
     def shutdown(self):
         """Shut down all S2S connections and the listener."""
         self._running = False
@@ -2526,13 +2433,7 @@ class ServerNetwork:
 
     def _get_local_server_id(self):
         """Return the local server's unique ID."""
-        if hasattr(self.local_server, 'server_id') and self.local_server.server_id:
-            return self.local_server.server_id
-        try:
-            from csc_platform import Platform
-            return Platform.get_server_shortname()
-        except Exception:
-            return getattr(self, 'server_id', 'server_001')
+        return getattr(self.local_server, 'server_id', self.server_id)
 
     def _log(self, message):
         """Log via the local server's logger."""
