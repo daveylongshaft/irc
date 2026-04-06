@@ -467,6 +467,9 @@ User directives are logged to `<PROJECT_ROOT>/instruction_history.log` — one l
 
 **On startup:** Do NOT read the full history (it may get large). But if context feels thin or a restart just happened, a quick `tail -5 "$CSC_ROOT/instruction_history.log"` can offer more insight than README.1st alone.
 
+Also check `docs/memory/INDEX.md` and `docs/memory/STATUS.md` first. They are the durable context map: read those indexes, then open only the specific memory entries that are relevant to the current task.
+This shared memory is for repo-launched CLI sessions and is additive to any existing per-agent memory databases.
+
 ---
 
 ## Git Workflow
