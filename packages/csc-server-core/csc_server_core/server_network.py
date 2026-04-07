@@ -331,10 +331,8 @@ class ServerLink:
         if not self._connected:
             return False
 
-        # Wait for DH key exchange to complete (outbound)
-        # (For inbound, DH is handled when processing CRYPTOINIT DH)
-        if not self._encrypted and self._dh_exchange is None:
-            # We're the ones initiating - wait for DH reply
+        # Wait for DH key exchange to complete
+        if not self._encrypted:
             for _ in range(100):  # ~10 second timeout
                 if self._encrypted:
                     break
