@@ -1349,7 +1349,6 @@ class ServerNetwork:
                 # Decrypt if encrypted
                 plaintext = data
                 enc = is_encrypted(data)
-                self._log(f"[LISTENER] rx {len(data)}b from {addr} enc={enc} known={addr in peer_links} key={peer_links[addr]._encrypted if addr in peer_links else 'N/A'}")
                 if enc:
                     # Peek to see if this is an authenticated link
                     if addr in peer_links and peer_links[addr]._encrypted:

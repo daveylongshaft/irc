@@ -327,13 +327,13 @@ class TestS2STiebreaker:
                 break
             time.sleep(0.1)
 
+        a_ids = [sid for sid, l in net_a._links.items() if l.is_connected()]
+        b_ids = [sid for sid, l in net_b._links.items() if l.is_connected()]
+
         # Teardown
         net_a._running = False; net_b._running = False
         if net_a._listener_sock: net_a._listener_sock.close()
         if net_b._listener_sock: net_b._listener_sock.close()
-
-        a_ids = [sid for sid, l in net_a._links.items() if l.is_connected()]
-        b_ids = [sid for sid, l in net_b._links.items() if l.is_connected()]
 
         assert srv_b.server_id in a_ids, (
             f"A._links={list(net_a._links.keys())} — expected {srv_b.server_id}"
@@ -346,9 +346,16 @@ class TestS2STiebreaker:
 def _cleanup_vfs_key():
     """Remove vfs.key from cwd if present (test isolation)."""
     import pathlib
+    import time
     vfs_key = pathlib.Path(os.getcwd()) / "vfs.key"
-    if vfs_key.exists():
-        vfs_key.unlink()
+    for _ in range(20):
+        if not vfs_key.exists():
+            return
+        try:
+            vfs_key.unlink()
+            return
+        except PermissionError:
+            time.sleep(0.05)
 
 
 class TestS2SSyncKey:
