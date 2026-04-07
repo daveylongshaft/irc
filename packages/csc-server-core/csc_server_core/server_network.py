@@ -1232,7 +1232,9 @@ class ServerNetwork:
 
                 # Decrypt if encrypted
                 plaintext = data
-                if is_encrypted(data):
+                enc = is_encrypted(data)
+                self._log(f"[LISTENER] rx {len(data)}b from {addr} enc={enc} known={addr in peer_links} key={peer_links[addr]._encrypted if addr in peer_links else 'N/A'}")
+                if enc:
                     # Peek to see if this is an authenticated link
                     if addr in peer_links and peer_links[addr]._encrypted:
                         try:
@@ -1240,11 +1242,15 @@ class ServerNetwork:
                         except Exception as e:
                             self._log(f"Decryption failed from {addr}: {e}")
                             continue
+                    else:
+                        self._log(f"[LISTENER] encrypted but no key for {addr}, dropping")
+                        continue
 
                 # Decode message
                 try:
                     line = plaintext.decode('utf-8').strip()
                 except UnicodeDecodeError:
+                    self._log(f"[LISTENER] UTF-8 decode failed from {addr} len={len(plaintext)}")
                     continue
 
                 if not line:
