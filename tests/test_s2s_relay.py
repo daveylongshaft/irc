@@ -88,6 +88,12 @@ def _free_udp_port():
     return port
 
 
+def _disable_cert_auth(net):
+    net.s2s_cert_path = ""
+    net.s2s_key_path = ""
+    net.s2s_ca_path = ""
+
+
 # ---------------------------------------------------------------------------
 # Fixture: two linked ServerNetwork instances (hub + leaf, password auth)
 # ---------------------------------------------------------------------------
@@ -120,6 +126,8 @@ def linked_pair():
     _PW = "testpass_s2s_relay"
     hub_net.s2s_password = _PW
     leaf_net.s2s_password = _PW
+    _disable_cert_auth(hub_net)
+    _disable_cert_auth(leaf_net)
 
     hub_net.s2s_port = hub_port
     leaf_net.s2s_port = leaf_port
@@ -281,6 +289,7 @@ class TestS2STiebreaker:
             net.s2s_password = _PW
             net.s2s_role = "leaf"
             net.s2s_peers = []
+            _disable_cert_auth(net)
 
         net_a.s2s_port = port_a
         net_b.s2s_port = port_b
@@ -366,6 +375,7 @@ class TestS2SSyncKey:
             net.s2s_password = _PW
             net.s2s_role = "leaf"
             net.s2s_peers = []
+            _disable_cert_auth(net)
 
         hub_net.s2s_port = port_hub
         leaf_net.s2s_port = port_leaf
@@ -427,6 +437,7 @@ class TestS2SSyncKey:
             net.s2s_password = _PW
             net.s2s_role = "leaf"
             net.s2s_peers = []
+            _disable_cert_auth(net)
 
         net_a.s2s_port = port_a
         net_b.s2s_port = port_b
@@ -478,6 +489,7 @@ class TestS2SSyncKey:
             net.s2s_password = "testpass_mesh"
             net.s2s_role = "leaf"
             net.s2s_peers = []
+            _disable_cert_auth(net)
 
         for i, (net, port) in enumerate(zip(nets, ports)):
             net.s2s_port = port

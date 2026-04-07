@@ -91,6 +91,13 @@ def _verify_cert_pem(cert_pem: str, ca_cert_path: str) -> tuple:
 # S2S protocol line terminator
 S2S_CRLF = b"\r\n"
 S2S_MAX_LINE = 8192
+S2S_CERT_CHUNK_B64 = 900
+S2S_CERT_CHUNK_MAX = 64
+
+
+def _split_b64_chunks(text: str, size: int = S2S_CERT_CHUNK_B64) -> list[str]:
+    """Split a base64 string into MTU-safe chunks."""
+    return [text[i:i + size] for i in range(0, len(text), size)] or [""]
 
 
 class ServerLink:
@@ -140,6 +147,7 @@ class ServerLink:
         # Handshake synchronization (for outbound connections)
         self._slinkack_received = threading.Event()  # Signaled when SLINKACK arrives
         self._slinkack_error = None  # Error message if SLINKACK validation failed
+        self._cert_chunks = {}  # kind -> {server_id, remote_timestamp, total, chunks}
 
         # Reliable delivery
         self._send_seq = 0
@@ -320,6 +328,111 @@ class ServerLink:
             self._slinkack_error = str(e)
             self._slinkack_received.set()
 
+    def _store_cert_chunk(self, kind, server_id, remote_timestamp, index, total, chunk):
+        """Store a cert chunk for an in-flight chunked handshake.
+
+        Returns:
+            (cert_b64, None) when all chunks are present,
+            (None, None) when waiting for more chunks,
+            (None, reason) on validation error.
+        """
+        try:
+            index = int(index)
+            total = int(total)
+            remote_timestamp = int(remote_timestamp)
+        except ValueError:
+            return None, "invalid chunk metadata"
+
+        if total < 1 or total > S2S_CERT_CHUNK_MAX:
+            return None, f"invalid chunk count {total}"
+        if index < 1 or index > total:
+            return None, f"invalid chunk index {index}/{total}"
+
+        state = self._cert_chunks.get(kind)
+        if (
+            not state
+            or state["server_id"] != server_id
+            or state["remote_timestamp"] != remote_timestamp
+            or state["total"] != total
+        ):
+            state = {
+                "server_id": server_id,
+                "remote_timestamp": remote_timestamp,
+                "total": total,
+                "chunks": {},
+            }
+            self._cert_chunks[kind] = state
+
+        state["chunks"][index] = chunk
+        if len(state["chunks"]) < total:
+            return None, None
+
+        missing = [i for i in range(1, total + 1) if i not in state["chunks"]]
+        if missing:
+            return None, None
+
+        cert_b64 = "".join(state["chunks"][i] for i in range(1, total + 1))
+        del self._cert_chunks[kind]
+        return cert_b64, None
+
+    def _leaf_cert_b64(self) -> str:
+        """Load only the leaf/server cert, not the full chain."""
+        cert_chain = Path(self.cert_path).read_text()
+        begin = cert_chain.find('-----BEGIN CERTIFICATE-----')
+        end = cert_chain.find('-----END CERTIFICATE-----')
+        if begin >= 0 and end > begin:
+            cert_pem = cert_chain[begin:end + len('-----END CERTIFICATE-----')].strip() + '\n'
+        else:
+            cert_pem = cert_chain
+        return base64.b64encode(cert_pem.encode()).decode()
+
+    def _send_cert_chunks(self, command, cert_b64, local_id, local_ts):
+        """Send a cert payload as MTU-safe chunk datagrams."""
+        chunks = _split_b64_chunks(cert_b64)
+        total = len(chunks)
+        for index, chunk in enumerate(chunks, start=1):
+            self.send_message(command, "CERTCHUNK", local_id, local_ts, index, total, chunk)
+
+    def _process_slinkack_cert_chunk(self, parts):
+        """Process a chunked SLINKACK certificate exchange."""
+        if len(parts) < 7:
+            self._slinkack_error = f"SLINKACK CERTCHUNK with {len(parts)} args"
+            self._slinkack_received.set()
+            return
+
+        remote_id = parts[2]
+        remote_ts = parts[3]
+        cert_b64, error = self._store_cert_chunk("slinkack", remote_id, remote_ts, parts[4], parts[5], parts[6])
+        if error:
+            self._slinkack_error = error
+            self._slinkack_received.set()
+            return
+        if cert_b64 is None:
+            return
+
+        self.remote_server_id = remote_id
+        try:
+            self.remote_timestamp = int(remote_ts)
+        except ValueError:
+            self.remote_timestamp = int(time.time())
+
+        try:
+            remote_cert_pem = base64.b64decode(cert_b64).decode()
+            ok, cn, reason = _verify_cert_pem(remote_cert_pem, self.ca_path)
+            if not ok:
+                self._slinkack_error = f"Remote cert rejected: {reason}"
+                self._slinkack_received.set()
+                return
+            if cn != self.remote_server_id:
+                self._log(f"Cert CN {cn!r} overrides claimed server_id {self.remote_server_id!r}")
+                self.remote_server_id = cn
+        except Exception as e:
+            self._slinkack_error = f"Failed to verify cert: {e}"
+            self._slinkack_received.set()
+            return
+
+        self._slinkack_received.set()
+
     def authenticate(self):
         """Exchange SLINK/SLINKACK handshake after DH key exchange.
 
@@ -352,21 +465,12 @@ class ServerLink:
                 self._log(f"local_server.server_id is: {self.local_server.server_id}")
 
             if self.cert_path and self.ca_path:
-                # Cert-based auth: send only the server cert (not the full chain).
-                # The CA cert is already on both sides; sending the chain exceeds
-                # UDP MTU when fragmented across VPN and Windows drops excess fragments.
-                cert_chain = Path(self.cert_path).read_text()
-                begin = cert_chain.find('-----BEGIN CERTIFICATE-----')
-                end = cert_chain.find('-----END CERTIFICATE-----')
-                if begin >= 0 and end > begin:
-                    cert_pem = cert_chain[begin:end + len('-----END CERTIFICATE-----')].strip() + '\n'
-                else:
-                    cert_pem = cert_chain
-                cert_b64 = base64.b64encode(cert_pem.encode()).decode()
-                self.send_message("SLINK", "CERT", cert_b64, local_id, local_ts)
+                self._slinkack_received.clear()
+                self._slinkack_error = None
+                cert_b64 = self._leaf_cert_b64()
+                self._send_cert_chunks("SLINK", cert_b64, local_id, local_ts)
 
                 # Wait for SLINKACK to be processed by reader thread
-                self._slinkack_received.clear()
                 if not self._slinkack_received.wait(timeout=10):
                     self._log("Timeout waiting for SLINKACK during cert handshake")
                     return False
@@ -534,6 +638,10 @@ class ServerLink:
                     continue
 
                 if line.startswith("SLINKACK "):
+                    parts = line.split(" ", 6)
+                    if len(parts) >= 7 and parts[1] == "CERTCHUNK":
+                        self._process_slinkack_cert_chunk(parts)
+                        continue
                     # Handle SLINKACK during handshake
                     self._handle_slinkack_response(line)
                     continue
@@ -1334,6 +1442,80 @@ class ServerNetwork:
                     local_id = self._get_local_server_id()
                     local_ts = str(int(getattr(self.local_server, 'startup_time', time.time())))
 
+                    if len(parts) >= 7 and parts[1] == "CERTCHUNK":
+                        if not (self.s2s_cert_path and self.s2s_ca_path):
+                            self._log(f"Cert auth from {addr} but no certs configured")
+                            reply = "ERROR Cert auth not configured"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+
+                        remote_id = parts[2]
+                        remote_ts = parts[3]
+                        cert_b64, error = link._store_cert_chunk("slink", remote_id, remote_ts, parts[4], parts[5], parts[6])
+                        if error:
+                            self._log(f"Chunked cert rejected from {addr}: {error}")
+                            reply = f"ERROR {error}"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+                        if cert_b64 is None:
+                            continue
+
+                        try:
+                            remote_cert_pem = base64.b64decode(cert_b64).decode()
+                            ok, cn, reason = _verify_cert_pem(remote_cert_pem, self.s2s_ca_path)
+                        except Exception as e:
+                            ok, cn, reason = False, "", str(e)
+
+                        if not ok:
+                            self._log(f"Cert rejected from {addr}: {reason}")
+                            reply = "ERROR Cert rejected"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+
+                        if cn != remote_id:
+                            self._log(f"Cert CN {cn!r} != claimed id {remote_id!r} from {addr}")
+                            reply = "ERROR Cert CN mismatch"
+                            reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                            self._listener_sock.sendto(reply_data, addr)
+                            continue
+
+                        link.remote_server_id = remote_id
+                        try:
+                            link.remote_timestamp = int(remote_ts)
+                        except ValueError:
+                            link.remote_timestamp = int(time.time())
+                        link._authenticated = True
+
+                        our_cert_b64 = link._leaf_cert_b64()
+                        link._send_cert_chunks("SLINKACK", our_cert_b64, local_id, local_ts)
+
+                        with self._lock:
+                            existing = self._links.get(remote_id)
+                            if existing and existing.is_connected():
+                                if remote_id > local_id:
+                                    self._log(f"Tiebreaker (inbound cert): closing outbound to {remote_id}, accepting their inbound")
+                                    existing.close()
+                                elif link.remote_timestamp > (getattr(existing, 'remote_timestamp', 0) or 0):
+                                    self._log(f"Remote {remote_id} restarted (ts {link.remote_timestamp} > {existing.remote_timestamp}), replacing stale cert link")
+                                    existing.close()
+                                else:
+                                    self._log(f"Tiebreaker (inbound cert): keeping outbound to {remote_id}, rejecting their inbound")
+                                    link._authenticated = False
+                                    link._connected = False
+                                    reply = "ERROR Already linked"
+                                    reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
+                                    self._listener_sock.sendto(reply_data, addr)
+                                    peer_links.pop(addr, None)
+                                    continue
+                            self._links[remote_id] = link
+                            self._seen_servers.add(remote_id)
+                        self._log(f"Inbound cert link authenticated from {remote_id} (CN={cn})")
+                        self._send_full_sync(link)
+                        continue
+
                     if len(parts) >= 5 and parts[1] == "CERT":
                         # Cert-based auth
                         remote_cert_b64 = parts[2]
@@ -1374,17 +1556,8 @@ class ServerNetwork:
                         link.remote_timestamp = remote_ts
                         link._authenticated = True
 
-                        our_cert_chain = Path(self.s2s_cert_path).read_text()
-                        _begin = our_cert_chain.find('-----BEGIN CERTIFICATE-----')
-                        _end = our_cert_chain.find('-----END CERTIFICATE-----')
-                        if _begin >= 0 and _end > _begin:
-                            our_cert_pem = our_cert_chain[_begin:_end + len('-----END CERTIFICATE-----')].strip() + '\n'
-                        else:
-                            our_cert_pem = our_cert_chain
-                        our_cert_b64 = base64.b64encode(our_cert_pem.encode()).decode()
-                        reply = f"SLINKACK CERT {our_cert_b64} {local_id} {local_ts}"
-                        reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
-                        self._listener_sock.sendto(reply_data, addr)
+                        our_cert_b64 = link._leaf_cert_b64()
+                        link._send_cert_chunks("SLINKACK", our_cert_b64, local_id, local_ts)
 
                         with self._lock:
                             existing = self._links.get(remote_id)
