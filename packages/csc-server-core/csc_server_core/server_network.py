@@ -352,8 +352,16 @@ class ServerLink:
                 self._log(f"local_server.server_id is: {self.local_server.server_id}")
 
             if self.cert_path and self.ca_path:
-                # Cert-based auth: send our cert chain, verify theirs
-                cert_pem = Path(self.cert_path).read_text()
+                # Cert-based auth: send only the server cert (not the full chain).
+                # The CA cert is already on both sides; sending the chain exceeds
+                # UDP MTU when fragmented across VPN and Windows drops excess fragments.
+                cert_chain = Path(self.cert_path).read_text()
+                begin = cert_chain.find('-----BEGIN CERTIFICATE-----')
+                end = cert_chain.find('-----END CERTIFICATE-----')
+                if begin >= 0 and end > begin:
+                    cert_pem = cert_chain[begin:end + len('-----END CERTIFICATE-----')].strip() + '\n'
+                else:
+                    cert_pem = cert_chain
                 cert_b64 = base64.b64encode(cert_pem.encode()).decode()
                 self.send_message("SLINK", "CERT", cert_b64, local_id, local_ts)
 
@@ -1366,7 +1374,13 @@ class ServerNetwork:
                         link.remote_timestamp = remote_ts
                         link._authenticated = True
 
-                        our_cert_pem = Path(self.s2s_cert_path).read_text()
+                        our_cert_chain = Path(self.s2s_cert_path).read_text()
+                        _begin = our_cert_chain.find('-----BEGIN CERTIFICATE-----')
+                        _end = our_cert_chain.find('-----END CERTIFICATE-----')
+                        if _begin >= 0 and _end > _begin:
+                            our_cert_pem = our_cert_chain[_begin:_end + len('-----END CERTIFICATE-----')].strip() + '\n'
+                        else:
+                            our_cert_pem = our_cert_chain
                         our_cert_b64 = base64.b64encode(our_cert_pem.encode()).decode()
                         reply = f"SLINKACK CERT {our_cert_b64} {local_id} {local_ts}"
                         reply_data = encrypt(link._aes_key, reply.encode()) if link._encrypted else reply.encode()
