@@ -1,7 +1,0 @@
-{
-  "01_phase_pre_shutdown": {
-    "status": "ERROR",
-    "error": "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}, 'request_id': 'req_011CYkV3cz1rPYnczPfY5iBU'}",
-    "timestamp": "2026-03-05T13:27:30.812054"
-  }
-}

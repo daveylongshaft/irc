@@ -68,6 +68,36 @@ class VFSDataConn:
 
         threading.Thread(target=_run, daemon=True).start()
 
+    def serve_upload_stream(self, stream_consumer, on_done=None, on_error=None) -> None:
+        """Accept one connection and hand the live socket to stream_consumer(conn).
+
+        The consumer is responsible for reading from the socket before returning.
+        Runs in a daemon thread and closes the accepted socket automatically.
+        """
+        sock = self._sock
+
+        def _run():
+            try:
+                conn, _ = sock.accept()
+                conn.settimeout(self.timeout)
+                try:
+                    stream_consumer(conn)
+                finally:
+                    conn.close()
+                if on_done:
+                    on_done()
+            except Exception as exc:
+                if on_error:
+                    on_error(str(exc))
+            finally:
+                try:
+                    sock.close()
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).debug('Ignored exception', exc_info=True)
+
+        threading.Thread(target=_run, daemon=True).start()
+
     def serve_download(self, data_fn, on_done=None, on_error=None) -> None:
         """Accept one connection, send all bytes from data_fn() (or bytes).
         Runs in a daemon thread — returns immediately."""
@@ -80,6 +110,36 @@ class VFSDataConn:
                 try:
                     payload = data_fn() if callable(data_fn) else data_fn
                     conn.sendall(payload)
+                finally:
+                    conn.close()
+                if on_done:
+                    on_done()
+            except Exception as exc:
+                if on_error:
+                    on_error(str(exc))
+            finally:
+                try:
+                    sock.close()
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).debug('Ignored exception', exc_info=True)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def serve_download_stream(self, stream_producer, on_done=None, on_error=None) -> None:
+        """Accept one connection and let stream_producer(conn) write to it.
+
+        The producer is responsible for sending all desired bytes before returning.
+        Runs in a daemon thread and closes the accepted socket automatically.
+        """
+        sock = self._sock
+
+        def _run():
+            try:
+                conn, _ = sock.accept()
+                conn.settimeout(self.timeout)
+                try:
+                    stream_producer(conn)
                 finally:
                     conn.close()
                 if on_done:

@@ -7,6 +7,7 @@ import threading
 import time
 import traceback
 import subprocess
+import binascii
 from pathlib import Path
 from csc_services.service import Service
 from csc_server_core.message_handler import MessageHandler
@@ -118,10 +119,6 @@ class Server(Service):
             self.log(f"[S2S] To obtain a certificate, run:")
             self.log(f"[S2S]   csc-ctl enroll https://facingaddictionwithhope.com/csc/pki/")
             self.log(f"[S2S] If not pre-approved, an oper must first run: PKI APPROVE <shortname>")
-
-        # Services sync manager (sequence counter, replay buffer, pending queue)
-        from csc_data.services_sync import ServicesSyncManager
-        self.services_sync = ServicesSyncManager(self.base_path)
 
         # Initialize S2S federation network
         self.s2s_network = ServerNetwork(self)
@@ -386,17 +383,31 @@ class Server(Service):
             self.sync_from_disk()
 
             # Decrypt if encrypted
-            if is_encrypted(data):
+            encrypted_guess = is_encrypted(data)
+            self.log(
+                f"[TRANSPORT] RX from {addr} encrypted_guess={encrypted_guess} "
+                f"{self._transport_preview(data)}"
+            )
+            if encrypted_guess:
                 key = self.encryption_keys.get(addr)
                 if key:
                     try:
                         data = decrypt(key, data)
+                        self.log(
+                            f"[TRANSPORT] RX decrypted from {addr} "
+                            f"{self._transport_preview(data)}"
+                        )
                     except Exception as e:
                         self.log(f"[CRYPTO] Decryption failed from {addr}: {e}")
                         return
                 else:
                     self.log(f"[CRYPTO] Received encrypted data from {addr} but no key established.")
                     return
+            else:
+                self.log(
+                    f"[TRANSPORT] RX plaintext from {addr} "
+                    f"{self._transport_preview(data)}"
+                )
 
             self.message_handler.process(data, addr)
         except Exception as e:
@@ -414,6 +425,11 @@ class Server(Service):
                 if isinstance(data, str):
                     data = data.encode("utf-8")
                 encrypted = encrypt(key, data)
+                self.log(
+                    f"[TRANSPORT] TX encrypted to {addr} "
+                    f"plain={self._transport_preview(data)} "
+                    f"cipher={self._transport_preview(encrypted)}"
+                )
                 # Send directly via super().sock_send which handles chunking/sending
                 super().sock_send(encrypted, addr)
                 return
@@ -423,7 +439,23 @@ class Server(Service):
                 return
 
         # Plaintext fallback
+        self.log(
+            f"[TRANSPORT] TX plaintext to {addr} "
+            f"{self._transport_preview(data)}"
+        )
         super().sock_send(data, addr)
+
+    def _transport_preview(self, data, limit=48):
+        """
+        Return a compact byte/text preview for transport diagnostics.
+        """
+        if isinstance(data, str):
+            data = data.encode("utf-8", errors="replace")
+        sample = bytes(data[:limit])
+        hex_part = binascii.hexlify(sample).decode("ascii")
+        text_part = sample.decode("utf-8", errors="replace").replace("\r", "\\r").replace("\n", "\\n")
+        suffix = "..." if len(data) > limit else ""
+        return f"len={len(data)} hex={hex_part}{suffix} text={text_part!r}{suffix}"
 
     def _network_loop(self):
         """
@@ -530,7 +562,7 @@ class Server(Service):
 
         return False
 
-    def send_wallops(self, message, propagate=True):
+    def send_wallops(self, message):
         """Send a WALLOPS message to all connected IRC operators."""
         wallops_msg = f":{SERVER_NAME} WALLOPS :{message}\r\n"
         for addr, info in list(self.clients.items()):
@@ -540,45 +572,6 @@ class Server(Service):
                     self.sock_send(wallops_msg.encode(), addr)
                 except Exception as e:
                     self.log(f"[WALLOPS] Error sending to {nick}@{addr}: {e}")
-        if propagate and hasattr(self, 's2s_network'):
-            self.s2s_network.broadcast_wallops(message)
-
-    def kill_nick_local(self, target_nick, reason="Killed"):
-        """Disconnect a local client by nick without requiring handler state.
-
-        Used by the S2S layer (REMOTEKILL). Returns True if found and disconnected.
-        """
-        from csc_server_core.irc import SERVER_NAME as _SRV, format_irc_message
-        target_addr = None
-        actual_nick = None
-        for a, info in list(self.clients.items()):
-            if info.get("name", "").lower() == target_nick.lower():
-                target_addr = a
-                actual_nick = info.get("name")
-                break
-        if not target_addr:
-            return False
-        nick = actual_nick or target_nick
-        prefix = f"{nick}!{nick}@{_SRV}"
-        quit_msg = format_irc_message(prefix, "QUIT", [], reason) + "\r\n"
-        if hasattr(self, 's2s_network'):
-            self.s2s_network.sync_user_quit(nick, reason)
-        channels = self.channel_manager.find_channels_for_nick(nick)
-        notified = set()
-        for ch in channels:
-            for m_nick, m_info in list(ch.members.items()):
-                m_addr = m_info.get("addr")
-                if m_addr and m_addr != target_addr and m_addr not in notified:
-                    self.sock_send(quit_msg.encode(), m_addr)
-                    notified.add(m_addr)
-        self.channel_manager.remove_nick_from_all(nick)
-        self.sock_send(f"ERROR :Closing Link: {nick} ({reason})\r\n".encode(), target_addr)
-        if nick.lower() in self.opers:
-            self.remove_active_oper(nick.lower())
-        self.clients.pop(target_addr, None)
-        self.nickserv_identified.pop(target_addr, None)
-        self.log(f"[REMOTEKILL] {nick} disconnected: {reason}")
-        return True
 
     def old_broadcast(self, message, exclude=None):
         """

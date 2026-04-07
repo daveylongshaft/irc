@@ -5,11 +5,19 @@ import time
 import threading
 from pathlib import Path
 import socket
+import struct
 from csc_network import Network
 from .aliases import Aliases
 from .macros import Macros
 from .client_file_handler import ClientFileHandler
 from .client_service_handler import ClientServiceHandler
+from .ftp_dcc_utils import (
+    dcc_ip_to_int,
+    normalize_ftp_path,
+    parse_dcc_send,
+    resolve_ftp_upload_target,
+    split_command_args,
+)
 from csc_data import Data
 from csc_server_core.irc import parse_irc_message, format_irc_message, SERVER_NAME
 
@@ -79,6 +87,11 @@ class Client(Network):
         self.project_root_dir = Path(__file__).resolve().parent.parent.parent
         self._client_file_handler = ClientFileHandler(self)
         self._client_service_handler = ClientServiceHandler(self)
+        self._ftp_cwd = "/"
+        self._ftp_pending_upload = None
+        self._ftp_pending_download = None
+        self._ftp_pending_size = None
+        self._dcc_offers = {}
 
     # ==========================================================
     # CONFIGURATION
@@ -887,6 +900,9 @@ class Client(Network):
                     print(f"[{target}] ** {nick} {action}")
                 else:
                     print(f"[DM] ** {nick} {action}")
+            elif ctcp_body.startswith("DCC SEND "):
+                if self._handle_dcc_offer(nick, ctcp_body):
+                    return True
             else:
                 print(f"[[{nick} CTCP]] {ctcp_body}")
             return False
@@ -955,6 +971,238 @@ class Client(Network):
         else:
             self._client_file_handler.process_chunk(sender_nick, text)
 
+    def _detect_outbound_ip(self):
+        """Best-effort local IPv4 address detection for DCC offers."""
+        try:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.connect((self.server_host, self.server_port))
+            ip = probe.getsockname()[0]
+            probe.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
+    def _ftp_path(self, path: str) -> str:
+        return normalize_ftp_path(path, cwd=self._ftp_cwd)
+
+    def _handle_dcc_offer(self, sender_nick: str, ctcp_body: str) -> bool:
+        offer = parse_dcc_send(ctcp_body)
+        if not offer:
+            print(f"[[{sender_nick} CTCP]] {ctcp_body}")
+            return False
+        offer["sender"] = sender_nick
+        self._dcc_offers[(sender_nick.lower(), offer["filename"])] = offer
+        print(
+            f"[DCC OFFER] {sender_nick} offers {offer['filename']} "
+            f"({offer['size']} bytes). Use /dcc accept {sender_nick} \"{offer['filename']}\" [ftp:/path]"
+        )
+        return True
+
+    def _stream_file_to_socket(self, local_path: str, peer_sock):
+        total = 0
+        with open(local_path, "rb") as handle:
+            while True:
+                chunk = handle.read(65536)
+                if not chunk:
+                    break
+                peer_sock.sendall(chunk)
+                total += len(chunk)
+        return total
+
+    def _start_dcc_send_session(self, target: str, file_name: str, file_size: int, sender_factory):
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("0.0.0.0", 0))
+        listener.listen(1)
+        listener.settimeout(120)
+        host_ip = self._detect_outbound_ip()
+        port = listener.getsockname()[1]
+        ctcp_payload = f'\x01DCC SEND "{file_name}" {dcc_ip_to_int(host_ip)} {port} {file_size}\x01'
+        super().send(f"PRIVMSG {target} :{ctcp_payload}\r\n")
+        print(f"[DCC] Offering {file_name} to {target} ({file_size} bytes)")
+
+        def _serve():
+            try:
+                peer, peer_addr = listener.accept()
+                peer.settimeout(60)
+                print(f"[DCC] {target} connected from {peer_addr[0]}:{peer_addr[1]}")
+                try:
+                    total = sender_factory(peer)
+                    print(f"[DCC] Sent {total} bytes to {target}")
+                finally:
+                    peer.close()
+            except Exception as exc:
+                print(f"[DCC] Send failed: {exc}")
+            finally:
+                listener.close()
+
+        threading.Thread(target=_serve, daemon=True).start()
+
+    def _bridge_socket_to_ftp_put(self, offer: dict, ftp_path: str, ip: str, port: int):
+        sender_sock = socket.create_connection((offer["ip"], offer["port"]), timeout=30)
+        ftp_sock = socket.create_connection((ip, port), timeout=30)
+        total = 0
+        try:
+            while True:
+                chunk = sender_sock.recv(65536)
+                if not chunk:
+                    break
+                ftp_sock.sendall(chunk)
+                total += len(chunk)
+                try:
+                    sender_sock.sendall(struct.pack("!I", total & 0xFFFFFFFF))
+                except OSError:
+                    pass
+            print(f"[DCC] Uploaded {total} bytes from {offer['filename']} -> {ftp_path}")
+        finally:
+            sender_sock.close()
+            ftp_sock.close()
+
+    def _bridge_ftp_get_to_dcc(self, ftp_path: str, ip: str, port: int, peer_sock):
+        ftp_sock = socket.create_connection((ip, port), timeout=30)
+        total = 0
+        try:
+            while True:
+                chunk = ftp_sock.recv(65536)
+                if not chunk:
+                    break
+                peer_sock.sendall(chunk)
+                total += len(chunk)
+            print(f"[DCC] Streamed {total} bytes from {ftp_path}")
+            return total
+        finally:
+            ftp_sock.close()
+
+    def _ftp_command(self, args: str):
+        """Handle IRC operator FTP commands."""
+        parts = split_command_args(args)
+        sub = parts[0].lower() if parts else "help"
+        rest = parts[1:]
+
+        if sub == "pwd":
+            super().send("FTP PWD\r\n")
+        elif sub in ("cwd", "cd"):
+            if not rest:
+                print("Usage: /ftp cwd <ftp:/path>")
+                return
+            super().send(f"FTP CWD {self._ftp_path(rest[0])}\r\n")
+        elif sub in ("ls", "list"):
+            path = self._ftp_path(rest[0]) if rest else self._ftp_cwd
+            super().send(f"FTP LIST {path}\r\n")
+        elif sub in ("get", "download"):
+            if not rest:
+                print("Usage: /ftp get <ftp:/path> [local_path]")
+                return
+            ftp_path = self._ftp_path(rest[0])
+            local_path = rest[1] if len(rest) > 1 else Path(ftp_path).name
+            self._ftp_pending_download = {"mode": "local", "path": ftp_path, "local_path": local_path}
+            super().send(f"FTP GET {ftp_path}\r\n")
+        elif sub in ("upload", "put"):
+            if len(rest) < 2:
+                print("Usage: /ftp upload <local_path> <ftp:/path-or-dir>")
+                return
+            local_path = rest[0]
+            ftp_path = resolve_ftp_upload_target(local_path, rest[1], cwd=self._ftp_cwd)
+            self._ftp_pending_upload = {"mode": "local", "local_path": local_path, "path": ftp_path}
+            super().send(f"FTP PUT {ftp_path}\r\n")
+        elif sub == "rnfr":
+            if not rest:
+                print("Usage: /ftp rnfr <ftp:/path>")
+                return
+            super().send(f"FTP RNFR {self._ftp_path(rest[0])}\r\n")
+        elif sub == "rnto":
+            if not rest:
+                print("Usage: /ftp rnto <ftp:/path>")
+                return
+            super().send(f"FTP RNTO {self._ftp_path(rest[0])}\r\n")
+        elif sub in ("mv", "rename"):
+            if len(rest) < 2:
+                print("Usage: /ftp mv <from> <to>")
+                return
+            super().send(f"FTP MV {self._ftp_path(rest[0])} {self._ftp_path(rest[1])}\r\n")
+        elif sub in ("del", "rm", "delete"):
+            if not rest:
+                print("Usage: /ftp del <ftp:/path>")
+                return
+            super().send(f"FTP DEL {self._ftp_path(rest[0])}\r\n")
+        else:
+            print(
+                "FTP commands:\n"
+                "  /ftp pwd\n"
+                "  /ftp cwd <ftp:/path>\n"
+                "  /ftp ls [ftp:/path]\n"
+                "  /ftp get <ftp:/path> [local_path]\n"
+                "  /ftp upload <local_path> <ftp:/path-or-dir>\n"
+                "  /ftp rnfr <ftp:/path>\n"
+                "  /ftp rnto <ftp:/path>\n"
+                "  /ftp mv <from> <to>\n"
+                "  /ftp del <ftp:/path>"
+            )
+
+    def _dcc_command(self, args: str):
+        """Handle DCC send/accept helper commands."""
+        parts = split_command_args(args)
+        sub = parts[0].lower() if parts else "help"
+        rest = parts[1:]
+
+        if sub == "offers":
+            if not self._dcc_offers:
+                print("[DCC] No pending offers.")
+                return
+            for offer in self._dcc_offers.values():
+                print(f"[DCC] {offer['sender']} -> {offer['filename']} ({offer['size']} bytes)")
+            return
+
+        if sub == "send":
+            if len(rest) < 2:
+                print("Usage: /dcc send <nick> <file-or-ftp:/path>")
+                return
+            target = rest[0]
+            source = rest[1]
+            if source.startswith("ftp:"):
+                ftp_path = self._ftp_path(source)
+                self._ftp_pending_size = {"mode": "dcc_send", "target": target, "path": ftp_path}
+                super().send(f"FTP SIZE {ftp_path}\r\n")
+                return
+            local = Path(source)
+            if not local.exists() or not local.is_file():
+                print(f"[DCC] File not found: {local}")
+                return
+            self._start_dcc_send_session(
+                target=target,
+                file_name=local.name,
+                file_size=local.stat().st_size,
+                sender_factory=lambda peer_sock: self._stream_file_to_socket(str(local), peer_sock),
+            )
+            return
+
+        if sub == "accept":
+            if len(rest) < 2:
+                print("Usage: /dcc accept <nick> <filename> [ftp:/target]")
+                return
+            key = (rest[0].lower(), rest[1])
+            offer = self._dcc_offers.get(key)
+            if not offer:
+                print(f"[DCC] No pending offer from {rest[0]} for {rest[1]}")
+                return
+            if len(rest) > 2:
+                target = rest[2]
+            else:
+                base = self._ftp_cwd if self._ftp_cwd else "/incoming"
+                target = f"ftp:{base.rstrip('/')}/{offer['filename']}"
+            ftp_path = resolve_ftp_upload_target(offer["filename"], target, cwd=self._ftp_cwd)
+            self._ftp_pending_upload = {"mode": "dcc_offer", "offer": offer, "path": ftp_path}
+            self._dcc_offers.pop(key, None)
+            super().send(f"FTP PUT {ftp_path}\r\n")
+            return
+
+        print(
+            "DCC commands:\n"
+            "  /dcc send <nick> <file-or-ftp:/path>\n"
+            "  /dcc accept <nick> <filename> [ftp:/target]\n"
+            "  /dcc offers"
+        )
+
     def _handle_notice_recv(self, parsed):
         """Handle received NOTICE, including ISOP responses and VFS protocol."""
         nick = parsed.prefix.split("!")[0] if parsed.prefix else "?"
@@ -964,6 +1212,10 @@ class Client(Network):
         # VFS protocol responses
         if text.startswith("VFS "):
             self._handle_vfs_notice(text)
+            return
+
+        if text.startswith("FTP "):
+            self._handle_ftp_notice(text)
             return
 
         # Check for ISOP response: "ISOP <nick> YES/NO"
@@ -1094,6 +1346,167 @@ class Client(Network):
 
         else:
             print(f"[VFS] {text}")
+
+    def _handle_ftp_notice(self, text: str):
+        """Handle FTP protocol NOTICEs from the server."""
+        if text.startswith("FTP PRET "):
+            parts = text.split()
+            if len(parts) < 5:
+                print(f"[FTP] Bad PRET: {text}")
+                return
+            ip = parts[2]
+            port = int(parts[3])
+            action = parts[4]
+
+            if action == "PUT":
+                info = self._ftp_pending_upload
+                if not info:
+                    print("[FTP] PRET PUT received but no pending upload.")
+                    return
+                self._ftp_pending_upload = None
+
+                def _upload():
+                    try:
+                        if info["mode"] == "local":
+                            with open(info["local_path"], "rb") as handle:
+                                data_sock = socket.create_connection((ip, port), timeout=30)
+                                try:
+                                    while True:
+                                        chunk = handle.read(65536)
+                                        if not chunk:
+                                            break
+                                        data_sock.sendall(chunk)
+                                finally:
+                                    data_sock.close()
+                            print(f"[FTP] Uploaded {info['local_path']} -> {info['path']}")
+                        elif info["mode"] == "dcc_offer":
+                            self._bridge_socket_to_ftp_put(info["offer"], info["path"], ip, port)
+                        else:
+                            print(f"[FTP] Unknown upload mode: {info['mode']}")
+                    except Exception as exc:
+                        print(f"[FTP] Upload failed: {exc}")
+
+                threading.Thread(target=_upload, daemon=True).start()
+                return
+
+            if action == "GET":
+                info = self._ftp_pending_download
+                if not info:
+                    print("[FTP] PRET GET received but no pending download.")
+                    return
+                self._ftp_pending_download = None
+
+                def _download():
+                    try:
+                        if info["mode"] == "local":
+                            data_sock = socket.create_connection((ip, port), timeout=30)
+                            try:
+                                with open(info["local_path"], "wb") as handle:
+                                    while True:
+                                        chunk = data_sock.recv(65536)
+                                        if not chunk:
+                                            break
+                                        handle.write(chunk)
+                            finally:
+                                data_sock.close()
+                            print(f"[FTP] Downloaded {info['path']} -> {info['local_path']}")
+                        elif info["mode"] == "dcc_send":
+                            info["result"] = self._bridge_ftp_get_to_dcc(info["path"], ip, port, info["peer_sock"])
+                        else:
+                            print(f"[FTP] Unknown download mode: {info['mode']}")
+                    except Exception as exc:
+                        if info.get("mode") == "dcc_send":
+                            info["error"] = str(exc)
+                        print(f"[FTP] Download failed: {exc}")
+                    finally:
+                        if info.get("mode") == "dcc_send":
+                            info["done"].set()
+                            try:
+                                info["peer_sock"].close()
+                            except OSError:
+                                pass
+
+                threading.Thread(target=_download, daemon=True).start()
+                return
+
+            if action == "LIST":
+                def _list():
+                    try:
+                        data_sock = socket.create_connection((ip, port), timeout=30)
+                        chunks = []
+                        while True:
+                            chunk = data_sock.recv(65536)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                        data_sock.close()
+                        listing = b"".join(chunks).decode("utf-8", errors="replace")
+                        print("[FTP] --- listing ---")
+                        print(listing)
+                        print("[FTP] --- end ---")
+                    except Exception as exc:
+                        print(f"[FTP] List failed: {exc}")
+
+                threading.Thread(target=_list, daemon=True).start()
+                return
+
+            print(f"[FTP] Unknown PRET action: {action}")
+            return
+
+        if text.startswith("FTP CWD "):
+            self._ftp_cwd = text[8:]
+            print(f"[FTP] cwd -> {self._ftp_cwd}")
+            return
+
+        if text.startswith("FTP PWD "):
+            print(f"[FTP] pwd -> {text[8:]}")
+            return
+
+        if text.startswith("FTP SIZE "):
+            parts = text.split()
+            if len(parts) < 4:
+                print(f"[FTP] Bad SIZE: {text}")
+                return
+            path = parts[2]
+            size = int(parts[3])
+            print(f"[FTP] size {path} = {size}")
+            pending = self._ftp_pending_size
+            if pending and pending.get("mode") == "dcc_send" and pending.get("path") == path:
+                self._ftp_pending_size = None
+                target = pending["target"]
+                filename = Path(path).name or "download.bin"
+
+                def _sender_factory(peer_sock):
+                    done = threading.Event()
+                    transfer_info = {
+                        "mode": "dcc_send",
+                        "path": path,
+                        "peer_sock": peer_sock,
+                        "done": done,
+                        "result": 0,
+                    }
+                    self._ftp_pending_download = transfer_info
+                    self.send(f"FTP GET {path}\r\n")
+                    done.wait(300)
+                    if self._ftp_pending_download is transfer_info:
+                        self._ftp_pending_download = None
+                    return transfer_info.get("result", 0)
+
+                self._start_dcc_send_session(target, filename, size, _sender_factory)
+            return
+
+        if text.startswith("FTP OK "):
+            print(f"[FTP] {text[7:]}")
+            return
+
+        if text.startswith("FTP ERR "):
+            self._ftp_pending_size = None
+            self._ftp_pending_upload = None
+            self._ftp_pending_download = None
+            print(f"[FTP ERROR] {text[8:]}")
+            return
+
+        print(f"[FTP] {text}")
 
     def _vfs_command(self, args: str):
         """Handle /vfs subcommands.
@@ -1320,6 +1733,10 @@ class Client(Network):
                 self._handle_status_command()
             elif command == "/ping":
                 self._handle_ping_command()
+            elif command == "/ftp":
+                self._ftp_command(args)
+            elif command == "/dcc":
+                self._dcc_command(args)
             elif command == "/vfs":
                 self._vfs_command(args)
             elif command == "/quote" or command == "/raw":
@@ -1381,6 +1798,8 @@ class Client(Network):
             "/kick #ch <nick> [reason]    : Kick user from channel.\n"
             "/motd                        : Show message of the day.\n"
             "/buffer [target]             : Replay chat buffer for target.\n"
+            "/ftp <subcommand>            : IRCop FTP filesystem control surface.\n"
+            "/dcc <subcommand>            : DCC send/accept helper commands.\n"
             "/saveconfig                  : Save current configuration.\n"
             "/alias <name>=<cmd>          : Create or update an alias.\n"
             "/unalias <name>              : Remove an alias.\n"
