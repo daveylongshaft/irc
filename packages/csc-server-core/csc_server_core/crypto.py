@@ -23,11 +23,12 @@ Protocol Flow:
     5. All subsequent data:  [12-byte IV][AES-GCM ciphertext][16-byte tag]
 
 Wire Format (encrypted messages):
-    Bytes 0-11:   Random IV (initialization vector / nonce)
-    Bytes 12-N:   AES-GCM ciphertext (same length as plaintext)
+    Byte 0:       Magic marker 0xE0 (not valid UTF-8 / ASCII, identifies encrypted frames)
+    Bytes 1-12:   Random IV (initialization vector / nonce)
+    Bytes 13-N:   AES-GCM ciphertext (same length as plaintext)
     Bytes N-N+16: GCM authentication tag
 
-    Total overhead per message: 28 bytes (12 IV + 16 tag)
+    Total overhead per message: 29 bytes (1 magic + 12 IV + 16 tag)
 
 Dependencies:
     - hashlib (stdlib) for SHA-256 key derivation
@@ -214,8 +215,8 @@ def encrypt(key: bytes, plaintext: bytes) -> bytes:
         plaintext: Raw bytes to encrypt (typically UTF-8 IRC messages).
 
     Returns:
-        Encrypted bytes in the format [IV][ciphertext][tag]. Pass this
-        directly to decrypt() to recover the plaintext.
+        Encrypted bytes in the format [0xE0 magic][IV][ciphertext][tag]. Pass
+        this directly to decrypt() to recover the plaintext.
 
     Raises:
         RuntimeError: If the cryptography library is not installed.
@@ -225,7 +226,7 @@ def encrypt(key: bytes, plaintext: bytes) -> bytes:
     aesgcm = AESGCM(key)
     iv = os.urandom(12)
     ciphertext = aesgcm.encrypt(iv, plaintext, None)
-    return iv + ciphertext
+    return b"\xe0" + iv + ciphertext
 
 
 def decrypt(key: bytes, data: bytes) -> bytes:
@@ -244,14 +245,17 @@ def decrypt(key: bytes, data: bytes) -> bytes:
 
     Raises:
         RuntimeError: If the cryptography library is not installed.
-        ValueError: If data is shorter than 28 bytes (minimum for IV + tag).
+        ValueError: If data is shorter than 29 bytes (minimum for magic + IV + tag).
         cryptography.exceptions.InvalidTag: If the authentication tag
             verification fails (data corrupted or wrong key).
     """
     if not HAS_CRYPTO:
         raise RuntimeError("cryptography library not installed: pip install cryptography")
-    if len(data) < 28:  # 12 IV + 16 tag minimum
+    if len(data) < 29:  # 1 magic + 12 IV + 16 tag minimum
         raise ValueError("Data too short to be encrypted")
+    # Strip leading magic byte if present
+    if data[0:1] == b"\xe0":
+        data = data[1:]
     aesgcm = AESGCM(key)
     iv = data[:12]
     ciphertext = data[12:]
@@ -268,12 +272,11 @@ def is_encrypted(data: bytes) -> bool:
     contains non-ASCII bytes or fails UTF-8 decoding.
 
     Detection logic:
-        1. If data < 4 bytes, return False (too short to be meaningful)
-        2. Try to decode first 32 bytes as UTF-8
+        1. If first byte is 0xE0 → encrypted (magic marker) → return True
+        2. If data < 4 bytes, return False (too short to be meaningful)
         3. If first char is ':' → plaintext IRC → return False
         4. If first word matches a known IRC or S2S command → return False
-        5. If UTF-8 decode fails → likely encrypted → return True
-        6. If none of the above match → likely encrypted → return True
+        5. Otherwise → return True
 
     Args:
         data: Raw bytes received from a socket.
@@ -282,6 +285,8 @@ def is_encrypted(data: bytes) -> bool:
         True if the data appears to be encrypted, False if it looks like
         plaintext IRC.
     """
+    if len(data) >= 1 and data[0] == 0xE0:
+        return True
     if len(data) < 4:
         return False
     try:
@@ -290,8 +295,6 @@ def is_encrypted(data: bytes) -> bool:
             return True
         if start[0] == ":":
             return False
-        
-        # Check first word against known IRC/S2S commands
         first_word = start.split()[0].upper()
         if first_word in ("NICK", "USER", "PING", "PONG", "QUIT", "PASS",
                          "PRIVMSG", "NOTICE", "JOIN", "PART", "KICK",
