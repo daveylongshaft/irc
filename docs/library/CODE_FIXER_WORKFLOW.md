@@ -1,0 +1,401 @@
+# Code Fixer Workflow - Complete Guide
+
+The code-fixer agent is a specialized worker that finds and fixes bugs in one pass. It uses an integrated journal-in-file workflow where the task file itself becomes the execution log.
+
+## Architecture
+
+```
+Task Flow:
+1. Fix task created in agents/code-fixer/queue/in/
+2. Wrapper detects it
+3. Moves to queue/work/
+4. Agent reads and starts processing
+5. Agent journals EVERY action into the file
+6. Agent marks COMPLETE
+7. Wrapper reads journal and processes git
+8. Wrapper moves to queue/out/
+```
+
+## Workflow Details
+
+### 1. Submit a Fix Task
+
+Create task file: `agents/code-fixer/queue/in/fix-001-empty-channel.json`
+
+```json
+{
+  "id": "fix-001-empty-channel",
+  "submitted": "2026-02-21T19:45:00Z",
+  "issue": "Server crashes when channel name is empty",
+  "description": "When joining a channel with empty name, ChannelManager.add_channel() crashes with TypeError",
+  "error_context": "TypeError: unhashable type: 'NoneType' when accessing channels dict with None key",
+  "files_hint": ["csc-server", "channel"],
+  "model": "deepseek-coder:6.7b",
+  "timeout": 10,
+  "stall_timeout": 120,
+  "journal": []
+}
+```
+
+### 2. Agent Receives Task
+
+Agent process (running via agent-service):
+1. Finds task in queue/in/
+2. Moves to queue/work/
+3. Reads task file
+4. **Starts journaling**
+
+### 3. Agent Journals in Advance
+
+**Before doing any work**, agent journals planned steps:
+
+```bash
+# Agent appends to the task file's journal array
+# Format: JSON object with timestamp, step, action, result
+
+agent$ cat >> agents/code-fixer/queue/work/fix-001-empty-channel.json << 'EOF'
+,
+{
+  "timestamp": "2026-02-21T19:46:00Z",
+  "step": 1,
+  "action": "Read tools/INDEX.txt to locate ChannelManager",
+  "status": "planned"
+}
+EOF
+```
+
+### 4. Agent Executes and Updates Journal
+
+Agent performs the action:
+
+```bash
+# Agent reads tools/INDEX.txt
+# Finds: ChannelManager in csc-server
+
+# Agent updates journal with result:
+agent$ cat >> agents/code-fixer/queue/work/fix-001-empty-channel.json << 'EOF'
+,
+{
+  "timestamp": "2026-02-21T19:46:05Z",
+  "step": 1,
+  "action": "Read tools/INDEX.txt to locate ChannelManager",
+  "result": "Found in packages/csc-server/csc_server/channel.py",
+  "status": "complete"
+}
+EOF
+```
+
+### 5. Continuing the Process
+
+Agent continues through all planned steps:
+
+```json
+[
+  {
+    "timestamp": "2026-02-21T19:46:00Z",
+    "step": 1,
+    "action": "Find ChannelManager via tools/INDEX.txt",
+    "result": "packages/csc-server/csc_server/channel.py",
+    "status": "complete"
+  },
+  {
+    "timestamp": "2026-02-21T19:46:10Z",
+    "step": 2,
+    "action": "Read source code to understand bug",
+    "result": "add_channel() missing validation on line 42",
+    "status": "complete"
+  },
+  {
+    "timestamp": "2026-02-21T19:46:20Z",
+    "step": 3,
+    "action": "Identify root cause",
+    "result": "No null/empty check before storing channel. Causes KeyError in dict operations.",
+    "status": "complete"
+  },
+  {
+    "timestamp": "2026-02-21T19:46:30Z",
+    "step": 4,
+    "action": "Replace code with validation",
+    "result": "Added if not validate_channel_name(name): raise ValueError()",
+    "status": "complete"
+  },
+  {
+    "timestamp": "2026-02-21T19:46:40Z",
+    "step": 5,
+    "action": "Create test proving fix",
+    "result": "4 test cases in test_channel_validation_fix.py (not executed)",
+    "status": "complete"
+  },
+  {
+    "timestamp": "2026-02-21T19:46:50Z",
+    "step": 6,
+    "action": "Verify files changed",
+    "result": "Modified: channel.py, Created: test_channel_validation_fix.py",
+    "status": "complete"
+  },
+  {
+    "timestamp": "2026-02-21T19:46:55Z",
+    "step": 7,
+    "action": "Mark COMPLETE",
+    "result": "All steps executed successfully",
+    "status": "complete"
+  }
+]
+```
+
+### 6. Agent Exits with COMPLETE
+
+Agent's final output (printed to stdout):
+
+```
+[JOURNAL]
+
+Fix ID: fix-001-empty-channel
+Status: COMPLETE
+Steps executed: 7
+Files changed: 2
+  - Modified: packages/csc-server/csc_server/channel.py
+  - Created: packages/csc-server/tests/test_channel_validation_fix.py
+
+Test file created (not executed):
+  packages/csc-server/tests/test_channel_validation_fix.py
+  - test_empty_channel_name_raises_error
+  - test_invalid_channel_name_raises_error
+  - test_valid_channel_name_works
+  - test_duplicate_channel_returns_false
+
+COMPLETE
+```
+
+### 7. Wrapper Detects COMPLETE
+
+The wrapper script (`code-fixer-wrapper.sh`):
+
+```bash
+# 1. Monitors queue/work/ for COMPLETE marker
+while grep -q "COMPLETE" "$WORK_FILE"; do
+    echo "[wrapper] Agent marked COMPLETE"
+    break
+done
+
+# 2. Extracts journal from JSON
+jq -r '.journal[]' "$WORK_FILE" > "$JOURNAL_FILE"
+
+# 3. Commits changes
+cd $CSC_ROOT
+git add -A
+git commit -m "fix: Server crashes when channel name is empty
+
+Fix ID: fix-001-empty-channel
+Generated by: code-fixer agent
+
+Agent journaled steps: logs/agents/code-fixer/journal-fix-001-empty-channel.log"
+
+# 4. Pushes to remote
+git push
+
+# 5. Moves task to completed
+mv queue/work/fix-001.json queue/out/fix-001.json
+```
+
+## Complete Example: Channel Name Fix
+
+### Task Submission
+
+```bash
+agent-control submit code-fixer '{
+  "id": "fix-001-empty-channel",
+  "issue": "Server crashes on empty channel names",
+  "description": "ChannelManager.add_channel() allows empty/None channel names"
+}'
+```
+
+### Agent Processing
+
+Agent in background:
+
+```
+1. Receives task: fix-001-empty-channel.json
+   Location: agents/code-fixer/queue/in/
+
+2. Moves to work: agents/code-fixer/queue/work/fix-001-empty-channel.json
+   Starts journaling
+
+3. Steps 1-6: Find bug, fix it, write test, update journal
+   Each step appends to journal array in task file
+
+4. Marks COMPLETE
+   Last journal entry: "status": "complete"
+
+5. Prints output to stdout:
+   COMPLETE
+```
+
+### Wrapper Processing
+
+Wrapper detects COMPLETE in task file and:
+
+```
+1. Reads journal from file
+2. Extracts to logs/agents/code-fixer/journal-fix-001-empty-channel.log
+3. Commits code changes
+4. Pushes to remote
+5. Moves task to queue/out/
+6. Updates agent state.json (tasks_processed += 1)
+```
+
+## Files Modified by Code Fixer
+
+When a fix is applied, the agent modifies:
+
+**Source file (the fix):**
+```
+packages/csc-server/csc_server/channel.py (modified)
+```
+
+**Test file (the proof):**
+```
+packages/csc-server/tests/test_channel_validation_fix.py (created, not executed)
+```
+
+## Journal Output Example
+
+Wrapper extracts journal to: `logs/agents/code-fixer/journal-fix-001-empty-channel.log`
+
+```
+2026-02-21T19:46:00Z [step-1] Find ChannelManager via tools/INDEX.txt: packages/csc-server/csc_server/channel.py
+2026-02-21T19:46:10Z [step-2] Read source code to understand bug: add_channel() missing validation on line 42
+2026-02-21T19:46:20Z [step-3] Identify root cause: No null/empty check before storing channel
+2026-02-21T19:46:30Z [step-4] Replace code with validation: Added if not validate_channel_name(name): raise ValueError()
+2026-02-21T19:46:40Z [step-5] Create test proving fix: 4 test cases in test_channel_validation_fix.py
+2026-02-21T19:46:50Z [step-6] Verify files changed: Modified: channel.py, Created: test_channel_validation_fix.py
+2026-02-21T19:46:55Z [step-7] Mark COMPLETE: All steps executed successfully
+```
+
+## Git Commit Generated
+
+```
+commit abc1234
+Author: CSC Agent <agent@csc>
+Date:   Mon Feb 21 19:46:55 2026
+
+    fix: Server crashes when channel name is empty
+
+    Fix ID: fix-001-empty-channel
+    Generated by: code-fixer agent
+
+    Agent journaled steps: logs/agents/code-fixer/journal-fix-001-empty-channel.log
+
+ packages/csc-server/csc_server/channel.py           | 12 ++++++++++
+ packages/csc-server/tests/test_channel_validation_fix.py | 45 ++++++++++++++
+ 2 files changed, 57 insertions(+)
+```
+
+## Monitoring Progress
+
+### Real-Time
+```bash
+# Watch agent progress
+tail -f agents/code-fixer/queue/work/fix-001-empty-channel.json | jq '.journal'
+```
+
+### After Completion
+```bash
+# View complete journal
+jq '.journal' agents/code-fixer/queue/out/fix-001-empty-channel.json
+
+# View extracted journal log
+cat logs/agents/code-fixer/journal-fix-001-empty-channel.log
+
+# View git commit
+git log --oneline | head -5
+git show HEAD
+```
+
+## Key Principles
+
+1. **Journal in advance**: Every action journaled BEFORE execution
+2. **File is journal**: Task file itself contains complete execution log
+3. **One-shot fix**: No iteration, debugging, or multiple approaches
+4. **No test execution**: Tests written but not run
+5. **Clean exit**: Wrapper handles all git operations
+6. **Transparent log**: Every step visible in journal
+
+## Error Handling
+
+If agent encounters an error:
+
+```json
+{
+  "timestamp": "2026-02-21T19:47:00Z",
+  "step": 4,
+  "action": "Replace code with validation",
+  "error": "Source file not found at expected location",
+  "status": "failed"
+}
+```
+
+Wrapper will:
+1. See task file without COMPLETE marker
+2. Timeout after 10 minutes
+3. Move task to queue/out/ with error status
+4. Update agent state.json (tasks_failed += 1)
+
+## Command Examples
+
+### Submit a fix task
+```bash
+agent-control submit code-fixer "Server crashes on empty channel names"
+```
+
+### Monitor progress
+```bash
+# Watch the agent work
+agent-control logs code-fixer --follow
+
+# Check queue status
+agent-control queue code-fixer
+```
+
+### View results
+```bash
+# Completed task with journal
+cat agents/code-fixer/queue/out/fix-001-empty-channel.json | jq '.journal'
+
+# Extracted journal
+cat logs/agents/code-fixer/journal-fix-001-empty-channel.log
+
+# Git changes
+git log -1 --stat
+git show HEAD
+```
+
+## Summary
+
+The code-fixer workflow is:
+
+```
+User submits fix task
+    ↓
+Agent journaled steps into file
+    ↓
+Agent executes steps
+    ↓
+Agent updates journal with results
+    ↓
+Agent marks COMPLETE
+    ↓
+Wrapper detects COMPLETE
+    ↓
+Wrapper extracts journal
+    ↓
+Wrapper commits to git
+    ↓
+Wrapper pushes to remote
+    ↓
+Wrapper moves to queue/out/
+    ↓
+Agent ready for next task
+```
+
+Clean, transparent, auditable, and fully automated.

@@ -17,6 +17,7 @@ Server responses are sent as NOTICE lines:
 
 from __future__ import annotations
 
+import json
 import hashlib
 import os
 import posixpath
@@ -24,6 +25,7 @@ import select
 import socket
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def _server_shortname() -> str:
@@ -85,7 +87,7 @@ class FTPMixin:
             self._ftp_err(addr, nick, f"Unknown FTP subcommand: {sub}")
 
     def _ftp_is_allowed(self, nick: str) -> bool:
-        return nick in getattr(self.server, "opers", {})
+        return nick.lower() in getattr(self.server, "opers", {})
 
     def _ftp_notice(self, addr, nick: str, text: str):
         self.server.sock_send(f":server NOTICE {nick} :{text}\r\n".encode(), addr)
@@ -110,16 +112,63 @@ class FTPMixin:
         try:
             from csc_ftpd.ftp_config import FtpConfig
             self._ftp_config_cache = FtpConfig()
-        except Exception:
-            self._ftp_config_cache = False
+        except Exception as exc:
+            self.server.log(f"[FTP] csc_ftpd unavailable, using local fallback config: {exc}")
+            self._ftp_config_cache = self._ftp_fallback_config()
         return self._ftp_config_cache or None
+
+    def _ftp_fallback_config(self):
+        root = self._ftp_find_csc_root()
+        service_path = self._ftp_find_service_config(root)
+        raw = {}
+        if service_path is not None:
+            try:
+                raw = json.loads(service_path.read_text(encoding="utf-8")).get("ftpd", {})
+            except Exception as exc:
+                self.server.log(f"[FTP] Failed to read fallback ftpd config from {service_path}: {exc}")
+
+        serve_root = raw.get("serve_root") or str(root)
+        serve_root = str(Path(serve_root).resolve())
+        index_path = raw.get("index_path", "etc/ftpd_index.json")
+        users_path = raw.get("users_path", "etc/ftpd_users.json")
+
+        return SimpleNamespace(
+            enabled=raw.get("enabled", False),
+            role=raw.get("role", "slave"),
+            master_host=raw.get("master_host", "10.10.10.1"),
+            serve_root=serve_root,
+            index_path=str((root / index_path).resolve()) if not os.path.isabs(index_path) else index_path,
+            users_path=str((root / users_path).resolve()) if not os.path.isabs(users_path) else users_path,
+        )
+
+    def _ftp_find_csc_root(self) -> Path:
+        env_root = os.environ.get("CSC_ROOT") or os.environ.get("CSC_HOME")
+        candidates = []
+        if env_root:
+            candidates.append(Path(env_root))
+        candidates.extend([Path.cwd(), Path(__file__).resolve()])
+        for candidate in candidates:
+            current = candidate if candidate.is_dir() else candidate.parent
+            for _ in range(12):
+                if (current / "csc-service.json").exists() or (current / "etc" / "csc-service.json").exists():
+                    return current
+                if current == current.parent:
+                    break
+                current = current.parent
+        return Path.cwd()
+
+    def _ftp_find_service_config(self, root: Path) -> Path | None:
+        for candidate in (root / "etc" / "csc-service.json", root / "csc-service.json"):
+            if candidate.exists():
+                return candidate
+        return None
 
     def _ftp_get_index(self):
         live_index = getattr(self.server, "_ftpd_index", None)
         if live_index is not None:
             return live_index
         if self._ftp_index_cache is not None:
-            return self._ftp_index_cache
+            return self._ftp_index_cache or None
         config = self._ftp_get_config()
         if not config or getattr(config, "role", "") != "master":
             self._ftp_index_cache = False
@@ -336,11 +385,13 @@ class FTPMixin:
             if self._ftp_can_stream_via_master_upload():
                 conn.serve_upload_stream(
                     lambda client_sock: self._ftp_master_stream_upload(vpath, client_sock),
+                    on_done=lambda: self._ftp_ok(addr, nick, f"PUT {vpath}"),
                     on_error=lambda e: self._ftp_err(addr, nick, f"PUT failed: {e}"),
                 )
             else:
                 conn.serve_upload_stream(
                     lambda client_sock: self._ftp_receive_local_file(vpath, client_sock),
+                    on_done=lambda: self._ftp_ok(addr, nick, f"PUT {vpath}"),
                     on_error=lambda e: self._ftp_err(addr, nick, f"PUT failed: {e}"),
                 )
             self._ftp_log("put", nick=nick, path=vpath)

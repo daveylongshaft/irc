@@ -29,6 +29,7 @@ from csc_server_core.handlers import (
     ChanServMixin,
     BotServMixin,
     UtilityMixin,
+    FTPMixin,
     VFSMixin,
 )
 
@@ -47,6 +48,7 @@ class MessageHandler(
     ChanServMixin,
     BotServMixin,
     UtilityMixin,
+    FTPMixin,
     VFSMixin,
 ):
     """
@@ -252,6 +254,7 @@ class MessageHandler(
             "DELINK":      self._handle_delink,
             "LOCALCONFIG": self._handle_localconfig,
             "HELP":        self._handle_help,
+            "FTP":         self._handle_ftp,
             "VFS":         self._handle_vfs,
         }
 
