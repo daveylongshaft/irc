@@ -375,7 +375,7 @@ class ServerData:
                 "created": ch.created,
                 "members": {
                     nick: {
-                        "addr": list(info.get("addr", ())),
+                        "addr": list(info.get("addr") or ()),
                         "modes": list(info.get("modes", set())),
                     }
                     for nick, info in ch.members.items()

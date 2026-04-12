@@ -27,14 +27,13 @@ class ClientServiceHandler:
         """
         Parses and executes a service command locally.
         Uses Service.parse_service_command() from csc_services for shared parsing.
-        Accepts both forms:
-          AI <token> <plugin> <method> [args...]
+        Accepts the canonical form:
           <target> AI <token> <plugin> <method> [args...]
         """
         from csc_services import Service
         parsed = Service.parse_service_command(cmd_text)
         if parsed is None:
-            return "0", "Error: Invalid service command. Expected: AI <token> <plugin> <method> [args...]"
+            return "0", "Error: Invalid service command. Expected: <target> AI <token> <plugin> <method> [args...]"
 
         token = parsed["token"]
         plugin_name_raw = parsed["class_name"]

@@ -4,7 +4,6 @@ import subprocess
 import time
 from pathlib import Path
 from csc_services import Service
-from csc_server_core.irc import format_irc_message, SERVER_NAME
 
 class CryptServ(Service):
     """

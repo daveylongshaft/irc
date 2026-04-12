@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "AI and IRC clients for CSC system."
 requires-python = ">=3.8"
 dependencies = [
-    "csc-network>=0.1.0",
+    "csc-services>=0.1.0",
 ]
 
 [tool.setuptools.packages.find]

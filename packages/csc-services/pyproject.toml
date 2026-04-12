@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Service implementations and base class for CSC system."
 requires-python = ">=3.8"
 dependencies = [
-    "csc-network>=0.1.0",
+    "csc-crypto>=0.1.0",
 ]
 
 [tool.setuptools.packages.find]

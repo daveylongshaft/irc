@@ -13,7 +13,7 @@ IS_WINDOWS = os.name == 'nt'
 
 # Windows service name -> (python module, display name, extra_env)
 WIN_SERVICES = {
-    "CSC-SERVER": ("csc_server_core.server",      "CSC IRC Server",  {"CSC_HEADLESS": "true"}),
+    "CSC-SERVER": ("csc_server.main",             "CSC IRC Server",  {"CSC_HEADLESS": "true"}),
     "CSC-LOOP":   ("csc_loop.infra.queue_worker", "CSC Loop Worker", {}),
     "CSC-BRIDGE": ("csc_bridge.main",             "CSC Bridge",      {}),
     "CSC-FTPD":   ("csc_ftpd.ftp_master",         "CSC FTP Daemon",  {}),

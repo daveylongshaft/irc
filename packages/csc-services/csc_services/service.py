@@ -1,10 +1,11 @@
 import importlib
 import sys
 import inspect
-from csc_network import Network
+from csc_crypto import Crypto
+from csc_services.irc import IRCProtocolMixin
 
 
-class Service( Network ):
+class Service(IRCProtocolMixin, Crypto):
     """Base class for all CSC services, supporting MVC-like dynamic execution."""
 
     SERVICE_KEYWORDS = {"ai"}
@@ -13,45 +14,29 @@ class Service( Network ):
     def parse_service_command(text):
         """Parse a service command from channel text.
 
-        Accepts two forms:
-          <keyword> <token> <class> [method] [args...]
+        Accepts one canonical form:
           <target> <keyword> <token> <class> [method] [args...]
 
         Returns a dict with keys: target, keyword, token, class_name, method, args, raw
         or None if the text is not a service command.
         """
         parts = text.split()
-        if not parts:
+        if len(parts) < 4:
             return None
-        first = parts[0].lower()
-        if first in Service.SERVICE_KEYWORDS:
-            if len(parts) < 3:
-                return None
-            return {
-                "target": None,
-                "keyword": first,
-                "token": parts[1],
-                "class_name": parts[2],
-                "method": parts[3] if len(parts) > 3 else "default",
-                "args": parts[4:] if len(parts) > 4 else [],
-                "raw": text,
-            }
-        elif len(parts) >= 2 and parts[1].lower() in Service.SERVICE_KEYWORDS:
-            if len(parts) < 4:
-                return None
-            return {
-                "target": parts[0],
-                "keyword": parts[1].lower(),
-                "token": parts[2],
-                "class_name": parts[3],
-                "method": parts[4] if len(parts) > 4 else "default",
-                "args": parts[5:] if len(parts) > 5 else [],
-                "raw": text,
-            }
-        return None
+        if parts[1].lower() not in Service.SERVICE_KEYWORDS:
+            return None
+        return {
+            "target": parts[0],
+            "keyword": parts[1].lower(),
+            "token": parts[2],
+            "class_name": parts[3],
+            "method": parts[4] if len(parts) > 4 else "default",
+            "args": parts[5:] if len(parts) > 5 else [],
+            "raw": text,
+        }
 
-    def __init__(self, server_instance=None):
-        super().__init__()
+    def __init__(self, server_instance=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.name = "service"
         self.loaded_modules = {}
         self.server = server_instance # Intentional self-reference for MVC orchestration
@@ -68,24 +53,34 @@ class Service( Network ):
         self.log( f"MVC Exec: {class_name_raw}.{method_name_raw}({args}) from {source_name}" )
 
         # Try multiple namespaces: csc_loop (infra) and csc_services (implementations)
-        namespaces = ["csc_loop.infra", "csc_services"]
+        namespaces = ["csc_loop.infra", "csc_services", "csc_version.services"]
+        module_candidates = [class_name_raw.lower()]
+        service_module = f"{class_name_raw.lower()}_service"
+        if service_module not in module_candidates:
+            module_candidates.append(service_module)
         module = None
         module_name_used = None
 
         for ns in namespaces:
-            module_name = f"{ns}.{class_name_raw.lower()}"
-            try:
-                if module_name in sys.modules:
-                    module = importlib.reload( sys.modules[module_name] )
-                else:
-                    module = importlib.import_module( module_name )
-                module_name_used = module_name
+            for module_basename in module_candidates:
+                module_name = f"{ns}.{module_basename}"
+                try:
+                    if module_name in sys.modules:
+                        module = importlib.reload( sys.modules[module_name] )
+                    else:
+                        module = importlib.import_module( module_name )
+                    module_name_used = module_name
+                    break
+                except ImportError:
+                    continue
+            if module:
                 break
-            except ImportError:
-                continue
 
         if not module:
-            return f"Error: Module for '{class_name_raw}' not found in {namespaces}."
+            return (
+                f"Error: Module for '{class_name_raw}' not found in "
+                f"{[f'{ns}.{name}' for ns in namespaces for name in module_candidates]}."
+            )
 
         try:
             class_name = None

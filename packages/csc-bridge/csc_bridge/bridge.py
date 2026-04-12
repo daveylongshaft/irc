@@ -77,6 +77,7 @@ Related Modules:
 import threading
 import time
 import logging
+import socket
 from typing import Dict, List, Optional, Any
 
 from .session import ClientSession
@@ -84,9 +85,12 @@ from .transports.base import InboundTransport, OutboundTransport, ClientID
 from .irc_normalizer import IrcNormalizer
 from .data_bridge import BridgeData
 from .control_handler import ControlHandler
-from csc_server_core.crypto import DHExchange, encrypt, decrypt, is_encrypted
+from csc_crypto import DHExchange, decrypt, encrypt, is_encrypted
 
 logger = logging.getLogger("csc_bridge")
+
+# Magic sequence to break from passthrough to partyline
+BREAK_TO_PARTYLINE = b"*#*#*#*"
 
 
 class Bridge:
@@ -134,9 +138,10 @@ class Bridge:
         inbound_transports: List[InboundTransport],
         outbound_transport: Optional[OutboundTransport],
         session_timeout: int = 300,
-        encrypt: bool = False,
+        encrypt: bool = True,
         normalize_mode: Optional[str] = None,
         daemon_mode: bool = False,
+        tunnel_manager: Optional[object] = None,
     ):
         """Initialize the bridge with transports and configuration.
 
@@ -162,6 +167,7 @@ class Bridge:
         self.encrypt = encrypt
         self.normalize_mode = normalize_mode
         self.daemon_mode = daemon_mode
+        self.tunnel_manager = tunnel_manager
         self.data = BridgeData()
 
         # Session tracking
@@ -172,6 +178,10 @@ class Bridge:
 
         # Map inbound transports by name for reverse lookups
         self._inbound_map: Dict[str, InboundTransport] = {}
+
+        # Bind tunnel manager if provided
+        if tunnel_manager:
+            tunnel_manager.bind_bridge(self)
 
     def start(self):
         """Start all transports and background threads.
@@ -187,10 +197,21 @@ class Bridge:
 
         # Start each inbound transport with our callback
         for transport in self.inbound_transports:
-            name = type(transport).__name__
-            self._inbound_map[name] = transport
+            # Use unique _inbound_id if set (by TunnelManager), else use class name with object id
+            if hasattr(transport, '_inbound_id'):
+                inbound_key = transport._inbound_id
+            else:
+                inbound_key = f"{type(transport).__name__}_{id(transport)}"
+                transport._inbound_id = inbound_key
+
+            # Skip if already registered by TunnelManager
+            if inbound_key in self._inbound_map:
+                logger.debug(f"Inbound transport already registered: {inbound_key}")
+                continue
+
+            self._inbound_map[inbound_key] = transport
             transport.start(lambda data, cid, t=transport: self._on_client_data(data, cid, t))
-            logger.info(f"Inbound transport started: {name}")
+            logger.info(f"Inbound transport started: {inbound_key}")
 
         # Background threads
         threading.Thread(
@@ -275,7 +296,7 @@ class Bridge:
 
         Allocates a ClientSession.
         If daemon_mode is False (legacy), creates a dedicated upstream handle via the
-        default outbound transport and spawns a listener.
+        outbound transport (per-tunnel if tunnel_manager exists, else default) and spawns a listener.
         If daemon_mode is True, sets state to LOBBY and waits for auth.
 
         Args:
@@ -287,9 +308,17 @@ class Bridge:
         """
         try:
             logger.debug(f"_create_session: Creating for client {client_id}")
+
+            # Determine inbound_name (unique ID for this inbound transport)
+            if hasattr(inbound, '_inbound_id'):
+                inbound_name = inbound._inbound_id
+            else:
+                inbound_name = f"{type(inbound).__name__}_{id(inbound)}"
+                inbound._inbound_id = inbound_name
+
             session = ClientSession(
                 client_id=client_id,
-                inbound_name=type(inbound).__name__,
+                inbound_name=inbound_name,
             )
             session.inbound = inbound # Store inbound transport object
 
@@ -303,28 +332,51 @@ class Bridge:
                 # No outbound yet
             else:
                 session.state = "CONNECTED"
-                session.outbound = self.default_outbound
+
+                # Determine outbound: per-tunnel if available, else default
+                tunnel_entry = None
+                if self.tunnel_manager:
+                    tunnel_entry = self.tunnel_manager.route_session(inbound)
+
+                if tunnel_entry:
+                    # Per-tunnel outbound
+                    session.outbound = tunnel_entry.make_outbound()
+                    logger.debug(f"Using per-tunnel outbound for {session.session_id[:8]} tunnel={tunnel_entry.config.name}")
+                    self._apply_tunnel_crypto(session, tunnel_entry.config)
+                else:
+                    # Legacy: use default outbound
+                    session.outbound = self.default_outbound
+                    if self.encrypt:
+                        # Apply global encryption setting
+                        from .tunnel import TunnelConfig
+                        legacy_config = TunnelConfig(
+                            name="default",
+                            listen_proto="tcp",
+                            listen_host="0.0.0.0",
+                            listen_port=0,
+                            remote_proto="udp",
+                            remote_host="localhost",
+                            remote_port=0,
+                            encrypt_mode="dh-aes",
+                        )
+                        self._apply_tunnel_crypto(session, legacy_config)
+
                 if session.outbound:
                     logger.debug(f"Creating upstream handle for {session.session_id[:8]}")
-                    session.upstream_handle = session.outbound.create_upstream(session.session_id)
-                    logger.debug(f"Upstream handle created successfully for {session.session_id[:8]}")
-
-                    # Initiate Encryption
-                    if self.encrypt:
-                        try:
-                            session.dh = DHExchange()
-                            init_msg = session.dh.format_init_message().encode("utf-8")
-                            session.outbound.send(session.upstream_handle, init_msg)
-                            logger.info(f"Sent CRYPTOINIT for {session.session_id[:8]}")
-                        except Exception as e:
-                            logger.error(f"Failed to initiate crypto for {session.session_id[:8]}: {e}")
+                    try:
+                        session.upstream_handle = session.outbound.create_upstream(session.session_id)
+                        logger.debug(f"Upstream handle created successfully for {session.session_id[:8]}")
+                    except (OSError, socket.timeout) as e:
+                        logger.warning(f"Upstream connection failed for {session.session_id[:8]}: {e}. Client will be accepted but upstream unavailable.")
+                        session.upstream_handle = None
+                        session.upstream_error = str(e)
 
             with self._lock:
                 self._sessions[session.session_id] = session
                 self._client_to_session[client_id] = session
 
             # Start server listener thread for this session
-            if session.outbound:
+            if session.outbound and session.upstream_handle:
                 logger.debug(f"Starting server listener thread for {session.session_id[:8]}")
                 threading.Thread(
                     target=self._server_listener,
@@ -340,6 +392,55 @@ class Bridge:
         except Exception as e:
             logger.error(f"Failed to create session for {client_id}: {type(e).__name__}: {e}", exc_info=True)
             return None
+
+    def _apply_tunnel_crypto(self, session: ClientSession, config):
+        """Apply per-tunnel encryption configuration to a session.
+
+        Supports three modes:
+        - "none": no encryption
+        - "dh-aes": Diffie-Hellman key exchange followed by AES-256-GCM
+        - "psk-aes:<base64_key>": pre-shared key mode, derives key via SHA-256
+
+        Args:
+            session: ClientSession to configure
+            config: TunnelConfig object with encrypt_mode and psk fields
+        """
+        import hashlib
+
+        if config.encrypt_mode == "none":
+            session.encrypted = False
+            session.aes_key = None
+
+        elif config.encrypt_mode == "dh-aes":
+            try:
+                if session.upstream_handle:
+                    session.dh = DHExchange()
+                    init_msg = session.dh.format_init_message().encode("utf-8")
+                    session.outbound.send(session.upstream_handle, init_msg)
+                    logger.info(f"Sent CRYPTOINIT DH for {session.session_id[:8]}")
+                else:
+                    logger.warning(f"DH-AES crypto requested but upstream handle not available for {session.session_id[:8]}, skipping")
+                    session.encrypted = False
+            except Exception as e:
+                logger.error(f"Failed to initiate DH crypto for {session.session_id[:8]}: {e}")
+                session.encrypted = False
+
+        elif config.encrypt_mode.startswith("psk-aes:"):
+            try:
+                if config.psk:
+                    session.aes_key = hashlib.sha256(config.psk).digest()
+                    session.encrypted = True
+                    logger.info(f"PSK-AES crypto enabled for {session.session_id[:8]}")
+                else:
+                    logger.error(f"PSK-AES configured but no PSK available for {session.session_id[:8]}")
+                    session.encrypted = False
+            except Exception as e:
+                logger.error(f"Failed to set PSK-AES crypto for {session.session_id[:8]}: {e}")
+                session.encrypted = False
+
+        else:
+            logger.warning(f"Unknown encrypt_mode: {config.encrypt_mode}")
+            session.encrypted = False
 
     def _handle_disconnect(self, client_id: ClientID):
         """Handle a client disconnect event.
@@ -519,6 +620,8 @@ class Bridge:
         - LOBBY state: Delegates to _handle_control_command for authentication
           and control commands (e.g., /connect, /help). Data is not forwarded
           to server.
+        - PARTYLINE state: Session in break mode. Delegates to control_handler
+          for bridge commands. Magic sequence *#*#*#* returns to CONNECTED.
         - CONNECTED state: Encrypts (if session.encrypted), normalizes (if
           session.normalizer configured), and sends to server via
           outbound.send().
@@ -618,6 +721,34 @@ class Bridge:
         """
         if session.state == "LOBBY":
             self._handle_control_command(session, data)
+            return
+
+        if session.state == "PARTYLINE":
+            # In partyline break mode
+            self._handle_control_command(session, data)
+            return
+
+        # CONNECTED state: check for break magic sequence
+        if BREAK_TO_PARTYLINE in data:
+            # Split on the magic sequence
+            parts = data.split(BREAK_TO_PARTYLINE, 1)
+            before = parts[0]
+            # Forward any data before the sequence
+            if before:
+                self._forward_to_server(session, before)
+            # Switch to PARTYLINE mode
+            session.state = "PARTYLINE"
+            if not session.control_handler:
+                session.control_handler = ControlHandler(session, self)
+            logger.info(f"Session {session.session_id[:8]} switched to PARTYLINE mode")
+            # Send partyline prompt to client
+            inbound = self._inbound_map.get(session.inbound_name)
+            if inbound:
+                try:
+                    prompt = b"\r\n*** PARTYLINE MODE *** Type /trans or /tunnel commands, or RESUME to return\r\nPL> "
+                    inbound.send_to_client(session.client_id, prompt)
+                except Exception as e:
+                    logger.error(f"Failed to send partyline prompt: {e}")
             return
 
         if not session.outbound or not session.upstream_handle:
@@ -957,10 +1088,11 @@ class Bridge:
                         logger.info(f"_server_listener: session {session.session_id[:8]} removed from _sessions, exiting loop")
                         break
 
-                if not session.outbound:
-                    # Should not be running if no outbound
-                    logger.info(f"_server_listener: no outbound for {session.session_id[:8]}, exiting loop")
-                    break
+                if not session.outbound or not session.upstream_handle:
+                    # Should not be running if no outbound or upstream handle
+                    logger.debug(f"_server_listener: no outbound or upstream for {session.session_id[:8]}, waiting...")
+                    time.sleep(0.1)  # Avoid busy-wait
+                    continue
 
                 try:
                     logger.debug(f"_server_listener: calling recv() for {session.session_id[:8]}")
@@ -1184,3 +1316,42 @@ class Bridge:
         """
         with self._lock:
             return [s for s in self._sessions.values() if s.state == "LOBBY"]
+
+    def add_tunnel(self, config):
+        """Add a new tunnel (delegates to TunnelManager).
+
+        Args:
+            config: TunnelConfig object
+
+        Raises:
+            RuntimeError if no TunnelManager is configured
+            ValueError if tunnel name exists or port binding fails
+        """
+        if not self.tunnel_manager:
+            raise RuntimeError("No TunnelManager configured")
+        return self.tunnel_manager.add_tunnel(config)
+
+    def del_tunnel(self, name: str, drain: bool = False):
+        """Remove a tunnel (delegates to TunnelManager).
+
+        Args:
+            name: Tunnel name
+            drain: If False, destroy sessions immediately; if True, let them timeout
+
+        Raises:
+            RuntimeError if no TunnelManager is configured
+            KeyError if tunnel not found
+        """
+        if not self.tunnel_manager:
+            raise RuntimeError("No TunnelManager configured")
+        self.tunnel_manager.del_tunnel(name, drain=drain)
+
+    def list_tunnels(self) -> List[dict]:
+        """List all configured tunnels (delegates to TunnelManager).
+
+        Returns:
+            List of tunnel status dicts with name, listen, remote, encrypt, sessions
+        """
+        if not self.tunnel_manager:
+            return []
+        return self.tunnel_manager.list_tunnels()

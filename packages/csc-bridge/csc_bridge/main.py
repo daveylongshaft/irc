@@ -107,6 +107,30 @@ logging.basicConfig(
     ]
 )
 
+
+def _find_csc_root() -> Path:
+    """Resolve the active CSC root from cwd/env rather than package install location."""
+    candidates = []
+    for env_key in ("CSC_HOME", "CSC_ROOT"):
+        value = os.environ.get(env_key)
+        if value:
+            candidates.append(Path(value))
+    candidates.extend([Path.cwd(), _bridge_dir and Path(_bridge_dir)])
+
+    seen = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate = candidate.resolve()
+        for root in [candidate, *candidate.parents]:
+            key = str(root).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if (root / "etc" / "csc-service.json").exists() or (root / "csc-service.json").exists():
+                return root
+    return Path.cwd().resolve()
+
 def main():
     """Load configuration from etc/csc-service.json via Platform, create transports, start bridge.
 
@@ -166,15 +190,10 @@ def main():
     # Patch subprocess to auto-hide windows on Windows
     patch_subprocess()
 
-    # Load configuration from etc/csc-service.json via Platform
-    plat = Platform()
-    config_file = plat.get_etc_dir() / "csc-service.json"
-
-    # Fallback to csc-service.json in project root if etc doesn't have it
+    csc_root = _find_csc_root()
+    config_file = csc_root / "etc" / "csc-service.json"
     if not config_file.exists():
-        csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')
-        if csc_root:
-            config_file = Path(csc_root) / "csc-service.json"
+        config_file = csc_root / "csc-service.json"
 
     config = {}
     if config_file.exists():
@@ -211,6 +230,11 @@ def main():
     session_timeout = config.get("session_timeout", 300)
     encryption_enabled = config.get("bridge_encryption_enabled", False)
     gateway_mode = config.get("gateway_mode", None)
+    shutdown_file = csc_root / "SHUTDOWN"
+
+    if shutdown_file.exists():
+        print("[Bridge] SHUTDOWN file present at startup. Exiting before binding listeners.")
+        return
 
     print(f"[Bridge] Config loaded from {config_file}")
     print(f"[Bridge] Local:  TCP {local_tcp_host}:{local_tcp_port} -> {server_host}:{server_port}")
@@ -256,28 +280,21 @@ def main():
     # so we need to block the main thread to keep them alive
     # Also check for SHUTDOWN file to allow graceful termination
     import threading
-    from pathlib import Path
 
-    # Find project root for SHUTDOWN file
-    csc_root = os.environ.get('CSC_HOME') or os.environ.get('CSC_ROOT')
-    if not csc_root:
-        csc_root = Path(__file__).resolve().parent
-        for _ in range(10):
-            if (csc_root / "SHUTDOWN").exists() or (csc_root / "csc-service.json").exists():
-                break
-            csc_root = csc_root.parent
-            if csc_root == csc_root.parent:
-                break
-
-    shutdown_file = Path(csc_root) / "SHUTDOWN"
     stop_event = threading.Event()
 
-    # Wait for shutdown signal or SHUTDOWN file
-    while not stop_event.is_set():
-        if shutdown_file.exists():
-            print("[Bridge] SHUTDOWN file detected. Shutting down gracefully.")
-            break
-        stop_event.wait(timeout=1.0)  # Check every 1 second
+    try:
+        # Wait for shutdown signal or SHUTDOWN file
+        while not stop_event.is_set():
+            if shutdown_file.exists():
+                print("[Bridge] SHUTDOWN file detected. Shutting down gracefully.")
+                break
+            stop_event.wait(timeout=1.0)  # Check every 1 second
+    finally:
+        try:
+            bridge.stop()
+        except Exception as e:
+            print(f"[Bridge] Error during stop(): {e}")
 
     print("[Bridge] Exiting.")
 

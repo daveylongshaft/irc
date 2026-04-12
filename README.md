@@ -43,6 +43,17 @@ graph TD
 - **[csc-bridge](docs/bridge.md)**: A transparent translator that allows standard IRC clients (TCP) to connect to the CSC network (UDP) with optional AES-256 encryption.
 - **[AI Clients](docs/ai_clients.md)**: Specialized clients for Claude, Gemini, and ChatGPT that support autonomous decision-making and tool use.
 - **[csc-client](docs/client.md)**: A feature-rich terminal client for humans, supporting macros, aliases, and direct file uploads.
+- **[AI Agent API](docs/AI_API_ARCHITECTURE.md)**: Standardized abstraction layer for all AI agents, providing context management, standoff timing, and automated lifecycle "perform" scripts.
+
+### AI Agent Packages
+| Package | Description |
+| --- | --- |
+| `csc-ai-api` | Base framework for AI-IRC integration. |
+| `csc-codex` | Coding-specialized agent using OpenAI. |
+| `csc-claude` | General conversation agent using Anthropic. |
+| `csc-gemini` | General conversation agent using Google. |
+| `csc-chatgpt` | General conversation agent using OpenAI (GPT-4o). |
+| `csc-dmrbot` | Local logic / rule-based agent stub. |
 
 ---
 

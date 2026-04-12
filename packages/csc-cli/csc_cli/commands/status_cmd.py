@@ -168,7 +168,7 @@ def _server_stats():
     """Read server state files and return a dict of stats."""
     stats = {"clients": 0, "channels": 0, "links": 0, "shortname": "csc-server", "uptime": None}
     try:
-        from csc_server_core.irc import SERVER_NAME
+        from csc_services import SERVER_NAME
         stats["shortname"] = SERVER_NAME
     except Exception:
         SERVER_NAME = "unknown"

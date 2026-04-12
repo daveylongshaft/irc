@@ -1,6 +1,6 @@
 from pathlib import Path
 import importlib.util
-import tempfile
+import shutil
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -17,8 +17,9 @@ def test_layer_packages_use_package_chain_imports():
         "packages/csc-version/csc_version/version.py": "from csc_data import Data",
         "packages/csc-platform/csc_platform/platform.py": "from csc_version import Version",
         "packages/csc-network/csc_network/network.py": "from csc_platform import Platform",
-        "packages/csc-services/csc_services/service.py": "from csc_network import Network",
-        "packages/csc-server-core/csc_server_core/server.py": "from csc_services.service import Service",
+        "packages/csc-crypto/csc_crypto/crypto.py": "from csc_network import Network",
+        "packages/csc-services/csc_services/service.py": "from csc_crypto import Crypto",
+        "packages/csc-server/csc_server/server.py": "from csc_services import Service",
     }
     for path, expected in expected_imports.items():
         assert expected in _read(path), path
@@ -40,8 +41,9 @@ def test_layer_package_manifests_require_lower_layers():
         "packages/csc-version/pyproject.toml": ["csc-data>=0.1.0"],
         "packages/csc-platform/pyproject.toml": ["csc-version>=0.1.0"],
         "packages/csc-network/pyproject.toml": ["csc-platform>=0.1.0"],
-        "packages/csc-services/pyproject.toml": ["csc-network>=0.1.0"],
-        "packages/csc-server-core/pyproject.toml": ["csc-services>=0.1.0"],
+        "packages/csc-crypto/pyproject.toml": ["csc-network>=0.1.0"],
+        "packages/csc-services/pyproject.toml": ["csc-crypto>=0.1.0"],
+        "packages/csc-server/pyproject.toml": ["csc-services>=0.1.0"],
     }
     for path, dependencies in expected_dependencies.items():
         contents = _read(path)
@@ -56,9 +58,13 @@ def test_find_csc_root_walks_up_to_marker_file():
     assert spec.loader is not None
     spec.loader.exec_module(module)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        root = Path(tmpdir) / "csc"
-        nested = root / "nested" / "deeper"
-        nested.mkdir(parents=True)
+    root = REPO_ROOT / "tmp_test_find_csc_root"
+    if root.exists():
+        shutil.rmtree(root, ignore_errors=True)
+    nested = root / "nested" / "deeper"
+    nested.mkdir(parents=True, exist_ok=True)
+    try:
         (root / ".csc_root").write_text("marker", encoding="utf-8")
         assert module.find_csc_root(nested) == root.resolve()
+    finally:
+        shutil.rmtree(root, ignore_errors=True)

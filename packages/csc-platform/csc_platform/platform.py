@@ -126,6 +126,76 @@ def _load_env_file():
         pass
 
 
+def _bootstrap_paths_from_get_paths():
+    """Load CSC_* env vars via bin/get_paths.py before Platform computes PROJECT_ROOT."""
+    try:
+        candidates = []
+        for env_key in ("CSC_ROOT", "CSC_HOME"):
+            value = os.environ.get(env_key)
+            if value:
+                candidates.append(Path(value))
+        candidates.append(Path.cwd())
+        candidates.append(Path(__file__).resolve())
+
+        script = None
+        seen = set()
+        for candidate in candidates:
+            candidate = candidate.resolve()
+            for root in [candidate, *candidate.parents]:
+                key = str(root).lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                maybe = root / "bin" / "get_paths.py"
+                if maybe.exists():
+                    script = maybe
+                    break
+            if script:
+                break
+
+        if not script:
+            return
+
+        env = os.environ.copy()
+        env["CSC_GET_PATHS_FALLBACK"] = "1"
+        result = subprocess.run(
+            [sys.executable, str(script), "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return
+
+        pairs = json.loads(result.stdout)
+        if not isinstance(pairs, dict):
+            return
+
+        for key, value in pairs.items():
+            if isinstance(value, str) and value:
+                os.environ[key] = value
+
+        csc_bin = pairs.get("CSC_BIN")
+        if csc_bin:
+            _promote_path_entry(csc_bin)
+    except Exception:
+        pass
+
+
+def _promote_path_entry(path_entry):
+    """Ensure a path entry exists and is first in PATH."""
+    current = os.environ.get("PATH", "")
+    parts = current.split(os.pathsep) if current else []
+    norm_target = os.path.normcase(os.path.normpath(path_entry))
+    filtered = [p for p in parts if os.path.normcase(os.path.normpath(p)) != norm_target]
+    os.environ["PATH"] = path_entry + (os.pathsep + os.pathsep.join(filtered) if filtered else "")
+
+
+# Bootstrap env paths before computing PROJECT_ROOT.
+_bootstrap_paths_from_get_paths()
+
+
 # Load .env file when module is imported, before any class instantiation
 _load_env_file()
 
@@ -845,6 +915,20 @@ class Platform(Version):
         return p
 
     @classmethod
+    def get_services_dir(cls) -> Path:
+        """Return the live services package directory, creating it if needed."""
+        p = cls.PROJECT_ROOT / "irc" / "packages" / "csc-services" / "csc_services"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @classmethod
+    def get_staging_dir(cls) -> Path:
+        """Return the service upload staging directory, creating it if needed."""
+        p = cls.PROJECT_ROOT / "irc" / "packages" / "csc-services" / "staging_uploads"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @classmethod
     def get_wo_dir(cls) -> Path:
         """Return the workorder pool directory (ops/wo)."""
         return cls.PROJECT_ROOT / "ops" / "wo"
@@ -1415,7 +1499,10 @@ class Platform(Version):
         os.environ['CSC_DOCS'] = str(self.get_docs_dir())
         os.environ['CSC_DOCS_TOOLS'] = str(self.get_tools_dir())
         os.environ['CSC_LOGS'] = str(self.get_logs_dir())
-        os.environ['CSC_BIN'] = self.get_abs_root_path(['irc', 'bin'])
+        os.environ['CSC_SERVICES'] = str(self.get_services_dir())
+        os.environ['CSC_STAGING'] = str(self.get_staging_dir())
+        os.environ['CSC_BIN'] = self.get_abs_root_path(['bin'])
+        _promote_path_entry(os.environ['CSC_BIN'])
 
 
 def _platform_cli(args=None):
@@ -1454,7 +1541,9 @@ def _platform_cli(args=None):
             "CSC_OPS_AGENTS": p.get_abs_root_path(["ops", "agents"]),
             "CSC_DOCS":       str(Platform.get_docs_dir()),
             "CSC_DOCS_TOOLS": str(Platform.get_tools_dir()),
-            "CSC_BIN":        p.get_abs_root_path(["irc", "bin"]),
+            "CSC_SERVICES":   str(Platform.get_services_dir()),
+            "CSC_STAGING":    str(Platform.get_staging_dir()),
+            "CSC_BIN":        p.get_abs_root_path(["bin"]),
         }
         for k, v in pairs.items():
             print(f'export {k}="{v}"')
@@ -1470,6 +1559,10 @@ def _platform_cli(args=None):
         print(Platform.get_docs_dir())
     elif cmd == "get_tools_dir":
         print(Platform.get_tools_dir())
+    elif cmd == "get_services_dir":
+        print(Platform.get_services_dir())
+    elif cmd == "get_staging_dir":
+        print(Platform.get_staging_dir())
     else:
         print(json.dumps(p.platform_data, indent=2, default=str))
 

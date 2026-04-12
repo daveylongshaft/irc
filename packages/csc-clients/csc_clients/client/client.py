@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 import socket
 import struct
-from csc_network import Network
+from csc_services import Service, SERVER_NAME, format_irc_message, parse_irc_message
 from .aliases import Aliases
 from .macros import Macros
 from .client_file_handler import ClientFileHandler
@@ -19,10 +19,9 @@ from .ftp_dcc_utils import (
     split_command_args,
 )
 from csc_data import Data
-from csc_server_core.irc import parse_irc_message, format_irc_message, SERVER_NAME
 
 
-class Client(Network):
+class Client(Service):
     """
     UDP client with IRC protocol support, identity, macros, aliases, and text-file uploads.
     """

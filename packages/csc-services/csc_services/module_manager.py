@@ -6,6 +6,7 @@ import shutil
 import importlib
 from pathlib import Path
 from csc_services import Service
+from csc_platform import Platform
 
 
 class module_manager( Service ):
@@ -25,7 +26,8 @@ class module_manager( Service ):
         """
         super().__init__( server_instance )
         self.name = "module_manager"
-        self.services_dir = os.path.dirname( os.path.abspath( __file__ ) )
+        self.services_dir = str(Platform.get_services_dir())
+        self.staging_dir = Platform.get_staging_dir()
         self.log( f"Module manager initialized. Services dir: {self.services_dir}" )
 
     def list(self) -> str:
@@ -123,7 +125,7 @@ class module_manager( Service ):
 
     def staging(self) -> str:
         """Lists all files in staging_uploads/ waiting for approval."""
-        staging_dir = Path(self.services_dir).parent / "staging_uploads"
+        staging_dir = self.staging_dir
         if not staging_dir.exists():
             return "No staging directory found."
 
@@ -176,7 +178,7 @@ class module_manager( Service ):
         2. File contains exactly one class definition
         3. Class name matches the service name (case-insensitive)
         """
-        staging_dir = Path(self.services_dir).parent / "staging_uploads"
+        staging_dir = self.staging_dir
         filename = f"{name.lower()}_service.py"
         staged_path = staging_dir / filename
         target_path = Path(self.services_dir) / filename
@@ -216,7 +218,7 @@ class module_manager( Service ):
         """
         Deletes a service module from staging_uploads/ (with version backup).
         """
-        staging_dir = Path(self.services_dir).parent / "staging_uploads"
+        staging_dir = self.staging_dir
         filename = f"{name.lower()}_service.py"
         staged_path = staging_dir / filename
 

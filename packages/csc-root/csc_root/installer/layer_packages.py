@@ -94,11 +94,20 @@ LAYER_PACKAGE_ORDER: tuple[LayerPackageSpec, ...] = (
         replacement_import="from csc_network import Network",
     ),
     LayerPackageSpec(
+        distribution="csc-crypto",
+        import_name="csc_crypto",
+        class_name="Crypto",
+        relative_dir="packages/csc-crypto",
+        dependencies=("csc-network",),
+        legacy_imports=("from csc_crypto import Crypto",),
+        replacement_import="from csc_crypto import Crypto",
+    ),
+    LayerPackageSpec(
         distribution="csc-service-base",
         import_name="csc_loop_base",
         class_name="Service",
         relative_dir="packages/csc-service-base",
-        dependencies=("csc-network",),
+        dependencies=("csc-crypto",),
         legacy_imports=(
             "from csc_services.service import Service",
             "from csc_services.service import Service",
@@ -107,14 +116,17 @@ LAYER_PACKAGE_ORDER: tuple[LayerPackageSpec, ...] = (
         notes="Still uses csc_services.service modules for dynamic service loading.",
     ),
     LayerPackageSpec(
-        distribution="csc-server-core",
-        import_name="csc_server_core",
+        distribution="csc-server",
+        import_name="csc_server",
         class_name="Server",
-        relative_dir="packages/csc-server-core",
+        relative_dir="packages/csc-server",
         dependencies=("csc-service-base",),
-        legacy_imports=("from csc_server_core.server import Server",),
-        replacement_import="from csc_server_core import Server",
-        notes="Still uses csc_server_core handlers and shared IRC helpers for non-core server composition.",
+        legacy_imports=(
+            "from csc_server.server import Server",
+            "from csc_server_core.server import Server",
+        ),
+        replacement_import="from csc_server import Server",
+        notes="Queue-first server package replacing the legacy csc-server-core runtime.",
     ),
 )
 

@@ -9,13 +9,14 @@ Commands (via /msg BotServ):
 Data storage: managed by PersistentStorageManager (botserv.json)
 """
 
-import time
+import re
 from pathlib import Path
 from csc_services import Service
-import subprocess
-import re
-import os
-import sys
+
+
+# Paths that require privileged (sudo) access
+PRIVILEGED_PREFIXES = ["/var/log/"]
+
 
 class Botserv(Service):
     """
@@ -27,6 +28,22 @@ class Botserv(Service):
         super().__init__(server_instance)
         self.name = "botserv"
         self.log("BotServ service initialized.")
+
+    def _is_privileged_path(self, path):
+        """Check if a log path requires privileged access."""
+        return any(str(path).startswith(p) for p in PRIVILEGED_PREFIXES)
+
+    def _get_offset_key(self, channel, logfile_path):
+        """Storage key for tracking read offset."""
+        return f"botserv_logread_offset_{channel}_{logfile_path}"
+
+    def _get_channel_filters(self, channel):
+        """Load compiled match/nomatch filter patterns for a channel."""
+        match_raw = self.server.storage.get(f"botserv_match_filters_{channel}", [])
+        nomatch_raw = self.server.storage.get(f"botserv_nomatch_filters_{channel}", [])
+        match = [re.compile(p, re.IGNORECASE) for p in match_raw]
+        nomatch = [re.compile(p, re.IGNORECASE) for p in nomatch_raw]
+        return match, nomatch
 
     def add(self, *args) -> str:
         """ADD <botnick> <#chan> <password>"""
@@ -44,19 +61,17 @@ class Botserv(Service):
         """LIST [#chan]"""
         return "Error: BotServ LIST must be called via PRIVMSG from the IRC server integration."
 
-
     def addmatch(self, *args) -> str:
         """ADDMATCH <#chan> <pattern> - Add a match filter pattern for a channel."""
         if len(args) < 2:
             return "Error: ADDMATCH requires channel and pattern. Usage: ADDMATCH <#chan> <pattern>"
-        channel = args[0]
-        pattern = args[1]
-        
+        channel, pattern = args[0], args[1]
+
         try:
-            re.compile(pattern) # Validate regex
+            re.compile(pattern)
         except re.error as e:
             return f"Error: Invalid regex pattern '{pattern}': {e}"
-            
+
         filters = self.server.storage.get(f"botserv_match_filters_{channel}", [])
         if pattern not in filters:
             filters.append(pattern)
@@ -68,9 +83,8 @@ class Botserv(Service):
         """DELMATCH <#chan> <pattern> - Delete a match filter pattern for a channel."""
         if len(args) < 2:
             return "Error: DELMATCH requires channel and pattern. Usage: DELMATCH <#chan> <pattern>"
-        channel = args[0]
-        pattern = args[1]
-        
+        channel, pattern = args[0], args[1]
+
         filters = self.server.storage.get(f"botserv_match_filters_{channel}", [])
         if pattern in filters:
             filters.remove(pattern)
@@ -82,11 +96,10 @@ class Botserv(Service):
         """ADDNOMATCH <#chan> <pattern> - Add a nomatch filter pattern for a channel."""
         if len(args) < 2:
             return "Error: ADDNOMATCH requires channel and pattern. Usage: ADDNOMATCH <#chan> <pattern>"
-        channel = args[0]
-        pattern = args[1]
-        
+        channel, pattern = args[0], args[1]
+
         try:
-            re.compile(pattern) # Validate regex
+            re.compile(pattern)
         except re.error as e:
             return f"Error: Invalid regex pattern '{pattern}': {e}"
 
@@ -101,9 +114,8 @@ class Botserv(Service):
         """DELNOMATCH <#chan> <pattern> - Delete a nomatch filter pattern for a channel."""
         if len(args) < 2:
             return "Error: DELNOMATCH requires channel and pattern. Usage: DELNOMATCH <#chan> <pattern>"
-        channel = args[0]
-        pattern = args[1]
-        
+        channel, pattern = args[0], args[1]
+
         filters = self.server.storage.get(f"botserv_nomatch_filters_{channel}", [])
         if pattern in filters:
             filters.remove(pattern)
@@ -145,12 +157,12 @@ class Botserv(Service):
             "  /msg BotServ ADD <botnick> <#chan> <password>  - Register a bot\n"
             "  /msg BotServ DEL <botnick> <#chan>             - Unregister a bot\n"
             "  /msg BotServ LIST [#chan]                      - List registered bots\n"
-            "  /msg BotServ ADDMATCH <botnick> <#chan> <pattern>    - Add a match filter pattern for a channel\n"
-            "  /msg BotServ DELMATCH <botnick> <#chan> <pattern>    - Delete a match filter pattern for a channel\n"
-            "  /msg BotServ ADDNOMATCH <botnick> <#chan> <pattern> - Add a nomatch filter pattern for a channel\n"
-            "  /msg BotServ DELNOMATCH <botnick> <#chan> <pattern> - Delete a nomatch filter pattern for a channel\n"
-            "  /msg BotServ LISTFILTERS <botnick> <#chan>           - List all match and nomatch filters for a channel\n"
-            "  /msg BotServ LOGREAD <#chan> <logfile_path> [filter_pattern] - Read logfile to channel with optional filtering"
+            "  /msg BotServ ADDMATCH <#chan> <pattern>        - Add a match filter\n"
+            "  /msg BotServ DELMATCH <#chan> <pattern>        - Delete a match filter\n"
+            "  /msg BotServ ADDNOMATCH <#chan> <pattern>      - Add a nomatch filter\n"
+            "  /msg BotServ DELNOMATCH <#chan> <pattern>      - Delete a nomatch filter\n"
+            "  /msg BotServ LISTFILTERS <#chan>               - List all filters\n"
+            "  /msg BotServ LOGREAD <#chan> <logfile_path> [filter] - Read log to channel"
         )
 
     def logread(self, *args, filter_pattern: str = None) -> str:
@@ -163,93 +175,84 @@ class Botserv(Service):
         if len(args) > 2:
             filter_pattern = args[2]
 
-        # Basic validation for channel format (starts with #)
         if not channel.startswith('#'):
             return "Error: Invalid channel format. Channel must start with #."
 
-        # Use self.server.storage for persistent data
-        storage_key = f"botserv_logread_offset_{channel}_{logfile_path}"
-        last_read_offset = self.server.storage.get(storage_key, 0)
-        
-        script_path = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "..", "bin", "read_privileged_log.py"))
-        
+        # Get stored offset via Data layer
+        offset_key = self._get_offset_key(channel, logfile_path)
+        last_offset = self.server.storage.get(offset_key, 0)
+
+        # Read new lines -- privileged paths use Data._tail_privileged_log_file,
+        # normal paths use Log._tail_log_file
+        path = Path(logfile_path)
         try:
-            # Call the privileged script
-            command = [sys.executable, script_path, logfile_path, str(last_read_offset)]
-            process = subprocess.run(command, capture_output=True, text=True, check=True)
-
-            new_content_raw = process.stdout
-            
-            # Extract total_bytes_read from stderr
-            total_bytes_read_str = [line for line in process.stderr.splitlines() if line.startswith("TOTAL_BYTES_READ:")]
-            if total_bytes_read_str:
-                total_bytes_read = int(total_bytes_read_str[0].split(":")[1])
+            if self._is_privileged_path(logfile_path):
+                new_lines, new_offset = self._tail_privileged_log_file(path, last_offset)
             else:
-                self.log(f"Warning: Could not find TOTAL_BYTES_READ in script output for {logfile_path}. Assuming current offset is file size.")
-                total_bytes_read = len(new_content_raw.encode('utf-8')) # Fallback: assume script returned entire new content
-
-            self.server.storage.set(storage_key, total_bytes_read)
-            
-            new_lines = new_content_raw.splitlines()
-
-            # Retrieve channel-specific match and nomatch filters
-            channel_match_filters = [re.compile(p, re.IGNORECASE) for p in self.server.storage.get(f"botserv_match_filters_{channel}", [])]
-            channel_nomatch_filters = [re.compile(p, re.IGNORECASE) for p in self.server.storage.get(f"botserv_nomatch_filters_{channel}", [])]
-
-            compiled_arg_filter_pattern = None
-            if filter_pattern:
-                try:
-                    compiled_arg_filter_pattern = re.compile(filter_pattern, re.IGNORECASE)
-                    self.server.send_to_channel(channel, f"Applying argument filter: '{filter_pattern}'")
-                except re.error as e:
-                    return f"Error: Invalid argument filter pattern '{filter_pattern}': {e}"
-
-            matched_lines_count = 0
-            lines_sent = 0
-            
-            if not new_lines and last_read_offset > 0:
-                self.server.send_to_channel(channel, f"No new lines in '{logfile_path}'.")
-                return f"Successfully checked log '{logfile_path}'. No new lines."
-            elif not new_lines and last_read_offset == 0:
-                 self.server.send_to_channel(channel, f"Log '{logfile_path}' is empty or not yet processed.")
-                 return f"Successfully checked log '{logfile_path}'. Empty or first read."
-
-            self.server.send_to_channel(channel, f"Starting to read new lines from: {logfile_path}")
-            for line in new_lines:
-                # Apply nomatch filters first
-                if any(nomatch_filter.search(line) for nomatch_filter in channel_nomatch_filters):
-                    continue # Skip this line
-
-                # Apply match filters (if any exist)
-                if channel_match_filters and not any(match_filter.search(line) for match_filter in channel_match_filters):
-                    continue # Skip this line if it doesn't match any required pattern
-
-                # Apply argument filter if present
-                if compiled_arg_filter_pattern is None or compiled_arg_filter_pattern.search(line):
-                    self.server.send_to_channel(channel, line.strip())
-                    matched_lines_count += 1
-                lines_sent += 1
-            
-            filter_summary = []
-            if compiled_arg_filter_pattern:
-                filter_summary.append(f"argument filter '{filter_pattern}'")
-            if channel_match_filters:
-                filter_summary.append("channel match filters")
-            if channel_nomatch_filters:
-                filter_summary.append("channel nomatch filters")
-
-            if filter_summary:
-                self.server.send_to_channel(channel, f"Finished reading new lines with {', '.join(filter_summary)}. {matched_lines_count} matching lines out of {lines_sent} new lines found.")
-            else:
-                self.server.send_to_channel(channel, f"Finished reading new lines from: {logfile_path}. Total new lines: {lines_sent}")
-            
-            return f"Successfully processed new lines from '{logfile_path}' to '{channel}'. Matched lines: {matched_lines_count}"
-        except FileNotFoundError:
-            return f"Error: Log reading script not found or permissions issue: {script_path}"
-        except subprocess.CalledProcessError as e:
-            return f"Error executing log script for {logfile_path}: {e.stderr}"
+                new_lines, new_offset = self._tail_log_file(path, last_offset)
         except Exception as e:
-            self.server.send_to_channel(channel, f"Error processing logfile {logfile_path}: {e}")
-            return f"Error processing logfile {logfile_path}: {e}"
+            self.server.send_to_channel(channel, f"Error reading {logfile_path}: {e}")
+            return f"Error reading {logfile_path}: {e}"
 
-    
+        # Persist new offset
+        self.server.storage.set(offset_key, new_offset)
+
+        if not new_lines:
+            if last_offset > 0:
+                self.server.send_to_channel(channel, f"No new lines in '{logfile_path}'.")
+            else:
+                self.server.send_to_channel(channel, f"Log '{logfile_path}' is empty or not yet processed.")
+            return f"Successfully checked log '{logfile_path}'. No new lines."
+
+        # Load channel filters
+        match_filters, nomatch_filters = self._get_channel_filters(channel)
+
+        # Compile argument filter if provided
+        compiled_arg_filter = None
+        if filter_pattern:
+            try:
+                compiled_arg_filter = re.compile(filter_pattern, re.IGNORECASE)
+                self.server.send_to_channel(channel, f"Applying filter: '{filter_pattern}'")
+            except re.error as e:
+                return f"Error: Invalid filter pattern '{filter_pattern}': {e}"
+
+        # Apply filters and send to channel
+        self.server.send_to_channel(channel, f"Reading new lines from: {logfile_path}")
+        matched = 0
+        total = len(new_lines)
+
+        for line in new_lines:
+            text = line.strip()
+            if not text:
+                continue
+
+            # Nomatch filters (exclusion)
+            if any(f.search(text) for f in nomatch_filters):
+                continue
+
+            # Match filters (inclusion -- all lines must match at least one)
+            if match_filters and not any(f.search(text) for f in match_filters):
+                continue
+
+            # Argument filter
+            if compiled_arg_filter and not compiled_arg_filter.search(text):
+                continue
+
+            self.server.send_to_channel(channel, text)
+            matched += 1
+
+        # Summary
+        filter_parts = []
+        if compiled_arg_filter:
+            filter_parts.append(f"argument filter '{filter_pattern}'")
+        if match_filters:
+            filter_parts.append("channel match filters")
+        if nomatch_filters:
+            filter_parts.append("channel nomatch filters")
+
+        if filter_parts:
+            self.server.send_to_channel(channel, f"Done. {matched} matching lines out of {total} new lines ({', '.join(filter_parts)}).")
+        else:
+            self.server.send_to_channel(channel, f"Done. {total} new lines from: {logfile_path}")
+
+        return f"Processed '{logfile_path}' to '{channel}'. {matched} lines delivered."
