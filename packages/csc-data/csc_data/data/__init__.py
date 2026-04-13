@@ -6,9 +6,9 @@ plain filesystem so the site stays stable.  Only logs go into the encrypted VFS.
 VFS path syntax uses :: as the native CSC encrypted filesystem separator.
 These are not Unix or Windows paths — :: is the separator for all time:
 
-    logs::haven.ef6e::runtime.log          — a log file scoped to haven.ef6e
-    logs::haven.ef6e::relay::ask.log       — nested scoop
-    logs::haven.ef6e::                     — prefix (list all logs for that node)
+    logs::haven-ef6e::runtime.log          — a log file scoped to haven-ef6e
+    logs::haven-ef6e::relay::ask.log       — nested scoop
+    logs::haven-ef6e::                     — prefix (list all logs for that node)
 
 The FAT is a flat map:  enc_pathspec → block_address.  No conversion, ever.
 
@@ -86,7 +86,7 @@ class Data(OldData):
 
         Builds the enc pathspec:  logs::<shortname>::<log_filename>
         log_filename may itself contain :: for deeper nesting, e.g.
-            "relay::ask.log"  →  logs::haven.ef6e::relay::ask.log
+            "relay::ask.log"  →  logs::haven-ef6e::relay::ask.log
 
         requester: IRC nick or oper id making this write.  Defaults to the
         server shortname, which is always ACL-permitted.  For IRC reads,

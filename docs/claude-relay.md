@@ -7,7 +7,7 @@ CSC CA for S2S server links — no new infrastructure needed.
 ## How It Works
 
 ```
-Windows node (haven.4346)                  Linux hub (haven.ef6e)
+Windows node (haven-4346)                  Linux hub (haven-ef6e)
   claude-relay-ask 10.10.10.1 9531  ──mTLS──>  claude-relay :9531
   sends: "explain this error\x00"             runs: claude --print "explain..."
   receives: Claude's response                 returns: stdout
@@ -61,13 +61,13 @@ openssl req -new -key /opt/csc/etc/<nodename>.key -subj "/CN=<nodename>" \
 cat pki/issued/<nodename>.crt pki/ca.crt > /opt/csc/etc/<nodename>.chain.pem
 ```
 
-## Linux Hub Setup (haven.ef6e)
+## Linux Hub Setup (haven-ef6e)
 
 Already running. Systemd unit: `~/.config/systemd/user/claude-relay.service`
 
 Port: **9531** on **0.0.0.0** (reachable from VPN subnet 10.10.10.0/24)
 
-Cert used: `/opt/csc/etc/haven.ef6e.chain.pem` (re-issued with serverClient type)
+Cert used: `/opt/csc/etc/haven-ef6e.chain.pem` (re-issued with serverClient type)
 
 ```bash
 systemctl --user status claude-relay
@@ -76,12 +76,12 @@ echo "say hi" | CLAUDE_RELAY_CERT=... CLAUDE_RELAY_KEY=... CLAUDE_RELAY_CA=... \
   claude-relay-ask 127.0.0.1 9531
 ```
 
-## Windows Node Setup (haven.4346)
+## Windows Node Setup (haven-4346)
 
 See work order: `ops/wo/ready/claude-relay-setup-windows.md`
 
 Short version:
-1. Re-issue haven.4346 cert with `serverClient` type (CA is on Linux hub)
+1. Re-issue haven-4346 cert with `serverClient` type (CA is on Linux hub)
 2. Copy `bin/claude-relay` and `bin/claude-relay-ask` to Windows
 3. Create NSSM service pointing to Python and the relay script
 4. Set environment: cert/key/CA paths + `CLAUDE_RELAY_PORT=9531`

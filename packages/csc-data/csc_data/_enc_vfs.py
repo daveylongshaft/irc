@@ -57,7 +57,7 @@ class EncryptedVFSStore:
         :: is the native CSC encrypted filesystem separator — not a Unix path,
         not a Windows path, just a FAT key.  The FAT is a flat map:
             enc_pathspec  →  block_address (00/11/22/33-44-55-66-77)
-        No conversion needed or wanted.  logs::haven.ef6e::relay-ask.log stays
+        No conversion needed or wanted.  logs::haven-ef6e::relay-ask.log stays
         exactly that.  The block store on disk uses hex addresses; the separator
         in the pathspec is purely for human readability and FAT prefix lookups.
         """

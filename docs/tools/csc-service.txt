@@ -310,7 +310,7 @@ CSC-SERVICE SUBMODULE MAP
 # [2026-03-17 17:39:34] :davey PRIVMSG #runtime :ai do agent status
 
 ── irc/packages/csc-service/csc_service/buffers/chan_s2s_test.log ──
-# [2026-03-19 14:33:05] :alice_local PRIVMSG #s2s_test :Hello from haven.4346 Alice!
+# [2026-03-19 14:33:05] :alice_local PRIVMSG #s2s_test :Hello from haven-4346 Alice!
 
 ── irc/packages/csc-service/csc_service/buffers/chan_t.log ──
 # [2026-03-13 06:12:30] :test_5482 PRIVMSG #t :AI do help
@@ -1316,7 +1316,7 @@ CSC-SERVICE SUBMODULE MAP
     def _handle_wakeword(self, msg, addr)  # WAKEWORD ENABLE|DISABLE - Toggle wakeword-based message filtering for this client.
     def _should_forward_to_client(self, recipient_addr, message_text, sender_nick)  # Check whether a PRIVMSG should be forwarded to a specific recipient.
     def _broadcast_privmsg_filtered(self, channel, out_msg, message_text, sender_nick, exclude=None)  # Broadcast a PRIVMSG to channel members with wakeword filtering.
-    def _get_local_server_id(self)  # Return the local server's S2S identity (e.g. 'haven.4346').
+    def _get_local_server_id(self)  # Return the local server's S2S identity (e.g. 'haven-4346').
     def _parse_ai_command(self, text)  # Detect AI command with optional server prefix.
     def _forward_ai_command(self, target_server, ai_text, nick, channel, addr)  # Forward an AI command to a remote server via SYNCCMD.
     def _handle_service_via_chatline(self, raw_line, addr, nick, channel=None)  # Handle service commands received via chatline (e.g., AI 1 agent assign...).

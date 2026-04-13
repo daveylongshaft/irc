@@ -427,8 +427,8 @@ csc/
 │   ├── channels.json
 │   ├── channels.json.corrupt.1773345477
 │   ├── chanserv.json
-│   ├── haven.4346.chain.pem
-│   ├── haven.4346.key
+│   ├── haven-4346.chain.pem
+│   ├── haven-4346.key
 │   ├── history.json
 │   ├── nickserv.json
 │   ├── opers.json

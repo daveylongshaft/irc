@@ -34,7 +34,7 @@ CSC-ROOT SUBMODULE MAP
 # Independent Root layer package for the CSC inheritance chain.
 
 ── irc/packages/csc-root/csc_root/letter_to_other_me.md ──
-# # Letter to the Other Me at haven.ef6e
+# # Letter to the Other Me at haven-ef6e
 
 ── irc/packages/csc-root/csc_root/root.py ──
   SCRIPT_DIR = dirname(Path(__file__).absolute())
