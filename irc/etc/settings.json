@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "nickserv": {
+    "enforce_timeout": 60,
+    "enforce_mode": "disconnect"
+  }
+}

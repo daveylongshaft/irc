@@ -1,0 +1,140 @@
+{
+  "detected_at": "2026-03-28T16:12:00+0000",
+  "working_dir": "/opt/csc/irc",
+  "path_separator": "/",
+  "hardware": {
+    "architecture": "x86_64",
+    "processor": "x86_64",
+    "cpu_cores": 1,
+    "cpu_speed_mhz": 2499,
+    "ram_total_mb": 1968,
+    "ram_available_mb": 1099,
+    "disk_total_gb": 29.4,
+    "disk_free_gb": 19.3
+  },
+  "os": {
+    "system": "Linux",
+    "release": "6.8.0-31-generic",
+    "version": "#31-Ubuntu SMP PREEMPT_DYNAMIC Sat Apr 20 00:40:06 UTC 2024",
+    "platform": "linux",
+    "python_version": "3.12.3",
+    "distribution": "Ubuntu 24.04.4 LTS"
+  },
+  "virtualization": {
+    "type": "bare_metal"
+  },
+  "geography": {
+    "timezone": "UTC",
+    "utc_offset": "+0000",
+    "locale": "en_US",
+    "country_code": "US"
+  },
+  "time": {
+    "system_time": "2026-03-28T16:12:00+0000",
+    "ntp_synced": true,
+    "clock_warning": null
+  },
+  "network": {},
+  "software": {
+    "python3": {
+      "installed": true,
+      "version": "Python 3.12.3"
+    },
+    "python": {
+      "installed": false
+    },
+    "pip": {
+      "installed": true,
+      "version": "pip 24.0 from /usr/lib/python3/dist-packages/pip (python 3.12)"
+    },
+    "pip3": {
+      "installed": true,
+      "version": "pip 24.0 from /usr/lib/python3/dist-packages/pip (python 3.12)"
+    },
+    "git": {
+      "installed": true,
+      "version": "git version 2.43.0"
+    },
+    "node": {
+      "installed": true,
+      "version": "v22.22.2"
+    },
+    "npm": {
+      "installed": true,
+      "version": "10.9.7"
+    },
+    "curl": {
+      "installed": true,
+      "version": "curl 8.5.0 (x86_64-pc-linux-gnu) libcurl/8.5.0 OpenSSL/3.0.13 zlib/1.3 brotli/1.1.0 zstd/1.5.5 libidn2/2.3.7 libpsl/0.21.2 (+libidn2/2.3.7) libssh/0.10.6/openssl/zlib nghttp2/1.59.0 librtmp/2.3 OpenLDAP/2.6.10"
+    },
+    "gcc": {
+      "installed": true,
+      "version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+    },
+    "make": {
+      "installed": true,
+      "version": "GNU Make 4.3"
+    },
+    "docker": {
+      "installed": false
+    },
+    "docker-compose": {
+      "installed": false
+    },
+    "apt": {
+      "installed": true,
+      "version": "apt 2.8.3 (amd64)"
+    },
+    "yum": {
+      "installed": false
+    },
+    "pacman": {
+      "installed": false
+    },
+    "pkg": {
+      "installed": false
+    }
+  },
+  "docker": {
+    "installed": false,
+    "daemon_running": false,
+    "version": null,
+    "usable": false
+  },
+  "ai_agents": {
+    "claude": {
+      "installed": true,
+      "path": "/home/davey/.nvm/versions/node/v22.22.2/bin/claude"
+    },
+    "gemini": {
+      "installed": true,
+      "path": "/home/davey/.nvm/versions/node/v22.22.2/bin/gemini"
+    },
+    "coding-agent": {
+      "installed": false,
+      "path": null
+    },
+    "aider": {
+      "installed": false,
+      "path": null
+    },
+    "copilot": {
+      "installed": false,
+      "path": null
+    }
+  },
+  "resource_assessment": {
+    "can_run_docker": false,
+    "can_run_ai_agents": false,
+    "resource_level": "minimal"
+  },
+  "runtime": {
+    "temp_root": "/opt/csc/irc/tmp",
+    "csc_agent_work": "/opt/csc/irc/tmp",
+    "project_tmp": "/opt/csc/irc/tmp",
+    "temp_dir_windows": "\\opt\\csc\\irc\\tmp",
+    "temp_dir_linux": "/opt/csc/irc/tmp",
+    "proj_dir_windows": "\\opt\\csc\\irc",
+    "proj_dir_linux": "/opt/csc/irc"
+  }
+}

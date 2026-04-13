@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "protect_local_opers": true,
+  "active_opers": [],
+  "olines": {
+    "admin": [
+      {
+        "user": "admin",
+        "password": "changeme",
+        "servers": [
+          "*"
+        ],
+        "host_masks": [
+          "*!*@*"
+        ],
+        "flags": "aol",
+        "comment": "default admin account"
+      }
+    ]
+  }
+}
