@@ -62,7 +62,7 @@ class LinkMixin:
         Accepts (host, port) or (origin_server, host, port). See
         Link.from_peer_tuple for semantics.
         """
-        link = Link.from_peer_tuple(peer, name=name)
+        link = Link.from_peer_tuple(self, peer, name=name)
         return self.add_link(link)
 
     def bind_link_origin(self, link: Link, origin_server: str) -> None:
@@ -154,7 +154,7 @@ class LinkMixin:
         if addr is None:
             return None
         for link in self._links_by_id.values():
-            if link.origin_server is None and link.configured_addr_matches(addr):
+            if link.origin_server is None and link.connection.addr_matches(addr):
                 return link
         return None
 

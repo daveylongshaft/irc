@@ -33,6 +33,8 @@ class PollingLoop:
         enable_pr_review = config.get("enable_pr_review", False)
         enable_jules = config.get("jules", {}).get("enabled", False)
         enable_codex = config.get("codex", {}).get("enabled", False)
+        enable_pki = config.get("enable_pki", False)
+        enable_ftpd = config.get("ftpd", {}).get("enabled", False)
 
         ts = lambda: time.strftime("%Y-%m-%d %H:%M:%S")
         idle_cycles = 0
@@ -102,6 +104,22 @@ class PollingLoop:
                         had_work = True
                 except Exception as e:
                     print(f"[{ts()}] [codex] ERROR: {e}")
+
+            if enable_pki:
+                try:
+                    from csc_loop.infra import pki_server
+                    if pki_server.run_cycle(self.work_dir):
+                        had_work = True
+                except Exception as e:
+                    print(f"[{ts()}] [pki] ERROR: {e}")
+
+            if enable_ftpd:
+                try:
+                    from csc_loop.infra import ftpd
+                    if ftpd.run_cycle(self.work_dir):
+                        had_work = True
+                except Exception as e:
+                    print(f"[{ts()}] [ftpd] ERROR: {e}")
 
             git_sync.push_if_changed()
 

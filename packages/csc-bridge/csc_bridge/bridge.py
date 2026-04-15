@@ -85,6 +85,7 @@ from .transports.base import InboundTransport, OutboundTransport, ClientID
 from .irc_normalizer import IrcNormalizer
 from .data_bridge import BridgeData
 from .control_handler import ControlHandler
+import hashlib
 from csc_crypto import DHExchange, decrypt, encrypt, is_encrypted
 
 logger = logging.getLogger("csc_bridge")
@@ -342,24 +343,9 @@ class Bridge:
                     # Per-tunnel outbound
                     session.outbound = tunnel_entry.make_outbound()
                     logger.debug(f"Using per-tunnel outbound for {session.session_id[:8]} tunnel={tunnel_entry.config.name}")
-                    self._apply_tunnel_crypto(session, tunnel_entry.config)
                 else:
                     # Legacy: use default outbound
                     session.outbound = self.default_outbound
-                    if self.encrypt:
-                        # Apply global encryption setting
-                        from .tunnel import TunnelConfig
-                        legacy_config = TunnelConfig(
-                            name="default",
-                            listen_proto="tcp",
-                            listen_host="0.0.0.0",
-                            listen_port=0,
-                            remote_proto="udp",
-                            remote_host="localhost",
-                            remote_port=0,
-                            encrypt_mode="dh-aes",
-                        )
-                        self._apply_tunnel_crypto(session, legacy_config)
 
                 if session.outbound:
                     logger.debug(f"Creating upstream handle for {session.session_id[:8]}")
@@ -370,6 +356,23 @@ class Bridge:
                         logger.warning(f"Upstream connection failed for {session.session_id[:8]}: {e}. Client will be accepted but upstream unavailable.")
                         session.upstream_handle = None
                         session.upstream_error = str(e)
+
+                # Apply crypto AFTER upstream handle exists so DH can send
+                if tunnel_entry:
+                    self._apply_tunnel_crypto(session, tunnel_entry.config)
+                elif self.encrypt:
+                    from .tunnel import TunnelConfig
+                    legacy_config = TunnelConfig(
+                        name="default",
+                        listen_proto="tcp",
+                        listen_host="0.0.0.0",
+                        listen_port=0,
+                        remote_proto="udp",
+                        remote_host="localhost",
+                        remote_port=0,
+                        encrypt_mode="dh-aes",
+                    )
+                    self._apply_tunnel_crypto(session, legacy_config)
 
             with self._lock:
                 self._sessions[session.session_id] = session
@@ -759,14 +762,12 @@ class Bridge:
         if session.encrypted:
             if session.aes_key:
                 try:
-                    # Do NOT encrypt CRYPTOINIT messages (handshake)
-                    # But client shouldn't be sending them anyway.
-                    # Just encrypt everything from client.
                     data = encrypt(session.aes_key, data)
+                    # Prepend 16-byte key_hash so server can match to session
+                    key_hash = hashlib.sha256(session.aes_key).digest()[:16]
+                    data = key_hash + data
                 except Exception as e:
                     logger.error(f"Encryption failed for {session.session_id[:8]}: {e}")
-                    # Forwarding raw data as fallback is safer for debugging but riskier for security.
-                    # As per instruction, handle missing key gracefully (don't drop silently).
             else:
                 logger.error(f"Encryption enabled but aes_key missing for {session.session_id[:8]}. Forwarding as plaintext.")
 
@@ -946,9 +947,13 @@ class Bridge:
         if getattr(session, 'encrypted', False) and getattr(session, 'aes_key', None):
             if is_encrypted(data):
                 try:
-                    data = decrypt(session.aes_key, data)
+                    # Strip key_hash prefix (16 bytes) if present
+                    expected_hash = hashlib.sha256(session.aes_key).digest()[:16]
+                    if len(data) > 16 and data[:16] == expected_hash:
+                        data = decrypt(session.aes_key, data[16:])
+                    else:
+                        data = decrypt(session.aes_key, data)
                 except Exception as e:
-                    # Log decryption failure but forward raw data rather than dropping
                     logger.error(f"Decryption failed for {session.session_id[:8]}: {e}")
 
         if inbound:
@@ -1113,6 +1118,16 @@ class Bridge:
                                         session.encrypted = True
                                         logger.info(f"Encrypted session established for {session.session_id[:8]}")
                                         continue # Consume the handshake message
+                                elif text.startswith("ERR_NOT_REGISTERED"):
+                                    # Server lost our DH key (e.g. after restart) -- re-initiate
+                                    logger.info(f"Server sent ERR_NOT_REGISTERED for {session.session_id[:8]}, re-initiating DH")
+                                    session.encrypted = False
+                                    session.aes_key = None
+                                    if session.outbound and session.upstream_handle:
+                                        session.dh = DHExchange()
+                                        init_msg = session.dh.format_init_message().encode("utf-8")
+                                        session.outbound.send(session.upstream_handle, init_msg)
+                                    continue
                             except Exception:
                                 pass  # Ignored exception
 
