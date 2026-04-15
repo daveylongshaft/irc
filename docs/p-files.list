@@ -447,8 +447,8 @@
 ./etc/channels.json
 ./etc/channels.json.corrupt.1773345477
 ./etc/chanserv.json
-./etc/haven.4346.chain.pem
-./etc/haven.4346.key
+./etc/haven-4346.chain.pem
+./etc/haven-4346.key
 ./etc/history.json
 ./etc/nickserv.json
 ./etc/opers.json

@@ -47,7 +47,7 @@
       "slug": "server-topology",
       "title": "Current Server Topology",
       "category": "environment",
-      "summary": "Local host is haven.4346; remote servers are haven.ef6e, beacon.83eb, and well.b7ea over hosts/VPN.",
+      "summary": "Local host is haven-4346; remote servers are haven-ef6e, beacon-83eb, and well-b7ea over hosts/VPN.",
       "status": "reference",
       "tags": [
         "environment",
@@ -81,7 +81,7 @@
       "slug": "s2s-linking-investigation",
       "title": "S2S Linking Investigation",
       "category": "tasks",
-      "summary": "Unfinished work to restore haven.4346 <-> haven.ef6e server linking and synchronized #general membership.",
+      "summary": "Unfinished work to restore haven-4346 <-> haven-ef6e server linking and synchronized #general membership.",
       "status": "stashed",
       "tags": [
         "networking",

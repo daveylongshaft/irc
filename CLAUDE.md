@@ -651,7 +651,7 @@ CSC servers linked via S2S can query each other's Claude instance using mTLS rel
 ```bash
 # Ask another server's Claude a question
 echo "your prompt" | claude-relay-ask <host> [port]
-claude-relay-ask haven.ef6e 9531 <<< "what is 2+2"
+claude-relay-ask haven-ef6e 9531 <<< "what is 2+2"
 
 # From Python
 import subprocess
@@ -675,8 +675,8 @@ print(result.stdout)
 - `CLAUDE_RELAY_CA` - Path to CA cert PEM
 
 ### Known Peers
-- `10.10.10.1:9531` - haven.ef6e (Linux)
-- `10.10.10.2:9531` - haven.4346 (Windows)
+- `10.10.10.1:9531` - haven-ef6e (Linux)
+- `10.10.10.2:9531` - haven-4346 (Windows)
 
 ### When to Use
 - Need information from the other server's environment
@@ -702,8 +702,8 @@ print(result.stdout)
 ### Config (csc-service.json)
 ```json
 {
-  "s2s_cert": "C:\\csc\\etc\\haven.4346.chain.pem",
-  "s2s_key": "C:\\csc\\etc\\haven.4346.key",
+  "s2s_cert": "C:\\csc\\etc\\haven-4346.chain.pem",
+  "s2s_key": "C:\\csc\\etc\\haven-4346.key",
   "s2s_ca": "C:\\csc\\etc\\ca.crt",
   "s2s_peers": [{"host": "10.10.10.1", "port": 9520}]
 }
