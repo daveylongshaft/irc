@@ -8,6 +8,22 @@
       <sourceFolder url="file://$MODULE_DIR$/packages/csc-server-core" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/csc-services" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/csc-version" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-ai-api" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-bridge" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-chatgpt" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-claude" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-cli" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-clients" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-codex" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-crypto" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-dmrbot" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-ftpd" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-gemini" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-log" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-loop" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-pki" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-platform" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/csc-server" isTestSource="false" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
