@@ -20,19 +20,24 @@ class ConfigManager:
         # CSC_ETC env var (set by Platform.export_paths)
         csc_etc = os.environ.get("CSC_ETC", "")
         if csc_etc:
-            cfg = Path(csc_etc) / "csc-service.json"
-            if cfg.exists():
-                return cfg
+            return Path(csc_etc) / "csc-service.json"
 
-        # Walk up from cwd — check etc/ subdir first, then directory itself
-        p = Path.cwd()
-        while p != p.parent:
-            for candidate in (p / "etc" / "csc-service.json", p / "csc-service.json"):
-                if candidate.exists():
-                    return candidate
-            p = p.parent
+        # Use Platform to resolve canonical etc dir
+        try:
+            from csc_platform.platform import Platform
+            return Platform.get_etc_dir() / "csc-service.json"
+        except (ImportError, AttributeError):
+            pass
 
-        return Path.cwd() / "etc" / "csc-service.json"
+        # Last resort: CSC_ROOT env var
+        csc_root = os.environ.get("CSC_ROOT", "")
+        if csc_root:
+            return Path(csc_root) / "etc" / "csc-service.json"
+
+        raise RuntimeError(
+            "Cannot resolve csc-service.json: csc-platform not available and "
+            "CSC_ETC/CSC_ROOT env vars are not set"
+        )
 
     def load_config(self):
         if self.config_file.exists():

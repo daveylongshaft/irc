@@ -607,6 +607,59 @@ def load_env():
     except Exception:
         pass
 
+def _load_service_config(work_dir=None):
+    """Load csc-service.json config."""
+    root = Path(work_dir) if work_dir else CSC_ROOT
+    config_path = root / "etc" / "csc-service.json"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _start_inloop_services(work_dir=None):
+    """Start ftpd and pki if enabled in config."""
+    config = _load_service_config(work_dir)
+    root = work_dir or str(CSC_ROOT)
+
+    if config.get("ftpd", {}).get("enabled", False):
+        try:
+            from csc_loop.infra import ftpd
+            ftpd.run_cycle(root)
+        except Exception as e:
+            log(f"[ftpd] startup error: {e}", "ERROR")
+
+    if config.get("enable_pki", False):
+        try:
+            from csc_loop.infra import pki_server
+            pki_server.run_cycle(root)
+        except Exception as e:
+            log(f"[pki] startup error: {e}", "ERROR")
+
+
+def _monitor_inloop_services(work_dir=None):
+    """Check health of ftpd and pki, restart if needed."""
+    config = _load_service_config(work_dir)
+    root = work_dir or str(CSC_ROOT)
+
+    if config.get("ftpd", {}).get("enabled", False):
+        try:
+            from csc_loop.infra import ftpd
+            ftpd.run_cycle(root)
+        except Exception as e:
+            log(f"[ftpd] monitor error: {e}", "ERROR")
+
+    if config.get("enable_pki", False):
+        try:
+            from csc_loop.infra import pki_server
+            pki_server.run_cycle(root)
+        except Exception as e:
+            log(f"[pki] monitor error: {e}", "ERROR")
+
+
 def main():
     _initialize_paths()
     load_env()
@@ -628,10 +681,14 @@ def main():
         arg = sys.argv[1]
         if arg == "--daemon":
             log("Daemon mode - event-driven with smart backpressure (Ctrl+C to stop)")
+            # Start in-loop services (ftpd, pki) based on config
+            _start_inloop_services(work_dir)
             try:
                 idle_cycles = 0  # Track consecutive idle cycles
                 while True:
                     had_work = run_cycle(work_dir_arg=work_dir)
+                    # Monitor in-loop services each cycle
+                    _monitor_inloop_services(work_dir)
 
                     if had_work:
                         # Work was done -> reset idle counter and cycle again immediately
