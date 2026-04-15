@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import base64
 import json
 import time
 from collections import OrderedDict
 from typing import Callable
 
-from csc_crypto import DHExchange, encrypt
+from csc_crypto import DHExchange
 from csc_server.queue.command import CommandEnvelope
 from csc_server.sync.link import Link
 
@@ -42,6 +43,9 @@ class SyncMesh:
     """
 
     _SEEN_COMMANDS_MAX = 10000
+    _KEEPALIVE_INTERVAL = 30  # Send PING every 30 seconds
+    _KEEPALIVE_TIMEOUT = 120  # Reset link if no response for 120 seconds
+    _DH_TIMEOUT = 10  # Re-initiate DH if no reply for 10 seconds
 
     def __init__(self, server, logger: Callable[[str], None]):
         self.server = server
@@ -49,6 +53,8 @@ class SyncMesh:
         self._running = False
         self._started_at: float | None = None
         self._seen_commands: OrderedDict[str, float] = OrderedDict()
+        self._link_ping_times: dict[str, float] = {}  # link.id -> time of last PING sent
+        self._link_dh_times: dict[str, float] = {}  # link.id -> time of last DH initiation
 
     # ------------------------------------------------------------------
     # Dedup
@@ -77,6 +83,10 @@ class SyncMesh:
         if link_count:
             names = self.server.link_names()
             self._logger(f"[SYNC] Mesh started with links={names}")
+            # Aggressively initiate DH with all configured links
+            for link in self.server.iter_links():
+                if link.connection.crypto_key is None and link.connection.dh_pending is None:
+                    self._initiate_link_dh(link)
             return
         self._announce_stub("start", "no links configured, relay is inactive")
         self._logger("[SYNC] Mesh started without links.")
@@ -124,12 +134,12 @@ class SyncMesh:
             if exclude_link_id is not None and link.id == exclude_link_id:
                 continue
             # Initiate DH on first outbound to this link
-            if link.crypto_key is None and link.dh_pending is None:
+            if link.connection.crypto_key is None and link.connection.dh_pending is None:
                 self._initiate_link_dh(link)
+
+            # Connection.sendto auto-encrypts (prepends key_hash + AES-GCM)
             wire = (line + "\r\n").encode("utf-8")
-            if link.crypto_key:
-                wire = encrypt(link.crypto_key, wire)
-            link.sendto(self.server.sock_send, wire)
+            link.connection.sendto(wire)
 
     # ------------------------------------------------------------------
     # Encryption helpers
@@ -138,22 +148,35 @@ class SyncMesh:
     def find_link_by_addr(self, addr: tuple) -> Link | None:
         """Return Link whose last_addr matches addr, or None."""
         for link in self.server.iter_links():
-            if link.last_addr == addr:
+            if link.connection.last_addr == addr:
                 return link
         return None
 
     def _initiate_link_dh(self, link: Link) -> None:
-        """Send SLINKDH to peer; store DHExchange for later completion."""
+        """Send SLINKDH_CERT with cert to peer; store DHExchange on Connection."""
         try:
-            dh = DHExchange()
-            link.dh_pending = dh
-            addr = link.send_address()
-            addr_str = f"{addr[0]}:{addr[1]}"
-            self.server._addr_dh[addr_str] = dh
-            msg = f"SLINKDH {dh.public:x}\r\n".encode("utf-8")
-            self.server.sock_send(msg, addr)
+            dh = link.connection.start_dh()
+            link.is_inbound = False
+            link.ftpd_role = "slave"
+            self._link_dh_times[link.id] = time.time()
+
+            # Send cert + DH public key for cert-based auth
+            s2s_cert_path = self.server._get_s2s_cert_path()
+            try:
+                with open(s2s_cert_path, 'r') as f:
+                    our_cert_pem = f.read()
+                our_cert_b64 = base64.b64encode(our_cert_pem.encode()).decode()
+                msg = f"SLINKDH_CERT {dh.public:x} {our_cert_b64}\r\n".encode("utf-8")
+            except Exception as e:
+                self.server.log(f"[S2S-CERT] Failed to read cert for SLINKDH_CERT: {e}")
+                msg = f"SLINKDH {dh.public:x}\r\n".encode("utf-8")
+
+            # Send plaintext handshake (no auto-encrypt -- no key yet)
+            addr = link.connection.send_address()
+            self.server.s2s_sock_send(msg, addr)
+            self.server.log(f"[S2S] Initiated outbound link to {link.name} with cert-based auth")
         except Exception as e:
-            self.server.log(f"[CRYPTO] SLINKDH initiation failed for {link.name}: {e}")
+            self.server.log(f"[S2S] SLINKDH initiation failed for {link.name}: {e}")
 
     # ------------------------------------------------------------------
     # Wire encoding
@@ -210,7 +233,7 @@ class SyncMesh:
         # Record the recv on the link; updates last_addr as a side effect
         # so NAT rebinds are tracked without any routing involvement.
         approx_wire_bytes = len(line.encode("utf-8")) + 2  # incl. CRLF
-        incoming_link.record_recv(approx_wire_bytes, addr=peer)
+        incoming_link.connection.record_recv(approx_wire_bytes, addr=peer)
 
         # Stamp the envelope with the link id it arrived on. Downstream
         # code (queue, dispatcher, stats, netsplit handling) reads this
@@ -340,7 +363,62 @@ class SyncMesh:
         )
 
     def heartbeat_tick(self) -> None:
-        self._log_stub("heartbeat_tick")
+        """Maintain S2S links: initiate DH, send PING, detect timeouts.
+
+        Called periodically from the main server loop. Aggressively keeps
+        all configured links up by re-initiating DH if replies are slow,
+        sending PING on encrypted links, and resetting links that die.
+        """
+        now = time.time()
+        for link in self.server.iter_links():
+            conn = link.connection
+
+            # Case 1: DH is pending - check if it's taking too long, re-initiate
+            if conn.dh_pending is not None:
+                last_dh = self._link_dh_times.get(link.id, now)
+                if now - last_dh > self._DH_TIMEOUT:
+                    self._logger(
+                        f"[KEEPALIVE] Link {link.name} DH timeout (no reply for {now - last_dh:.0f}s), "
+                        f"re-initiating"
+                    )
+                    self._initiate_link_dh(link)
+                continue
+
+            # Case 2: Link encrypted - send PING keepalive
+            if conn.crypto_key is not None:
+                # Check if link has gone silent (use Connection.is_expired)
+                if conn.is_expired():
+                    self._logger(
+                        f"[KEEPALIVE] Link {link.name} expired "
+                        f"(no response for {now - conn.last_seen:.0f}s), "
+                        f"resetting connection"
+                    )
+                    conn.clear_crypto()
+                    self._initiate_link_dh(link)
+                    continue
+
+                # Send PING if it's been long enough
+                last_ping = self._link_ping_times.get(link.id, now)
+                if now - last_ping > self._KEEPALIVE_INTERVAL:
+                    ping_envelope = CommandEnvelope(
+                        command_id=f"ping-{link.id[:8]}-{int(now)}",
+                        kind="PING",
+                        line=f"PING {link.id}",
+                        origin_server=self.server.name,
+                        source_session="s2s-keepalive",
+                        replicate=False,
+                    )
+                    line = self.encode_command_line(ping_envelope)
+                    wire = (line + "\r\n").encode("utf-8")
+                    # Connection.sendto auto-encrypts
+                    conn.sendto(wire)
+                    self._link_ping_times[link.id] = now
+                    self._logger(f"[KEEPALIVE] Sent PING to {link.name}")
+                continue
+
+            # Case 3: Link has no crypto and no pending DH - re-initiate
+            self._logger(f"[KEEPALIVE] Link {link.name} has no crypto or pending DH, initiating")
+            self._initiate_link_dh(link)
 
     def _announce_stub(self, method_name: str, detail: str) -> None:
         self._logger(f"[STUB] SyncMesh.{method_name} called: {detail}.")

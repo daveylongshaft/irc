@@ -144,6 +144,13 @@ def is_encrypted(data: bytes) -> bool:
             "DESYNC",
             "SQUIT",
             "ERROR",
+            "SLINKDH",
+            "SLINKDH_CERT",
+            "SLINKDH_NEEDCERT",
+            "SLINKDH_CERTACK",
+            "SLINKDHREPLY",
+            "SLINKDHREPLY_CERT",
+            "ERR_NOT_REGISTERED",
         ):
             return False
     except (UnicodeDecodeError, IndexError):
