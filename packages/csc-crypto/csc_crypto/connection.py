@@ -190,6 +190,7 @@ class Connection:
             self.server.unregister_connection_key(self)
         self.crypto_key = key
         self.key_hash = hashlib.sha256(key).digest()[:16]
+        self.dh_pending = None  # DH complete
         self.last_seen = time.time()
         self.server.register_connection_key(self)
         self.server.log(
