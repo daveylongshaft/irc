@@ -513,12 +513,11 @@ class Server(Service, LinkMixin, UserMixin):
                 link.ftpd_role = "master"
                 self.log(f"[S2S] Auto-created inbound link from {peer_name} (cert-based, we are FTPD master)")
 
-            # If we already have a live key on this link (e.g. our outbound DH
-            # just completed), skip this inbound DH to avoid key mismatch race.
-            if link.connection.crypto_key is not None and not link.connection.is_expired():
-                self.log(f"[S2S-CERT] Ignoring inbound DH from {peer_name} -- link already has live key")
-                link.connection.update_addr(addr)
-                return
+            # Peer wants to rekey -- allow it even if we have a live key.
+            # The peer may have lost state or expired their side.
+            if link.connection.crypto_key is not None:
+                self.log(f"[S2S-CERT] Rekeying link {peer_name} (peer requested new DH)")
+                link.connection.clear_crypto()
 
             # Perform DH exchange via Connection
             their_pub = int(their_pub_hex, 16)

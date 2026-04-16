@@ -366,14 +366,19 @@ class CommandDispatcher:
                 self._send_numeric(envelope, ERR_CANNOTSENDTOCHAN, nick, f"{channel_name} :Cannot send to channel (+m)")
                 return
 
+            # Always broadcast the PRIVMSG to channel first -- it's a
+            # chat message regardless of whether it's also a service
+            # command.  S2S sync already happened at ingress time;
+            # this is the local channel echo.
+            out = format_irc_message(self._user_host(nick, envelope), "PRIVMSG", [channel_name], text)
+            self._broadcast_to_channel(channel_name, out, exclude_session=envelope.source_session)
+
             # File upload handling: <begin file=name> ... <end file>
             if self._handle_file_upload(envelope, channel_name, nick, text):
                 return
 
             parsed = Service.parse_service_command(text)
             if parsed is None:
-                out = format_irc_message(self._user_host(nick, envelope), "PRIVMSG", [channel_name], text)
-                self._broadcast_to_channel(channel_name, out, exclude_session=envelope.source_session)
                 self._debug(f"[DEBUG] non-service PRIVMSG id={envelope.command_id} text={text!r}")
                 self.state.record_protocol_event(
                     envelope,
@@ -390,11 +395,6 @@ class CommandDispatcher:
                 self._debug(
                     f"[DEBUG] skip id={envelope.command_id} target={parsed['target']} "
                     f"local_targets={sorted(local_targets)} reason=target_mismatch"
-                )
-                self.state.record_skipped_service_command(
-                    envelope,
-                    parsed["target"],
-                    "target_mismatch",
                 )
                 self.state.record_protocol_event(
                     envelope,

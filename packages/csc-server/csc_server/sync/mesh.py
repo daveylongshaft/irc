@@ -290,6 +290,27 @@ class SyncMesh:
             )
             return None
 
+        # S2S keepalive PINGs: send PONG back on the link connection,
+        # don't queue for the dispatcher (which would PONG to a fake session).
+        if envelope.kind == "PING" and envelope.source_session == "s2s-keepalive":
+            link = self.server.get_link_by_id(envelope.arrival_link_id)
+            if link and link.connection.crypto_key:
+                pong_envelope = CommandEnvelope(
+                    command_id=f"pong-{envelope.command_id}",
+                    kind="PONG",
+                    line=f"PONG {envelope.command_id}",
+                    origin_server=self.server.name,
+                    source_session="s2s-keepalive",
+                    replicate=False,
+                )
+                wire = (self.encode_command_line(pong_envelope) + "\r\n").encode("utf-8")
+                link.connection.sendto(wire)
+                self._logger(
+                    f"[KEEPALIVE] Got PING from {envelope.origin_server}, "
+                    f"sent PONG to {link.connection.send_address()}"
+                )
+            return envelope
+
         # Relay to other links BEFORE local enqueue (relay-first).
         if envelope.replicate and self.server.link_count() > 0:
             self.sync_command(envelope, exclude_link_id=envelope.arrival_link_id)
