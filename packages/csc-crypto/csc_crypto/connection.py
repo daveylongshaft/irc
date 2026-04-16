@@ -51,6 +51,9 @@ class Connection:
         "crypto_key",
         "key_hash",
         "dh_pending",
+        "dh_initiated_at",
+        "last_ping_sent",
+        "timeout_count",
         "state",
         "opened_at",
         "last_seen",
@@ -71,6 +74,9 @@ class Connection:
         self.crypto_key: bytes | None = None
         self.key_hash: bytes | None = None
         self.dh_pending: DHExchange | None = None
+        self.dh_initiated_at: float = 0.0
+        self.last_ping_sent: float = 0.0
+        self.timeout_count: int = 0
         self.state: str = CONN_STATE_UNKNOWN
         self.opened_at: float = time.time()
         self.last_seen: float = 0.0
@@ -217,6 +223,7 @@ class Connection:
     def start_dh(self) -> DHExchange:
         """Create a new DH exchange and store as pending."""
         self.dh_pending = DHExchange()
+        self.dh_initiated_at = time.time()
         return self.dh_pending
 
     def complete_dh(self, other_public: int) -> bytes:
@@ -225,11 +232,10 @@ class Connection:
             raise RuntimeError("No pending DH exchange to complete")
         key = self.dh_pending.compute_shared_key(other_public)
         self.set_crypto_key(key)
-        self.dh_pending = None
         return key
 
     # ------------------------------------------------------------------
-    # Liveness
+    # Liveness / keepalive
     # ------------------------------------------------------------------
 
     def is_expired(self) -> bool:
@@ -237,6 +243,22 @@ class Connection:
         if self.last_seen == 0.0:
             return False
         return (time.time() - self.last_seen) > CONN_EXPIRY_SECONDS
+
+    def dh_timed_out(self, timeout_secs: float = 10.0) -> bool:
+        """True if DH is pending and has exceeded timeout."""
+        if self.dh_pending is None:
+            return False
+        return (time.time() - self.dh_initiated_at) > timeout_secs
+
+    def ping_due(self, interval_secs: float = 30.0) -> bool:
+        """True if enough time has passed to send another keepalive PING."""
+        return (time.time() - self.last_ping_sent) > interval_secs
+
+    def record_ping_sent(self) -> None:
+        self.last_ping_sent = time.time()
+
+    def record_timeout(self) -> None:
+        self.timeout_count += 1
 
     # ------------------------------------------------------------------
     # Serialization
@@ -265,6 +287,10 @@ class Connection:
             "last_seen": self.last_seen,
             "has_crypto": self.crypto_key is not None,
             "key_hash": self.key_hash[:4].hex() if self.key_hash else "",
+            "dh_pending": self.dh_pending is not None,
+            "dh_initiated_at": self.dh_initiated_at,
+            "last_ping_sent": self.last_ping_sent,
+            "timeout_count": self.timeout_count,
         }
 
     def to_dict(self) -> dict:

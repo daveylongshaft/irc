@@ -53,8 +53,6 @@ class SyncMesh:
         self._running = False
         self._started_at: float | None = None
         self._seen_commands: OrderedDict[str, float] = OrderedDict()
-        self._link_ping_times: dict[str, float] = {}  # link.id -> time of last PING sent
-        self._link_dh_times: dict[str, float] = {}  # link.id -> time of last DH initiation
 
     # ------------------------------------------------------------------
     # Dedup
@@ -158,7 +156,6 @@ class SyncMesh:
             dh = link.connection.start_dh()
             link.is_inbound = False
             link.ftpd_role = "slave"
-            self._link_dh_times[link.id] = time.time()
 
             # Send cert + DH public key for cert-based auth
             s2s_cert_path = self.server._get_s2s_cert_path()
@@ -396,31 +393,32 @@ class SyncMesh:
 
             # Case 1: DH is pending - check if it's taking too long, re-initiate
             if conn.dh_pending is not None:
-                last_dh = self._link_dh_times.get(link.id, now)
-                if now - last_dh > self._DH_TIMEOUT:
+                if conn.dh_timed_out(self._DH_TIMEOUT):
+                    conn.record_timeout()
                     self._logger(
-                        f"[KEEPALIVE] Link {link.name} DH timeout (no reply for {now - last_dh:.0f}s), "
-                        f"re-initiating"
+                        f"[KEEPALIVE] Link {link.name} DH timeout "
+                        f"(no reply for {now - conn.dh_initiated_at:.0f}s), "
+                        f"timeouts={conn.timeout_count}, re-initiating"
                     )
                     self._initiate_link_dh(link)
                 continue
 
             # Case 2: Link encrypted - send PING keepalive
             if conn.crypto_key is not None:
-                # Check if link has gone silent (use Connection.is_expired)
+                # Check if link has gone silent
                 if conn.is_expired():
+                    conn.record_timeout()
                     self._logger(
                         f"[KEEPALIVE] Link {link.name} expired "
                         f"(no response for {now - conn.last_seen:.0f}s), "
-                        f"resetting connection"
+                        f"timeouts={conn.timeout_count}, resetting"
                     )
                     conn.clear_crypto()
                     self._initiate_link_dh(link)
                     continue
 
                 # Send PING if it's been long enough
-                last_ping = self._link_ping_times.get(link.id, now)
-                if now - last_ping > self._KEEPALIVE_INTERVAL:
+                if conn.ping_due(self._KEEPALIVE_INTERVAL):
                     ping_envelope = CommandEnvelope(
                         command_id=f"ping-{link.id[:8]}-{int(now)}",
                         kind="PING",
@@ -431,9 +429,8 @@ class SyncMesh:
                     )
                     line = self.encode_command_line(ping_envelope)
                     wire = (line + "\r\n").encode("utf-8")
-                    # Connection.sendto auto-encrypts
                     conn.sendto(wire)
-                    self._link_ping_times[link.id] = now
+                    conn.record_ping_sent()
                     self._logger(f"[KEEPALIVE] Sent PING to {link.name}")
                 continue
 
