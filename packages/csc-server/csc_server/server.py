@@ -175,12 +175,8 @@ class Server(Service, LinkMixin, UserMixin):
         while self._running and not self._stop_event.is_set():
             self._ingest_network_messages()
             handled = self.run_once()
-            # Heartbeat tick every ~1 second for keepalive
-            now = time.time()
-            if now - self._last_heartbeat > 1.0:
-                self.sync_mesh.heartbeat_tick()
-                self._last_heartbeat = now
             if not handled:
+                self.sync_mesh.heartbeat_tick()
                 time.sleep(0.05)
 
         self._flush_outbound_events()
