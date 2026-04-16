@@ -295,7 +295,7 @@ class SyncMesh:
                 pong_envelope = CommandEnvelope(
                     command_id=f"pong-{envelope.command_id}",
                     kind="PONG",
-                    line=f"PONG {envelope.command_id}",
+                    payload={"line": f"PONG {envelope.command_id}"},
                     origin_server=self.server.name,
                     source_session="s2s-keepalive",
                     replicate=False,
@@ -422,7 +422,7 @@ class SyncMesh:
                     ping_envelope = CommandEnvelope(
                         command_id=f"ping-{link.id[:8]}-{int(now)}",
                         kind="PING",
-                        line=f"PING {link.id}",
+                        payload={"line": f"PING {link.id}"},
                         origin_server=self.server.name,
                         source_session="s2s-keepalive",
                         replicate=False,
