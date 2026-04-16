@@ -1,0 +1,566 @@
+DOCS SUBMODULE MAP
+==================================================
+
+── irc/docs/AGENT_LIFECYCLE_AND_CONTEXT.md ──
+# Agent Lifecycle: Assignment, Spawning, and Context Loading
+
+── irc/docs/AI_API_ARCHITECTURE.md ──
+# # AI Client API Architecture
+
+── irc/docs/AUTO_RESUME_SETUP.md ──
+# # Claude CLI Auto-Resume Setup
+
+── irc/docs/EVOLUTION.md ──
+# # EVOLUTION.md
+
+── irc/docs/EVOLUTION_RESEARCH_BRIEF.md ──
+# # EVOLUTION.md — Research Brief for Opus
+
+── irc/docs/FIFO_TESTING_GUIDE.md ──
+# # FIFO Testing Guide
+
+── irc/docs/FUTURE_ARCHITECTURE_LANGUAGE_AGNOSTIC_BYTECODE_PIPELINE.md ──
+# # Future Architecture: Language-Agnostic Code Synthesis via Bytecode Pipeline
+
+── irc/docs/GEMINI-TO-RUN-CLAUDE-API.md ──
+# # Running Claude API Batches When Anthropic Keys Are Exhausted
+
+── irc/docs/GEMINI.md ──
+# # GEMINI.md
+
+── irc/docs/GIT_WORKFLOW.md ──
+# Git Workflow & Best Practices
+
+── irc/docs/HOUSEKEEPING.md ──
+# Housekeeping & Maintenance Guide
+
+── irc/docs/INDEX.md ──
+# IRC Documentation Index
+
+── irc/docs/KNOWN_ISSUES.txt ──
+# 2026-03-08 | shared/server storage | os.replace() atomic rename is NOT atomic on Windows — the crash-safety guarantee (temp→fsync→rename) only holds on POSIX. On Windows a process kill mid-rename can leave a partial file. Affects channels.json, users.json, opers.json, bans.json, history.json. Fix: use a Windows-safe atomic write (e.g. write to temp, flush, close, then os.replace with retry logic or use a Win32 ReplaceFile call).
+
+── irc/docs/LAYER_PACKAGE_INSTALLER.md ──
+# # Layer Package Installer Integration Guide
+
+── irc/docs/MOTIVE_STATE.md ──
+# # Central Motive State
+
+── irc/docs/PERMANENT_STORAGE_ARCHITECTURE.md ──
+# # Permanent Storage Architecture
+
+── irc/docs/PERMANENT_STORAGE_SYSTEM.md ──
+# # Permanent Storage System Architecture
+
+── irc/docs/PKI_ENROLLMENT_GUIDE.md ──
+# # CSC PKI Enrollment & Infrastructure Guide
+
+── irc/docs/PLATFORM_PATHS.md ──
+# # Platform-Agnostic Path Resolution
+
+── irc/docs/POWER_FAILURE_VERIFICATION.md ──
+# # Power Failure Verification Checklist
+
+── irc/docs/PR_REVIEW_POLICY.md ──
+# # PR Review Policy - CSC Project
+
+── irc/docs/QUICKSTART.md ──
+# # CSC Quickstart
+
+── irc/docs/SUBPROCESS_SPAWNING_RULES.md ──
+# # SUBPROCESS SPAWNING - CRITICAL RULES
+
+── irc/docs/SYSTEM_STATUS.txt ──
+# =================================================================
+
+── irc/docs/WINDOW_SPAWNING_FIX_REQUIRED.txt ──
+# CRITICAL BUG - WINDOW SPAWNING (2026-03-12)
+
+── irc/docs/archive/AGENT_LAUNCHER_GUIDE.md ──
+# # Agent Launcher & Tracker Guide
+
+── irc/docs/archive/AGENT_SYSTEM.md ──
+# # Multi-Agent System - Queue-Based Task Processing
+
+── irc/docs/archive/AIDER.md ──
+# # AIDER.md
+
+── irc/docs/archive/ANALYSIS_2026-03-08.md ──
+# # CSC Project Analysis — 2026-03-08
+
+── irc/docs/archive/AUTONOMOUS_SYSTEM_ROADMAP.md ──
+# # Autonomous CSC System - Activation Roadmap
+
+── irc/docs/archive/BACKUP_SERVICE_SUMMARY.md ──
+# # Backup Service: Documentation & Testing Summary
+
+── irc/docs/archive/BATCH_API_TOOL_USE.md ──
+# # Anthropic Batch API with Tool Use
+
+── irc/docs/archive/BRIDGE_SERVER_SETUP.md ──
+# # Bridge Server Infrastructure Setup
+
+── irc/docs/archive/CATALOG_AND_RANKING.md ──
+# # Catalog and Ranking System
+
+── irc/docs/archive/CLAUDE_API_STATUS.md ──
+# # Claude API Status Report
+
+── irc/docs/archive/CLEANUP_SUMMARY.md ──
+# # Federation Implementation Status - CLEANUP COMPLETE
+
+── irc/docs/archive/CLIENT_CONSOLE_GUIDE.md ──
+# # CSC Client Console Guide
+
+── irc/docs/archive/CODE_FIXER_WORKFLOW.md ──
+# # Code Fixer Workflow - Complete Guide
+
+── irc/docs/archive/CONFIG_FILES_README.md ──
+# # Configuration Files
+
+── irc/docs/archive/CURRENT_ARCHITECTURE.md ──
+# # Current Architecture Analysis & Design Recommendations
+
+── irc/docs/archive/DEVCONTEXT.md ──
+# # CSC Developer Context
+
+── irc/docs/archive/DOCKER_AGENT_SETUP.md ──
+# # Docker Coding Agent - Setup & Verification
+
+── irc/docs/archive/FEDERATION_ROADMAP.md ──
+# # CSC Server Federation Roadmap
+
+── irc/docs/archive/FINAL_WORKORDER_VERIFICATION.md ──
+# # Final Workorder Verification Report
+
+── irc/docs/archive/FUTURE_VISION.md ──
+# # Future Vision: Self-Improving Multi-AI Autonomous System
+
+── irc/docs/archive/GEMINI_BATCH.md ──
+# # Gemini Batch API Tools
+
+── irc/docs/archive/GENERIC_AGENTS.md ──
+# # Generic Agents - Simple Task Execution
+
+── irc/docs/archive/INDEX.md ──
+# # Library Documentation Index
+
+── irc/docs/archive/MIRC_CONNECTION_SETUP.md ──
+# # mIRC Connection Setup for CSC Server
+
+── irc/docs/archive/MOLTBOOK_SETUP.md ──
+# # Moltbook CSC-Bot Shared Account Setup
+
+── irc/docs/archive/NICKSERV_IMPLEMENTATION.md ──
+# # NickServ Registration System - Implementation Complete
+
+── irc/docs/archive/PATH_PROTECTION_BATCH_STRATEGY.md ──
+# # Path-Based Git Protection System - Batch Processing Strategy
+
+── irc/docs/archive/PATH_PROTECTION_WORKORDER_TRACKING.md ──
+# # Path-Based Git Protection System - Workorder Tracking
+
+── irc/docs/archive/PM_RUNTIME_GAP_ANALYSIS.md ──
+# # PM Runtime Gap Analysis (Docs vs Current Repository)
+
+── irc/docs/archive/PREFLIGHT_CHECKS.md ──
+# # Preflight Checks - Worker Launch Validation
+
+── irc/docs/archive/REFACTORING_SUMMARY.md ──
+# # Refactoring Summary: estimate_tokens_for_text → estimate_input_tokens
+
+── irc/docs/archive/RESTORATION_AUDIT.md ──
+# # Restoration Audit Report
+
+── irc/docs/archive/SCHEDULER_SETUP.md ──
+# # CSC Background Services Setup
+
+── irc/docs/archive/SERVER_INFRASTRUCTURE_FIX.md ──
+# # IRC Server Infrastructure - Complete Fix Plan
+
+── irc/docs/archive/SERVICES_BOTSERV_CHANSERV.md ──
+# # IRC Services Documentation: BotServ and ChanServ
+
+── irc/docs/archive/SERVICE_SETUP.md ──
+# # CSC Background Service Setup
+
+── irc/docs/archive/SERVICE_SYSTEM_RESTORATION.md ──
+# # Service System Restoration & Moltbook Integration
+
+── irc/docs/archive/SESSION_STATE.md ──
+# # Current Session State
+
+── irc/docs/archive/SHARED_FILE_AUDIT.md ──
+# # Shared File Divergence Audit
+
+── irc/docs/archive/SYSTEM_ACTIVATION_COMPLETE.md ──
+# # 🚀 Dual-Mode Task Execution System - ACTIVATED
+
+── irc/docs/archive/SYSTEM_OVERVIEW.md ──
+# # CSC Complete System Overview
+
+── irc/docs/archive/TASK_EXECUTION_MODES.md ──
+# # Task Execution Modes: Queue vs Direct API
+
+── irc/docs/archive/TASK_EXECUTION_SUMMARY.md ──
+# # Task Execution Infrastructure - Complete Implementation
+
+── irc/docs/archive/TEST_BRIDGE.md ──
+# # Bridge Connectivity & Encryption Test
+
+── irc/docs/archive/WIP.md ──
+# # Benchmark Diagnosis: Channel Name Case Normalization Issue
+
+── irc/docs/archive/WORKER_QUICKSTART.md ──
+# # Worker System Quick Start
+
+── irc/docs/archive/WORKER_SYSTEM.md ──
+# # Worker System - Background Prompt Processing
+
+── irc/docs/archive/WORKORDERS_SERVICE_INTEGRATION.md ──
+# # Workorders Service Integration - Dual-Mode Execution
+
+── irc/docs/archive/WORKORDER_REVIEW.md ──
+# # Workorder Review: Technical Issues Found
+
+── irc/docs/archive/ai_clients.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/analysis_report.json ──
+# [
+
+── irc/docs/archive/bridge.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/client.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/csc-ctl.md ──
+# # `csc-ctl` Command Reference
+
+── irc/docs/archive/gemini_issues.txt ──
+# Excellent.
+
+── irc/docs/archive/jules.md ──
+# # Jules Integration
+
+── irc/docs/archive/platform.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/pr-review-merge-automation.md ──
+# # PR Review & Auto-Merge Automation
+
+── irc/docs/archive/protocol.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/server.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/services.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/setup.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/archive/translator-api.md ──
+# # CSC Translator -- API Reference
+
+── irc/docs/archive/translator-cli.md ──
+# # CSC Translator -- Command-Line Usage Guide
+
+── irc/docs/archive/translator-overview.md ──
+# # CSC Translator -- Architecture Overview
+
+── irc/docs/archive/upgrade_system.txt ──
+# Understood. Here’s a complete **technical whitepaper** describing the architecture and behavior of the **Module Reloading, Hibernation, and Upgrade System** you and I discussed earlier.
+
+── irc/docs/claude-relay.md ──
+# # Claude Relay — Cross-Node AI Consultation
+
+── irc/docs/config-schemas.md ──
+# # Configuration File Schemas
+
+── irc/docs/gemini-prompts.txt ──
+# # Certificate-Based Message Encryption System
+
+── irc/docs/library/AGENTS_ACTIVE_STATUS.md ──
+# # CSC Federation Agents - ACTIVE STATUS
+
+── irc/docs/library/AGENT_LAUNCHER_GUIDE.md ──
+# # Agent Launcher & Tracker Guide
+
+── irc/docs/library/AGENT_SYSTEM.md ──
+# # Multi-Agent System - Queue-Based Task Processing
+
+── irc/docs/library/AIDER.md ──
+# # AIDER.md
+
+── irc/docs/library/AUTONOMOUS_SYSTEM_ROADMAP.md ──
+# # Autonomous CSC System - Activation Roadmap
+
+── irc/docs/library/BATCH_API_TOOL_USE.md ──
+# # Anthropic Batch API with Tool Use
+
+── irc/docs/library/BRIDGE_SERVER_SETUP.md ──
+# # Bridge Server Infrastructure Setup
+
+── irc/docs/library/CATALOG_AND_RANKING.md ──
+# # Catalog and Ranking System
+
+── irc/docs/library/CLAUDE_API_STATUS.md ──
+# # Claude API Status Report
+
+── irc/docs/library/CLEANUP_SUMMARY.md ──
+# # Federation Implementation Status - CLEANUP COMPLETE
+
+── irc/docs/library/CLIENT_CONSOLE_GUIDE.md ──
+# # CSC Client Console Guide
+
+── irc/docs/library/CODE_FIXER_WORKFLOW.md ──
+# # Code Fixer Workflow - Complete Guide
+
+── irc/docs/library/CONFIG_FILES_README.md ──
+# # Configuration Files
+
+── irc/docs/library/CURRENT_ARCHITECTURE.md ──
+# # Current Architecture Analysis & Design Recommendations
+
+── irc/docs/library/DEVCONTEXT.md ──
+# # CSC Developer Context
+
+── irc/docs/library/DOCKER_AGENT_SETUP.md ──
+# # Docker Coding Agent - Setup & Verification
+
+── irc/docs/library/FEDERATION_ROADMAP.md ──
+# # CSC Server Federation Roadmap
+
+── irc/docs/library/FUTURE_VISION.md ──
+# # Future Vision: Self-Improving Multi-AI Autonomous System
+
+── irc/docs/library/GEMINI_BATCH.md ──
+# # Gemini Batch API Tools
+
+── irc/docs/library/GENERIC_AGENTS.md ──
+# # Generic Agents - Simple Task Execution
+
+── irc/docs/library/INDEX.md ──
+# # Library Documentation Index
+
+── irc/docs/library/MIRC_CONNECTION_SETUP.md ──
+# # mIRC Connection Setup for CSC Server
+
+── irc/docs/library/MOLTBOOK_SETUP.md ──
+# # Moltbook CSC-Bot Shared Account Setup
+
+── irc/docs/library/NICKSERV_IMPLEMENTATION.md ──
+# # NickServ Registration System - Implementation Complete
+
+── irc/docs/library/PATH_PROTECTION_BATCH_STRATEGY.md ──
+# # Path-Based Git Protection System - Batch Processing Strategy
+
+── irc/docs/library/PATH_PROTECTION_WORKORDER_TRACKING.md ──
+# # Path-Based Git Protection System - Workorder Tracking
+
+── irc/docs/library/PM_AGENT_MODULE_SUMMARY.md ──
+# # PM Agent Module Implementation - Complete
+
+── irc/docs/library/PM_RUNTIME_GAP_ANALYSIS.md ──
+# # PM Runtime Gap Analysis (Docs vs Current Repository)
+
+── irc/docs/library/PREFLIGHT_CHECKS.md ──
+# # Preflight Checks - Worker Launch Validation
+
+── irc/docs/library/SCHEDULER_SETUP.md ──
+# # CSC Background Services Setup
+
+── irc/docs/library/SERVER_INFRASTRUCTURE_FIX.md ──
+# # IRC Server Infrastructure - Complete Fix Plan
+
+── irc/docs/library/SERVICES_BOTSERV_CHANSERV.md ──
+# # IRC Services Documentation: BotServ and ChanServ
+
+── irc/docs/library/SERVICE_SETUP.md ──
+# # CSC Background Service Setup
+
+── irc/docs/library/SERVICE_SYSTEM_RESTORATION.md ──
+# # Service System Restoration & Moltbook Integration
+
+── irc/docs/library/SESSION_STATE.md ──
+# # Current Session State
+
+── irc/docs/library/SHARED_FILE_AUDIT.md ──
+# # Shared File Divergence Audit
+
+── irc/docs/library/SYSTEM_OVERVIEW.md ──
+# # CSC Complete System Overview
+
+── irc/docs/library/TASK_EXECUTION_MODES.md ──
+# # Task Execution Modes: Queue vs Direct API
+
+── irc/docs/library/TEST_BRIDGE.md ──
+# # Bridge Connectivity & Encryption Test
+
+── irc/docs/library/WORKER_QUICKSTART.md ──
+# # Worker System Quick Start
+
+── irc/docs/library/WORKER_SYSTEM.md ──
+# # Worker System - Background Prompt Processing
+
+── irc/docs/library/WORKORDERS_SERVICE_INTEGRATION.md ──
+# # Workorders Service Integration - Dual-Mode Execution
+
+── irc/docs/library/ai_clients.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/bridge.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/client.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/csc-ctl.md ──
+# # `csc-ctl` Command Reference
+
+── irc/docs/library/jules.md ──
+# # Jules Integration
+
+── irc/docs/library/platform.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/pr-review-merge-automation.md ──
+# # PR Review & Auto-Merge Automation
+
+── irc/docs/library/protocol.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/server.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/services.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/setup.md ──
+# [← Back to README](../README.md)
+
+── irc/docs/library/translator-api.md ──
+# # CSC Translator -- API Reference
+
+── irc/docs/library/translator-cli.md ──
+# # CSC Translator -- Command-Line Usage Guide
+
+── irc/docs/library/translator-overview.md ──
+# # CSC Translator -- Architecture Overview
+
+── irc/docs/memory/INDEX.md ──
+# # Memory Index
+
+── irc/docs/memory/README.md ──
+# # Durable Memory
+
+── irc/docs/memory/STATUS.md ──
+# # Memory Status
+
+── irc/docs/memory/XREF.md ──
+# # Memory Cross References
+
+── irc/docs/memory/environment/server-topology.md ──
+# # Current Server Topology
+
+── irc/docs/memory/index.json ──
+# {
+
+── irc/docs/memory/tasks/s2s-linking-investigation.md ──
+# # S2S Linking Investigation
+
+── irc/docs/memory/user/davey-collaboration-preferences.md ──
+# # Davey Collaboration Preferences
+
+── irc/docs/memory/workflow/ops-roles-shared-entrypoint.md ──
+# # ops/roles/_shared Entrypoint
+
+── irc/docs/memory/workflow/temp-clone-git-workflow.md ──
+# # Temp Clone Git Workflow
+
+── irc/docs/memory/xref.json ──
+# {
+
+── irc/docs/my_tool_pouch.md ──
+# # My Tool Pouch
+
+── irc/docs/p-files.list ──
+# .
+
+── irc/docs/plans/2026-03-01-state-of-project-documentation.md ──
+# # State-Of-Project Documentation Plan
+
+── irc/docs/plans/agile-giggling-bonbon.md ──
+# # Plan: Give cagent agents full tool access + revert WIP append
+
+── irc/docs/plans/atomic-spinning-mountain.md ──
+# # Universal Agent Wrapper Implementation Plan
+
+── irc/docs/plans/cuddly-marinating-harp.md ──
+# # Translator App Implementation Plan
+
+── irc/docs/plans/cuddly-stargazing-goose.md ──
+# # Everything Plan — client-server-commander
+
+── irc/docs/plans/golden-dancing-liskov.md ──
+# # Plan: Windows Test Runner Service
+
+── irc/docs/plans/jazzy-sauteeing-hare.md ──
+# # Moltbook Service Integration Plan
+
+── irc/docs/plans/peaceful-hatching-hopper.md ──
+# # Plan: Docker Agent Wrapper Enhancement
+
+── irc/docs/plans/refactor-infra-inheritance.md ──
+# # Plan: Refactor CSC Infrastructure to Inherited Log/Data Patterns
+
+── irc/docs/plans/replicated-mixing-puppy.md ──
+# # Chat Buffer Logging & Replay
+
+── irc/docs/plans/sunny-growing-toucan.md ──
+# # Fix Benchmark Queue System Architecture
+
+── irc/docs/plans/tidy-marinating-moon.md ──
+# # Plan: Client-Side Service Execution & File Upload Handling
+
+── irc/docs/plans/typed-petting-cake.md ──
+# # Workflow Orchestration - Delegate to Gemini
+
+── irc/docs/platform.md ──
+# # Platform — Cross-Platform Path & Environment Layer
+
+── irc/docs/pm/README.md ──
+# # Project Manager Context
+
+── irc/docs/pm/agents.md ──
+# # Agent Roster & Assignment Policy
+
+── irc/docs/pm/architecture.md ──
+# # CSC Service Architecture
+
+── irc/docs/pm/history.md ──
+# # Assignment History & Lessons Learned
+
+── irc/docs/pm/procedures.md ──
+# # PM Operating Procedures
+
+── irc/docs/pm/runbook.md ──
+# # PM Decision Loop (Runbook)
+
+── irc/docs/pm/strategy.md ──
+# # PM Strategy: Agent Assignment Under Usage Constraints
+
+── irc/docs/pm/system.md ──
+# # System Architecture Reference
+
+── irc/docs/pm/workorder-triage.md ──
+# # Workorder Triage Guide
+
+── irc/docs/services.md ──
+# # CSC Services Documentation
+
+── irc/docs/tree.txt ──
+# csc/

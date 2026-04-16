@@ -1,0 +1,21 @@
+CSC XREF - SYMBOLS STARTING WITH 'D'
+==================================================
+
+DHExchange: irc/packages/csc-crypto/csc_crypto/crypto.py (in csc-crypto)
+Data: irc/packages/csc-data/csc_data/data.py (in csc-data), irc/packages/csc-data/csc_data/data/__init__.py (in csc-data), irc/packages/csc-data/csc_data/old_data/__init__.py (in csc-data), irc/packages/csc-clients/csc_clients/client/data.py (in csc-clients)
+DmrClient: irc/packages/csc-dmrbot/csc_dmrbot/client.py (in csc-dmrbot)
+DummyServer: irc/benchmarks/run_local_benchmarks.py (in tests)
+dcc_int_to_ip: irc/packages/csc-clients/csc_clients/client/ftp_dcc_utils.py (in csc-clients)
+dcc_ip_to_int: irc/packages/csc-clients/csc_clients/client/ftp_dcc_utils.py (in csc-clients)
+decrypt: irc/packages/csc-crypto/csc_crypto/crypto.py (in csc-crypto)
+delete_file: bin/gemini-batch/gbatch_tools.py (in bin-scripts), irc/bin/claude-batch/libexec/tools.py (in bin-scripts)
+detect_agent_name: ops/agents/chatgpt/bin/run_agent.py (in ops), ops/agents/claude/bin/run_agent.py (in ops), ops/agents/codellama/bin/run_agent.py (in ops), ops/agents/deepseek/bin/run_agent.py (in ops), ops/agents/dmr_qwen_task_runner/bin/run_agent.py (in ops), ops/agents/gemini-2.5-flash-lite/bin/run_agent.py (in ops), ops/agents/gemini-2.5-flash/bin/run_agent.py (in ops), ops/agents/gemini-2.5-pro/bin/run_agent.py (in ops), ops/agents/gemini-3-flash-preview/bin/run_agent.py (in ops), ops/agents/gemini-3-flash/bin/run_agent.py (in ops), ops/agents/gemini-3-pro-preview/bin/run_agent.py (in ops), ops/agents/gemini-3-pro/bin/run_agent.py (in ops), ops/agents/gemini-3.1-pro-preview/bin/run_agent.py (in ops), ops/agents/gemini/bin/run_agent.py (in ops), ops/agents/haiku/bin/run_agent.py (in ops), ops/agents/ollama-codellama/bin/run_agent.py (in ops), ops/agents/ollama-deepseek/bin/run_agent.py (in ops), ops/agents/ollama-qwen/bin/run_agent.py (in ops), ops/agents/opus/bin/run_agent.py (in ops), ops/agents/qwen/bin/run_agent.py (in ops), ops/agents/sonnet/bin/run_agent.py (in ops), ops/agents/templates/run_agent.py (in ops), ops/agents/test-agent/bin/run_agent.py (in ops)
+detect_agent_prefix: irc/packages/csc-loop/csc_loop/infra/pm.py (in csc-loop)
+detect_group: irc/deploy/install.py (in other)
+detect_platform: irc/deploy/install.py (in other)
+detect_python: irc/deploy/install.py (in other)
+detect_user: irc/deploy/install.py (in other)
+disable: irc/packages/csc-cli/csc_cli/commands/config_cmd.py (in csc-cli)
+does_it_work: irc/packages/csc-services/csc_services/server_test.py (in csc-services)
+drain: tests/s2s_link_win.py (in tests), tests/s2s_link_win_s2stest.py (in tests)
+dump: irc/packages/csc-cli/csc_cli/commands/config_cmd.py (in csc-cli)

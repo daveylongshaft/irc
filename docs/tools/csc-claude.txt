@@ -1,0 +1,38 @@
+CSC-CLAUDE SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-claude/csc_claude.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-claude/csc_claude.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-claude/csc_claude.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-claude/csc_claude.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-claude/csc_claude.egg-info/requires.txt ──
+# csc-ai-api>=0.1.0
+
+── irc/packages/csc-claude/csc_claude.egg-info/top_level.txt ──
+# csc_claude
+
+── irc/packages/csc-claude/csc_claude/__init__.py ──
+
+── irc/packages/csc-claude/csc_claude/api.py ──
+  class ClaudeAPI:  # Wraps the Anthropic SDK for Claude interaction.
+    def __init__(self, api_key: str, model: str='claude-3-haiku-20240307')
+    def complete(self, context_lines: List[str], system_prompt: Optional[str]=None) -> str  # Formats context and sends to Anthropic messages API.
+
+── irc/packages/csc-claude/csc_claude/client.py ──
+  class ClaudeClient(AIClient):  # Claude AI IRC client.
+    def __init__(self, config_path: Optional[str]=None, input_file: Optional[str]=None, output_file: Optional[str]=None)
+    def _resolve_api_key(self) -> str  # Resolves the API key from environment or data store.
+    def respond(self, context: List[str]) -> Optional[str]  # Generates a response using the Claude API.
+
+── irc/packages/csc-claude/csc_claude/main.py ──
+  def main()  # Main entry point for the csc-claude agent.
+
+── irc/packages/csc-claude/pyproject.toml ──
+# [build-system]

@@ -1,0 +1,424 @@
+CSC-SERVER SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-server/csc_server.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-server/csc_server.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-server/csc_server.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-server/csc_server.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-server/csc_server.egg-info/requires.txt ──
+# csc-services>=0.1.0
+
+── irc/packages/csc-server/csc_server.egg-info/top_level.txt ──
+# build
+
+── irc/packages/csc-server/csc_server/__init__.py ──
+
+── irc/packages/csc-server/csc_server/exec/__init__.py ──
+
+── irc/packages/csc-server/csc_server/exec/dispatcher.py ──
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_ISUPPORT = '005'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_UMODEIS = '221'
+  RPL_CHANNELMODEIS = '324'
+  RPL_TOPICWHOTIME = '333'
+  RPL_WHOREPLY = '352'
+  RPL_ENDOFWHO = '315'
+  RPL_WHOISUSER = '311'
+  RPL_WHOISSERVER = '312'
+  RPL_WHOISOPERATOR = '313'
+  RPL_WHOISIDLE = '317'
+  RPL_ENDOFWHOIS = '318'
+  RPL_WHOISCHANNELS = '319'
+  RPL_AWAY = '301'
+  RPL_UNAWAY = '305'
+  RPL_NOWAWAY = '306'
+  RPL_BANLIST = '367'
+  RPL_ENDOFBANLIST = '368'
+  RPL_MOTD = '372'
+  RPL_MOTDSTART = '375'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  RPL_STATSLINKINFO = '211'
+  RPL_STATSCOMMANDS = '212'
+  RPL_STATSCLINE = '213'
+  RPL_STATSNLINE = '214'
+  RPL_STATSILINE = '215'
+  RPL_STATSKLINE = '216'
+  RPL_STATSYLINE = '218'
+  RPL_ENDOFSTATS = '219'
+  RPL_STATSUPTIME = '242'
+  RPL_STATSOLINE = '243'
+  RPL_STATSHLINE = '244'
+  RPL_LUSERCLIENT = '251'
+  RPL_LUSEROP = '252'
+  RPL_LUSERUNKNOWN = '253'
+  RPL_LUSERCHANNELS = '254'
+  RPL_LUSERME = '255'
+  RPL_ADMINME = '256'
+  RPL_ADMINLOC1 = '257'
+  RPL_ADMINLOC2 = '258'
+  RPL_ADMINEMAIL = '259'
+  RPL_USERHOST = '302'
+  RPL_ISON = '303'
+  RPL_INVITING = '341'
+  RPL_VERSION = '351'
+  RPL_LINKS = '364'
+  RPL_ENDOFLINKS = '365'
+  RPL_INFO = '371'
+  RPL_ENDOFINFO = '374'
+  RPL_TIME = '391'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHSERVER = '402'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_NOTREGISTERED = '451'
+  ERR_NOTONCHANNEL = '442'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_USERONCHANNEL = '443'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_CHANNELISFULL = '471'
+  ERR_INVITEONLYCHAN = '473'
+  ERR_BANNEDFROMCHAN = '474'
+  ERR_BADCHANNELKEY = '475'
+  ERR_NOPRIVILEGES = '481'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_UMODEUNKNOWNFLAG = '501'
+  ERR_USERSDONTMATCH = '502'
+  NICK_RE = re.compile('^[A-Za-z\\[\\]\\\\`_^{|}][A-Za-z0-9\\[\\]\\\\`_^{|}\\-]*$')
+  class CommandDispatcher:  # Executes queued commands against local server state.
+    def __init__(self, server, state: ServerState, logger: Callable[[str], None], store: CommandStore | None=None)
+    def dispatch(self, envelope: CommandEnvelope) -> None
+    def _dispatch_irc(self, envelope: CommandEnvelope) -> None
+    def _handle_privmsg(self, message, envelope: CommandEnvelope) -> None
+    def _handle_notice(self, message, envelope: CommandEnvelope) -> None
+    def _handle_who(self, message, envelope: CommandEnvelope) -> None
+    def _handle_who_channel(self, envelope: CommandEnvelope, nick: str, channel_name: str) -> None
+    def _handle_who_mask(self, envelope: CommandEnvelope, nick: str, mask: str) -> None
+    def _handle_whois(self, message, envelope: CommandEnvelope) -> None
+    def _visible_whois_channels(self, requester_session_id: str, requester_nick: str, target_session_id: str, target_nick: str) -> list[str]
+    def _handle_motd(self, envelope: CommandEnvelope) -> None
+    def _handle_stats(self, message, envelope: CommandEnvelope) -> None
+    def _handle_stats_l(self, envelope: CommandEnvelope, nick: str) -> None  # STATS L: list server link info (one 211 numeric per S2S peer).
+    def _handle_stats_u(self, envelope: CommandEnvelope, nick: str) -> None  # STATS U: server uptime (RPL_STATSUPTIME 242).
+    def _handle_stats_m(self, envelope: CommandEnvelope, nick: str) -> None  # STATS M: per-command counters (RPL_STATSCOMMANDS 212).
+    def _handle_stats_o(self, envelope: CommandEnvelope, nick: str) -> None  # STATS O: configured oper host patterns (RPL_STATSOLINE 243).
+    def _send_motd(self, envelope: CommandEnvelope, nick: str) -> None
+    def _handle_away(self, message, envelope: CommandEnvelope) -> None
+    def _who_flags(self, session_id: str, member: dict | None, session: dict) -> str
+    def _handle_mode(self, message, envelope: CommandEnvelope) -> None
+    def _handle_user_mode(self, message, envelope: CommandEnvelope, nick: str, target_nick: str) -> None
+    def _handle_channel_mode(self, message, envelope: CommandEnvelope, nick: str, chan_name: str) -> None
+    def _send_ban_list(self, envelope: CommandEnvelope, nick: str, channel_name: str) -> None
+    def _handle_topic(self, message, envelope: CommandEnvelope) -> None
+    def _handle_kick(self, message, envelope: CommandEnvelope) -> None
+    def _handle_pass(self, message, envelope: CommandEnvelope) -> None
+    def _handle_nick(self, message, envelope: CommandEnvelope) -> None
+    def _handle_user(self, message, envelope: CommandEnvelope) -> None
+    def _handle_oper(self, message, envelope: CommandEnvelope) -> None
+    def _try_complete_registration(self, envelope: CommandEnvelope) -> None
+    def _send_numeric(self, envelope: CommandEnvelope, numeric: str, target: str, *text_parts) -> None
+    def _nick_in_use(self, new_nick: str, source_session: str) -> bool
+    def _require_registered(self, envelope: CommandEnvelope) -> str | None
+    def _handle_file_upload(self, envelope: CommandEnvelope, channel_name: str, nick: str, text: str) -> bool  # Handle IRC file upload markers. Returns True if the message was consumed.
+    def _install_uploaded_module(self, module_name: str, content: str) -> None  # Write uploaded module to csc_services package directory for handle_command to find.
+    def _broadcast_to_channel(self, channel_name: str, line: str, exclude_session: str | None=None) -> None
+    def _broadcast_channel_line(self, channel_name: str, line: str) -> None  # Broadcast a server-generated channel line locally AND to peers via sync_mesh.
+    def _send_names_reply(self, envelope: CommandEnvelope, channel_name: str, nick: str) -> None
+    def _join_channel(self, envelope: CommandEnvelope, channel_name: str, auto=False, key=None) -> None
+    def _handle_join(self, message, envelope: CommandEnvelope) -> None
+    def _handle_part(self, message, envelope: CommandEnvelope) -> None
+    def _handle_names(self, message, envelope: CommandEnvelope) -> None
+    def _handle_list(self, envelope: CommandEnvelope) -> None
+    def _handle_quit(self, message, envelope: CommandEnvelope) -> None
+    def _is_authorized_service_command(self, message, envelope: CommandEnvelope) -> tuple[bool, dict]
+    def _user_host(self, nick: str, envelope: CommandEnvelope) -> str  # Build hostmask preserving origin server for relayed commands.
+    def _debug(self, message: str) -> None
+    def _handle_invite(self, message, envelope: CommandEnvelope) -> None
+    def _handle_lusers(self, message, envelope: CommandEnvelope) -> None
+    def _handle_version(self, message, envelope: CommandEnvelope) -> None
+    def _handle_time(self, message, envelope: CommandEnvelope) -> None
+    def _handle_admin(self, message, envelope: CommandEnvelope) -> None
+    def _handle_info(self, message, envelope: CommandEnvelope) -> None
+    def _handle_links(self, message, envelope: CommandEnvelope) -> None
+    def _handle_userhost(self, message, envelope: CommandEnvelope) -> None
+    def _handle_ison(self, message, envelope: CommandEnvelope) -> None
+    def _require_oper(self, envelope: CommandEnvelope, nick: str) -> bool
+    def _handle_kill(self, message, envelope: CommandEnvelope) -> None
+    def _handle_squit(self, message, envelope: CommandEnvelope) -> None
+    def _handle_wallops(self, message, envelope: CommandEnvelope) -> None
+    def _handle_connect(self, message, envelope: CommandEnvelope) -> None
+    def _handle_rehash(self, message, envelope: CommandEnvelope) -> None
+    def _handle_restart(self, message, envelope: CommandEnvelope) -> None
+    def _handle_die(self, message, envelope: CommandEnvelope) -> None
+    def _resolve_stub_log_path(self) -> str
+    def log_stubbed_call(self, class_name: str, method_name: str, **extra) -> None  # Record that a stubbed/unimplemented method was invoked.
+
+── irc/packages/csc-server/csc_server/irc/__init__.py ──
+
+── irc/packages/csc-server/csc_server/irc/ingress.py ──
+  class IRCIngress:  # Normalizes incoming client lines into canonical queue items.
+    def __init__(self, server, queue: LocalCommandQueue, sync_mesh: SyncMesh, logger: Callable[[str], None])
+    def accept_client_line(self, line: str, source_session: str, metadata: dict | None=None) -> CommandEnvelope
+    def _build_payload(self, line: str, source_session: str, metadata: dict | None) -> dict
+    def _resolve_metadata(self, line: str, source_session: str, metadata: dict | None) -> dict
+    def _extract_channel(line: str) -> str
+    def _should_replicate(kind: str, line: str) -> bool
+
+── irc/packages/csc-server/csc_server/main.py ──
+
+── irc/packages/csc-server/csc_server/queue/__init__.py ──
+
+── irc/packages/csc-server/csc_server/queue/command.py ──
+  class CommandEnvelope:  # Canonical queue item shared by ingress, sync, and execution.
+    def to_dict(self) -> dict
+    def from_dict(cls, payload: dict) -> 'CommandEnvelope'
+
+── irc/packages/csc-server/csc_server/queue/local_queue.py ──
+  class LocalCommandQueue:  # In-memory queue scaffold for server command execution.
+    def __init__(self, logger: Callable[[str], None], store: CommandStore | None=None)
+    def append(self, envelope: CommandEnvelope, persist: bool=True) -> None
+    def pop_next(self) -> CommandEnvelope | None
+    def __len__(self) -> int
+
+── irc/packages/csc-server/csc_server/queue/store.py ──
+  class CommandStore:  # Append-only command log used to rebuild pending queue state on restart.
+    def __init__(self, logger: Callable[[str], None], base_dir: Path | None=None)
+    def log_path(self) -> Path
+    def record_enqueued(self, envelope: CommandEnvelope) -> None
+    def record_executed(self, envelope: CommandEnvelope) -> None
+    def load_pending(self) -> list[CommandEnvelope]
+    def _append_event(self, event_type: str, envelope: CommandEnvelope) -> None
+    def _resolve_base_dir(cls) -> Path
+
+── irc/packages/csc-server/csc_server/server.py ──
+  class Server(Service, LinkMixin, UserMixin):  # Queue-first server scaffold built on the CSC service inheritance chain.
+    def __init__(self, host: str='0.0.0.0', port: int=9525, debug: bool=False, peers: list[tuple] | None=None, name: str | None=None, master: tuple | None=None)
+    def register_connection_key(self, conn: Connection) -> None  # Register a connection's key_hash for O(1) lookup on recv.
+    def unregister_connection_key(self, conn: Connection) -> None  # Unregister a connection's key_hash.
+    def _find_link_for_addr(self, addr: tuple[str, int]) -> 'Link | None'  # Find the Link associated with a peer address.
+    def enqueue_client_line(self, line: str, source_session: str='local', metadata: dict | None=None) -> str  # Normalize a client line into a command envelope and queue it.
+    def update_session_context(self, source_session: str, source_nick=None, source_is_oper=None, channel_ops=None) -> dict
+    def run_once(self) -> bool  # Execute one queued command if available.
+    def run(self) -> None  # Run the queue-first UDP server loop until interrupted.
+    def stop(self) -> None
+    def debug(self, message: str) -> None
+    def _install_signal_handlers(self) -> None
+    def _restore_pending_queue(self) -> None
+    def _bind_socket(self) -> None
+    def _bind_s2s_socket(self) -> None  # Bind a second UDP socket on S2S_PORT for inter-server traffic.
+    def s2s_sock_send(self, data: bytes, addr: tuple) -> None  # Send data via the S2S socket (port 9520).
+    def _close_s2s_socket(self) -> None  # Shut down the S2S listener thread and close its socket.
+    def _s2s_listener(self) -> None  # Listener thread for the S2S port — feeds into the same message_queue.
+    def _ingest_network_messages(self) -> None
+    def _maybe_initiate_dh_for_addr(self, addr: tuple, session_id: str) -> None  # If addr matches a configured peer, initiate fresh DH (rate-limited to once per 10s per IP).
+    def _flush_outbound_events(self) -> None
+    def _handle_cryptoinit_dh(self, line: str, addr: tuple, session_id: str) -> None  # Handle client-initiated DH key exchange.
+    def _validate_s2s_cert_and_get_peer_name(self, cert_pem: str, ca_cert_path: str) -> str | None  # Validate S2S cert PEM against CA. Return peer name (cert CN) if valid, else None.
+    def _handle_slinkdh_cert(self, line: str, addr: tuple, session_id: str) -> None  # Handle inbound S2S cert + DH handshake. Validates cert, creates link if valid.
+    def _handle_slinkdh(self, line: str, addr: tuple, session_id: str) -> None
+    def _handle_slinkdhreply_cert(self, line: str, addr: tuple, session_id: str) -> None  # Handle SLINKDHREPLY_CERT: master's reply with cert + DH public key.
+    def _handle_slinkdhreply(self, line: str, addr: tuple, session_id: str) -> None
+    def _handle_err_not_registered(self, addr: tuple, session_id: str) -> None  # Handle ERR_NOT_REGISTERED: link was forgotten, trigger re-auth.
+    def _get_s2s_cert_path(self) -> str  # Return path to our S2S certificate chain (platform-aware).
+    def _session_id_for_addr(addr: tuple[str, int]) -> str
+  def main(argv: list[str] | None=None) -> int
+
+── irc/packages/csc-server/csc_server/state/__init__.py ──
+
+── irc/packages/csc-server/csc_server/state/server_state.py ──
+  class ServerState:  # In-memory state scaffold for queue-driven server execution.
+    def record_execution(self, envelope: CommandEnvelope) -> None
+    def record_outbound(self, line: str) -> None
+    def record_session_outbound(self, session_id: str, line: str) -> None
+    def record_service_result(self, envelope: CommandEnvelope, class_name: str, method_name: str, result: str) -> None
+    def record_protocol_event(self, envelope: CommandEnvelope, event: str, detail: dict) -> None
+    def record_skipped_service_command(self, envelope: CommandEnvelope, target: str, reason: str, detail: dict | None=None) -> None
+    def set_session_context(self, session_id: str, source_nick=None, source_is_oper=None, channel_ops=None) -> dict
+    def get_session_context(self, session_id: str) -> dict
+    def ensure_session(self, session_id: str) -> dict
+    def get_session(self, session_id: str) -> dict | None
+    def touch_session_activity(self, session_id: str, when=None, origin_server=None) -> dict
+    def mark_session_registered(self, session_id: str, when=None, origin_server=None) -> dict
+    def session_channels(self, session_id: str) -> set[str]
+    def set_away(self, session_id: str, message: str | None) -> None
+    def get_away(self, session_id: str) -> str | None
+    def idle_seconds(self, session_id: str, now=None) -> int
+    def signon_time(self, session_id: str) -> int
+    def remove_session(self, session_id: str) -> dict | None
+    def normalize_channel_name(channel_name: str) -> str
+    def ensure_channel(self, channel_name: str) -> dict
+    def get_channel(self, channel_name: str) -> dict | None
+    def list_channels(self) -> list[dict]
+    def add_channel_member(self, channel_name: str, session_id: str, nick: str, op=False) -> dict
+    def remove_channel_member(self, channel_name: str, nick: str) -> bool
+    def remove_session_from_all_channels(self, session_id: str) -> list[str]
+    def channel_member_sessions(self, channel_name: str) -> list[str]
+    def channel_members(self, channel_name: str) -> list[dict]
+    def is_channel_member(self, channel_name: str, nick: str) -> bool
+    def is_channel_op(self, channel_name: str, nick: str) -> bool
+    def session_nick(self, session_id: str) -> str | None
+    def find_session_by_nick(self, nick: str) -> str | None
+    def rename_session_nick(self, session_id: str, old_nick: str, new_nick: str) -> None
+    def _refresh_session_channel_ops(self, session_id: str) -> None
+    def set_channel_mode(self, channel_name: str, mode: str, param: str | int | None=None) -> None
+    def unset_channel_mode(self, channel_name: str, mode: str) -> None
+    def get_channel_modes(self, channel_name: str) -> tuple[set, dict]
+    def set_member_mode(self, channel_name: str, nick: str, mode: str) -> bool
+    def unset_member_mode(self, channel_name: str, nick: str, mode: str) -> bool
+    def is_voiced(self, channel_name: str, nick: str) -> bool
+    def add_ban(self, channel_name: str, mask: str) -> bool
+    def remove_ban(self, channel_name: str, mask: str) -> bool
+    def get_bans(self, channel_name: str) -> list[str]
+    def normalize_ban_mask(mask: str) -> str
+    def match_ban_mask(mask: str, nick_user_host: str) -> bool
+    def is_banned(self, channel_name: str, nick: str, user: str, host: str) -> bool
+    def add_invite(self, channel_name: str, nick: str) -> None
+    def is_invited(self, channel_name: str, nick: str) -> bool
+    def can_speak(self, channel_name: str, nick: str) -> bool  # Check if nick can speak in channel. Always True unless +m is set,
+    def can_set_topic(self, channel_name: str, nick: str) -> bool  # Check if nick can set topic. Always True unless +t is set,
+    def set_user_mode(self, session_id: str, mode: str) -> None
+    def unset_user_mode(self, session_id: str, mode: str) -> None
+    def get_user_modes(self, session_id: str) -> set
+
+── irc/packages/csc-server/csc_server/sync/__init__.py ──
+
+── irc/packages/csc-server/csc_server/sync/link.py ──
+# Link: a single peer connection in the SyncMesh.
+  class Link:  # A single peer link in the mesh.
+    def __init__(self, server, host: str, port: int, origin_server=None, name=None, resolve=True)
+    def bind_origin(self, origin_server: str) -> None  # Bind this Link to a specific peer identity.
+    def add_user(self, nick: str, **attrs) -> None
+    def del_user(self, nick: str) -> bool
+    def has_user(self, nick: str) -> bool
+    def user_list(self) -> list[str]
+    def add_channel(self, name: str, **attrs) -> None
+    def del_channel(self, name: str) -> bool
+    def has_channel(self, name: str) -> bool
+    def channel_list(self) -> list[str]
+    def add_oper(self, nick: str) -> None
+    def del_oper(self, nick: str) -> bool
+    def stats_dict(self) -> dict  # Per-link stats row used by STATS L / link_stats().
+    def to_dict(self) -> dict  # Full dict representation (config + state + known entities).
+    def from_peer_tuple(cls, server, peer: tuple, name=None) -> 'Link'  # Build a Link from a peer config tuple.
+    def __repr__(self) -> str
+  def aggregate_user_lists(local_users: Iterable[str], links: Iterable['Link']) -> set[str]  # Build a complete user list by unioning local and all links' user lists.
+  def aggregate_channel_lists(local_channels: Iterable[str], links: Iterable['Link']) -> set[str]
+
+── irc/packages/csc-server/csc_server/sync/link_mixin.py ──
+# LinkMixin: attaches link-handling capability to any class (typically Server).
+  class LinkMixin:  # Mixin that adds link management to a host class.
+    def _init_links(self) -> None  # Initialise the link tables. Call once from the host __init__.
+    def add_link(self, link: Link) -> Link  # Register a new link in all indices.
+    def add_link_from_peer_tuple(self, peer: tuple, name=None) -> Link  # Build a Link from a peer config tuple and register it.
+    def bind_link_origin(self, link: Link, origin_server: str) -> None  # Bind a previously-unbound Link to an origin_server identity.
+    def remove_link(self, link_id: str) -> Link | None  # Unregister a link by id. Returns the removed Link or None.
+    def replace_links(self, new_links: Iterable[Link]) -> None  # Replace the entire link set atomically (used by config reload).
+    def get_link_by_id(self, link_id: str) -> Link | None
+    def get_link_by_origin(self, origin_server: str) -> Link | None
+    def has_link_id(self, link_id: str) -> bool
+    def has_origin(self, origin_server: str) -> bool
+    def iter_links(self) -> Iterator[Link]
+    def link_ids(self) -> list[str]
+    def link_names(self) -> list[str]
+    def link_count(self) -> int
+    def link_stats(self) -> list[dict]  # Snapshot of all links' stats, for STATS L formatting.
+    def find_unbound_link_for_addr(self, addr: tuple[str, int] | None) -> Link | None  # Find a pre-configured, not-yet-bound Link whose configured
+    def all_known_users(self, local_users: Iterable[str]=()) -> set[str]
+    def all_known_channels(self, local_channels: Iterable[str]=()) -> set[str]
+    def all_known_opers(self, local_opers: Iterable[str]=()) -> set[str]
+    def links_where_user_known(self, nick: str) -> list[Link]  # Return every link that currently believes `nick` lives on its side.
+    def links_where_channel_known(self, channel: str) -> list[Link]
+
+── irc/packages/csc-server/csc_server/sync/mesh.py ──
+  class SyncMesh:  # UDP relay for queue envelopes across linked peers.
+    def __init__(self, server, logger: Callable[[str], None])
+    def _mark_seen(self, command_id: str | None) -> bool  # Record a command_id. Returns True if newly seen, False if duplicate.
+    def start(self) -> None
+    def stop(self) -> None
+    def sync_command(self, envelope: CommandEnvelope, exclude_link_id=None) -> None  # Relay a command to linked peers.
+    def find_link_by_addr(self, addr: tuple) -> Link | None  # Return Link whose last_addr matches addr, or None.
+    def _initiate_link_dh(self, link: Link) -> None  # Send SLINKDH_CERT with cert to peer; store DHExchange on Connection.
+    def prepare_sync_payload(self, envelope: CommandEnvelope) -> dict
+    def encode_command(self, envelope: CommandEnvelope) -> bytes
+    def encode_command_line(self, envelope: CommandEnvelope) -> str
+    def receive_command_line(self, line: str, peer=None) -> CommandEnvelope | None  # Parse a SYNCLINE off the wire and route it by identity.
+    def _resolve_incoming_link(self, origin_server: str, peer: tuple[str, int] | None) -> Link | None  # Find the Link that `origin_server` belongs to.
+    def _process_received_envelope(self, envelope: CommandEnvelope) -> CommandEnvelope | None  # Dedup, relay, then enqueue. Used by receive_command_line and
+    def receive_command(self, payload: dict | bytes | str) -> CommandEnvelope | None
+    def link_stats(self) -> list[dict]  # Return per-link statistics for `/stats l`.
+    def _log_stub(self, method_name: str, **extra) -> None
+    def peer_timeout_detected(self, link: Link) -> None
+    def emit_netsplit_quits(self, dead_link: Link) -> None
+    def squit_propagate(self, dead_link: Link, reason: str='') -> None
+    def heartbeat_tick(self) -> None  # Maintain S2S links: initiate DH, send PING, detect timeouts.
+    def _announce_stub(self, method_name: str, detail: str) -> None
+
+── irc/packages/csc-server/csc_server/user.py ──
+# User: a single client connection to the server.
+  class User:  # A single client connection to the server.
+    def __init__(self, server, host: str, port: int, addr: tuple[str, int] | None=None)
+    def session_id(self) -> str  # Return ip:port string matching ServerState/Dispatcher convention.
+    def mark_registered(self) -> None  # Transition from 'new' to 'registered'.
+    def set_user_info(self, username: str, realname: str) -> None
+    def rename(self, new_nick: str) -> str | None  # Update nick. Returns old nick or None if first set.
+    def join_channel(self, name: str) -> None
+    def part_channel(self, name: str) -> None
+    def channel_list(self) -> list[str]
+    def set_mode(self, mode: str) -> None
+    def unset_mode(self, mode: str) -> None
+    def has_mode(self, mode: str) -> bool
+    def set_oper(self, account: str, flags: str) -> None
+    def clear_oper(self) -> None
+    def is_oper(self) -> bool
+    def set_away(self, message: str) -> None
+    def clear_away(self) -> None
+    def touch_activity(self, origin_server: str | None=None) -> None
+    def idle_seconds(self) -> int
+    def send(self, data: bytes) -> None  # Send data to this user. Connection handles encryption.
+    def stats_dict(self) -> dict  # User stats snapshot.
+    def to_dict(self) -> dict  # Full state dict.
+    def __repr__(self) -> str
+
+── irc/packages/csc-server/csc_server/user_mixin.py ──
+# UserMixin: attaches user-handling capability to any class (typically Server).
+  class UserMixin:  # Mixin that adds user management to a host class.
+    def _init_users(self) -> None  # Initialise user tables. Call once from the host __init__.
+    def add_user(self, user: User) -> User  # Register a new user in all indices.
+    def remove_user(self, user_id: str) -> User | None  # Unregister a user by id. Returns removed User or None.
+    def rename_user(self, user: User, old_nick: str, new_nick: str) -> None  # Update nick index when a user changes nick.
+    def reindex_user_session(self, user: User, old_session_id: str) -> None  # Update session index when a user's source address changes (NAT rebind).
+    def get_user_by_id(self, user_id: str) -> User | None
+    def get_user_by_session(self, session_id: str) -> User | None
+    def get_user_by_nick(self, nick: str) -> User | None
+    def has_user_id(self, user_id: str) -> bool
+    def has_nick(self, nick: str) -> bool
+    def iter_users(self) -> Iterator[User]
+    def local_users(self) -> list[User]
+    def remote_users(self) -> list[User]
+    def user_count(self) -> int
+    def user_nicks(self) -> list[str]
+    def user_stats(self) -> list[dict]  # Snapshot of all users' stats.
+
+── irc/packages/csc-server/pyproject.toml ──
+# [build-system]

@@ -1,0 +1,6 @@
+CSC XREF - SYMBOLS STARTING WITH 'K'
+==================================================
+
+KeyManager: packages/enc-ext-vfs/enc_ext_vfs/key_manager.py (in other)
+key_manager: packages/enc-ext-vfs/tests/test_block_store.py (in other)
+km: packages/enc-ext-vfs/tests/test_fat.py (in other), packages/enc-ext-vfs/tests/test_key_manager.py (in other)

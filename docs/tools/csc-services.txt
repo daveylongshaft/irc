@@ -1,0 +1,486 @@
+CSC-SERVICES SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-services/csc_services.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-services/csc_services.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-services/csc_services.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-services/csc_services.egg-info/requires.txt ──
+# csc-crypto>=0.1.0
+
+── irc/packages/csc-services/csc_services.egg-info/top_level.txt ──
+# build
+
+── irc/packages/csc-services/csc_services/__init__.py ──
+  PROJECT_ROOT = Platform.PROJECT_ROOT
+
+── irc/packages/csc-services/csc_services/agent.py ──
+  class Agent(Service):  # AI agent runner service.
+    def PROMPTS_BASE(self)
+    def READY_DIR(self)
+    def WIP_DIR(self)
+    def DONE_DIR(self)
+    def _build_cmd(self, agent_name, prompt, wip_filename, repo_clone_path=None)  # Build the command for the given agent.
+    def __init__(self, server_instance)
+    def _is_running(self)  # Check if the tracked agent process is still alive.
+    def _find_prompt(self, filename)  # Find a prompt file in ready/ or wip/. Returns Path or None.
+    def _read_text_safe(path)  # Read a text file, trying utf-8 first then falling back to latin-1.
+    def _create_queue_metadata(self, agent_name: str, workorder_name: str, original_path: Path) -> dict  # Create metadata dictionary for a queued workorder.
+    def _ensure_agent_dirs(self, agent_dir, agent_name)  # Create agent directory structure and copy default template if missing.
+    def _detect_agents(self)  # Return dict of agent name -> available (bool).
+    def _parse_front_matter(filepath)  # Parse YAML-like front-matter from a prompt file.
+    def _check_prompt_capabilities(self, filepath)  # Check if this system can satisfy a prompt's requirements.
+    def _build_prompt(self, wip_path)  # Assemble the full prompt from README.1shot + agent context dir + WIP content.
+    def list(self) -> str  # List available AI agent backends.
+    def select(self, name: str) -> str  # Select which AI agent backend to use.
+    def assign(self, prompt_filename: str) -> str  # Assign a prompt to the selected agent for queue-based processing.
+    def _write_queued_files(self, wip_path: Path, metadata: dict, agent_name: str, workorder_filename: str)  # Writes the workorder content and its metadata to the agent's queue/in/ directory.
+    def _run_generate_orders_md_script(self, agent_name: str, workorder_filename: str)  # Generate orders.md in agent's queue/in/ with cached context.
+    def _format_elapsed(self, started)  # Format elapsed time from a start timestamp.
+    def _get_proc_mem(self, pid)  # Get resident memory of a process in MB from /proc. Returns str or '?'.
+    def _get_log_size(self, log_path)  # Get log file size as human-readable string.
+    def _get_wip_progress(self, prompt_name)  # Count completed/next/pending steps in WIP file.
+    def status(self) -> str  # Show queue and agent status by scanning queue directories and WIP files.
+    def _is_running_pid(self, pid)  # Check if a specific PID is alive.
+    def stop(self) -> str  # Stop the running agent.
+    def kill(self) -> str  # Kill the running agent and move WIP prompt back to ready.
+    def tail(self, *args) -> str  # Tail the WIP journal file to see agent progress.
+    def _find_temp_repo_wips(self)  # Find WIP files in agent temp repos (where running agents write).
+    def _find_wip_file(self, filename)  # Find a workorder file in wip/, done/, or ready/. Returns Path or None.
+    def _tail_file(self, wip_path, n=20, source=None)  # Return the last N lines of a file with a header.
+    def _check_stale(self)  # Check if the WIP file hasn't been updated recently. Returns warning or None.
+    def _clear_state(self)  # Reset agent tracking state.
+    def _git_sync(self, msg)  # Commit staged changes, push, pull.
+    def default(self, *args) -> str  # Show available commands.
+  def _get_file_ops()  # Get the FtpFileOps singleton (lazy init, falls back to plain mode).
+
+── irc/packages/csc-services/csc_services/backup.py ──
+  class backup(Service):  # Backup service using pure Python (tarfile/shutil).
+    def __init__(self, server_instance)  # Initializes the instance.
+    def create(self, *paths) -> str  # Creates a tar.gz backup of the specified files/directories.
+    def list(self) -> str  # Lists all available backup archives.
+    def restore(self, archive: str, dest: str='.') -> str  # Restores a backup archive to a destination directory.
+    def diff(self, archive: str, filepath: str) -> str  # Compares a file in a backup archive with its current version on disk.
+    def default(self, *args) -> str  # Shows available commands for the Backup service.
+
+── irc/packages/csc-services/csc_services/benchmark.py ──
+  class benchmark(Service):  # Benchmark service for running and tracking AI agent performance tests.
+    def __init__(self, server_instance)
+    def _save_metadata(self)  # Save benchmark metadata to disk.
+    def _read_prompt_file(self, name)  # Read a benchmark prompt file.
+    def _write_prompt_file(self, name, content)  # Write a benchmark prompt file.
+    def add(self, name, *description_parts) -> str  # Add a new benchmark prompt.
+    def delete(self, name) -> str  # Delete a benchmark prompt and its results.
+    def run(self, name, agent_name) -> str  # Run a benchmark with the specified agent using the queue system.
+    def _archive_result(self, name, agent_name, duration, prompt, result, start_time)  # Archive benchmark result as a tarball with metadata.
+    def list(self) -> str  # List all available benchmarks.
+    def results(self, name, agent_filter='') -> str  # Show results for a benchmark.
+    def default(self, *args) -> str  # Show available commands.
+
+── irc/packages/csc-services/csc_services/botserv.py ──
+# BotServ Service - Bot registration and management for channels.
+  PRIVILEGED_PREFIXES = ['/var/log/']
+  class Botserv(Service):  # BotServ service for channel bot management.
+    def __init__(self, server_instance)  # Initialize the BotServ service.
+    def _is_privileged_path(self, path)  # Check if a log path requires privileged access.
+    def _get_offset_key(self, channel, logfile_path)  # Storage key for tracking read offset.
+    def _get_channel_filters(self, channel)  # Load compiled match/nomatch filter patterns for a channel.
+    def add(self, *args) -> str  # ADD <botnick> <#chan> <password>
+    def delete(self, *args) -> str  # DEL <botnick> <#chan>
+    def list(self, *args) -> str  # LIST [#chan]
+    def addmatch(self, *args) -> str  # ADDMATCH <#chan> <pattern> - Add a match filter pattern for a channel.
+    def delmatch(self, *args) -> str  # DELMATCH <#chan> <pattern> - Delete a match filter pattern for a channel.
+    def addnomatch(self, *args) -> str  # ADDNOMATCH <#chan> <pattern> - Add a nomatch filter pattern for a channel.
+    def delnomatch(self, *args) -> str  # DELNOMATCH <#chan> <pattern> - Delete a nomatch filter pattern for a channel.
+    def listfilters(self, *args) -> str  # LISTFILTERS <#chan> - List all match and nomatch filters for a channel.
+    def default(self, *args) -> str  # Show available BotServ commands.
+    def logread(self, *args, filter_pattern=None) -> str  # LOGREAD <#chan> <logfile_path> [filter_pattern] - Read logfile to channel with optional filtering.
+
+── irc/packages/csc-services/csc_services/builtin.py ──
+  class builtin(Service):
+    def echo(self, *args) -> str  # Echoes back the given arguments.
+    def status(self) -> str  # Returns the status of the system.
+    def current_time(self) -> str  # Returns the current server time.
+    def download_url_content(self, url: str) -> str  # Downloads the content of a URL.
+    def download_url_to_file(self, url: str, local_filepath: str) -> str  # Downloads the content of a URL to a file.
+    def _add_core_files_to_safeguards(self)  # Dynamically adds core project files to the list of safeguarded paths.
+    def __init__(self, server_instance)  # Initialize the builtin service with server instance and safeguards.
+    def list_dir(self, path_argument: str='.') -> str  # Lists the contents of a directory.
+    def read_file_content(self, filepath: str) -> str  # Reads the content of a file, making newlines visible.
+    def create_directory_local(self, path_str: str) -> str  # Creates a local directory
+    def delete_local(self, path_str: str) -> str  # Deletes a local file or empty directory
+    def move_local(self, source_path_str: str, destination_path_str: str) -> str  # Moves a local file or directory
+    def _get_ftp_connection(self, h, p_s, u, pw) -> Union[ftplib.FTP, str]  # Establishes an FTP connection.
+    def ftp_connect_list(self, host: str, remote_path: str='.', port_str: str='21', user: str='anonymous', passwd: str='') -> str  # Connects to FTP and lists directory contents.
+    def ftp_download_file(self, host: str, remote_filepath: str, local_filepath: str, port_str: str='21', user: str='anonymous', passwd: str='') -> str  # Downloads a file from an FTP server.
+    def ftp_upload_file(self, host: str, local_filepath: str, remote_filepath: str, port_str: str='21', user: str='anonymous', passwd: str='') -> str  # Uploads a file to an FTP server.
+
+── irc/packages/csc-services/csc_services/catalog.py ──
+# Catalog and ranking service for AI agents.
+  class catalog(Service):  # Agent catalog and ranking system.
+    def __init__(self, server_instance)
+    def _calculate_total_cost(self, agent_id, duration_seconds)  # Calculate total cost = API cost + time cost.
+    def _parse_result_filename(self, filename)  # Parse benchmark result filename: {name}-{duration}-{agent}-{unixtime}.tgz
+    def _load_benchmark_results(self)  # Load all benchmark results from results directory.
+    def _calculate_rankings(self)  # Calculate cost-performance rankings for all agents.
+    def list(self) -> str  # List all agents with specifications.
+    def rank(self) -> str  # Show cost-performance rankings with multiple perspectives.
+    def assign(self, task_type, priority='balanced') -> str  # Get recommended agent for task type.
+    def update(self) -> str  # Refresh rankings from benchmark data.
+    def default(self, *args) -> str  # Show available commands.
+
+── irc/packages/csc-services/csc_services/crypt_serv.py ──
+  class CryptServ(Service):  # CryptServ is a key distribution bot, managing RSA key pairs for channels and DM pairs.
+    def __init__(self, server_instance)
+    def _run_gencert_script(self, target_name)  # Executes the gencert.sh script to generate keys for a target.
+    def _load_cert_bundle(self, target_name)  # Loads private and public keys for a given target.
+    def request(self, target: str, requestor_nick: str) -> str  # Handles requests for certificates (channel or DM).
+    def _send_cert_bundle_to_requestor(self, cert_bundle: dict, target: str, requestor_nick: str) -> str  # Sends the certificate bundle as PRIVMSG to the requestor.
+    def default(self, *args) -> str  # Default handler for CryptServ commands.
+
+── irc/packages/csc-services/csc_services/curl.py ──
+  class curl(Service):  # A service to perform basic cURL-like web requests.
+    def __init__(self, server_instance)  # Initializes the Curl service.
+    def run(self, *args)  # Parses curl-like arguments to make an HTTP request.
+    def default(self, *args)  # Default help message.
+
+── irc/packages/csc-services/csc_services/help.py ──
+  class Help(Service):
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/irc.py ──
+# Shared IRC protocol helpers exposed from the services layer.
+  SERVER_NAME = _load_server_name()
+  class IRCMessage:
+  class IRCProtocolMixin:  # Mixin that exposes IRC helpers to Service subclasses.
+    def parse_irc_message(line: str) -> IRCMessage
+    def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str
+    def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str
+  def _load_server_name() -> str
+  def parse_irc_message(line: str) -> IRCMessage
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str
+
+── irc/packages/csc-services/csc_services/module_manager.py ──
+  class module_manager(Service):  # Dynamic module management for the service system.
+    def __init__(self, server_instance)  # Initializes the instance.
+    def list(self) -> str  # Lists all available and currently loaded service modules.
+    def read(self, name: str) -> str  # Reads the source code of a service module.
+    def create(self, name: str, content_b64: str) -> str  # Creates a new service module from base64-encoded content.
+    def rehash(self, *names) -> str  # Reloads specified service modules.
+    def staging(self) -> str  # Lists all files in staging_uploads/ waiting for approval.
+    def _validate_service_file(self, filepath: Path, expected_class: str) -> tuple  # Validates a service file contains exactly one class with the expected name.
+    def approve(self, name: str) -> str  # Validates and moves a service module from staging_uploads/ to services/.
+    def reject(self, name: str) -> str  # Deletes a service module from staging_uploads/ (with version backup).
+    def default(self, *args) -> str  # Shows available commands for the Module Manager service.
+
+── irc/packages/csc-services/csc_services/moltbook.py ──
+  BASE_URL = 'https://www.moltbook.com/api/v1'
+  class moltbook(Service):  # Moltbook social network service for AI agents.
+    def __init__(self, server_instance)
+    def _request(self, method, path, body=None, api_key=None)
+    def _get(self, path, params=None, api_key=None)
+    def _post(self, path, body=None, api_key=None)
+    def _patch(self, path, body=None, api_key=None)
+    def _delete(self, path, body=None, api_key=None)
+    def _require_key(self)
+    def _fmt(self, data)
+    def setup(self, *args)  # Save API credentials. Usage: setup <api_key> <agent_name>
+    def register(self, *args)  # Register a new agent. Usage: register <name> <description>
+    def status(self, *args)  # Check account/claim status. Usage: status
+    def post(self, *args)  # Create a text post. Usage: post <submolt> <title> <content...>
+    def post_link(self, *args)  # Create a link post. Usage: post_link <submolt> <title> <url>
+    def comment(self, *args)  # Comment on a post. Usage: comment <post_id> <content...>
+    def reply(self, *args)  # Reply to a comment. Usage: reply <post_id> <parent_comment_id> <content...>
+    def upvote(self, *args)  # Upvote a post. Usage: upvote <post_id>
+    def downvote(self, *args)  # Downvote a post. Usage: downvote <post_id>
+    def delete_post(self, *args)  # Delete a post. Usage: delete_post <post_id>
+    def feed(self, *args)  # Read the feed. Usage: feed [sort] [limit]
+    def submolt_feed(self, *args)  # Feed for a specific submolt. Usage: submolt_feed <submolt> [sort] [limit]
+    def get_post(self, *args)  # Get a single post. Usage: get_post <post_id>
+    def get_comments(self, *args)  # Get comments on a post. Usage: get_comments <post_id> [sort]
+    def search(self, *args)  # Search posts. Usage: search <query> [limit]
+    def create_submolt(self, *args)  # Create a submolt community. Usage: create_submolt <name> <description>
+    def subscribe(self, *args)  # Subscribe to a submolt. Usage: subscribe <submolt>
+    def unsubscribe(self, *args)  # Unsubscribe from a submolt. Usage: unsubscribe <submolt>
+    def list_submolts(self, *args)  # List all submolts. Usage: list_submolts [sort] [limit]
+    def follow(self, *args)  # Follow another agent. Usage: follow <agent_name>
+    def unfollow(self, *args)  # Unfollow an agent. Usage: unfollow <agent_name>
+    def profile(self, *args)  # View profile. Usage: profile [agent_name]
+    def update_profile(self, *args)  # Update profile description. Usage: update_profile <description>
+    def notifications(self, *args)  # View notifications. Usage: notifications [limit]
+    def default(self, *args)  # Show available commands.
+
+── irc/packages/csc-services/csc_services/nickserv.py ──
+# NickServ Service - User registration and identity management.
+  class Nickserv(Service):  # NickServ service for user registration and authentication.
+    def __init__(self, server_instance)  # Initialize the NickServ service.
+    def _load_db(self)  # Load the nickserv database from disk into memory.
+    def _save_db(self)  # Save the in-memory registry back to disk.
+    def _hash_password(self, password: str) -> str  # Hash a password using MD5.
+    def _verify_password(self, stored_hash: str, password: str) -> bool  # Verify a password against its stored hash.
+    def register(self, email: str, password: str) -> str  # Register the current nick with an email and password.
+    def _register_nick(self, nick: str, email: str, password: str) -> str  # Internal method to register a nick.
+    def ident(self, password: str) -> str  # Identify with your registered nick using the password.
+    def _ident_nick(self, nick: str, password: str) -> tuple  # Internal method to identify a nick.
+    def unregister(self, nick: str) -> str  # Unregister a nick (oper only).
+    def info(self, nick: str) -> str  # Show registration information for a nick (visible to oper/self).
+    def is_registered(self, nick: str) -> bool  # Check if a nick is registered.
+    def default(self, *args) -> str  # Show available NickServ commands.
+
+── irc/packages/csc-services/csc_services/ntfy.py ──
+  class ntfy(Service):  # A dedicated service to send notifications via ntfy.sh.
+    def __init__(self, server_instance)  # Initializes the instance.
+    def send(self, *args)  # Sends a notification to the ntfy.sh topic.
+    def default(self, *args)  # Checks service status and shows the configured topic.
+
+── irc/packages/csc-services/csc_services/orders_assembler.py ──
+# OrdersAssembler: Reads orders.md-template and resolves @include directives.
+  class OrdersAssembler:  # Reads orders.md-template and resolves @include directives into final orders.md.
+    def __init__(self, project_root)
+    def assemble(self, agent_name, workorder_filename, role='worker', template_path=None)  # Read template, resolve all @include directives, return assembled string.
+    def _find_template(self, agent_name)  # Find template: agent-specific first, then global fallback.
+    def _resolve_include(self, uri, agent_name, role, workorder_filename)  # Resolve an @include URI to file content.
+    def _read_glob(self, base, pattern)  # Expand glob pattern, sort results (README.md first), concatenate.
+    def _read_file(self, path)  # Read a single file, return content or empty string.
+    def _substitute(self, text, placeholders)  # Replace placeholder tags in text.
+    def extract_role(wip_path)  # Read role from workorder YAML front-matter. Default: 'worker'.
+
+── irc/packages/csc-services/csc_services/patch.py ──
+  class patch(Service):  # Fuzzy patch service for applying code changes to service modules.
+    def __init__(self, server_instance)
+    def _find_anchor(lines, line_hint, text_fragment)  # Find a line containing text_fragment near line_hint.
+    def _parse_loose_patch(content)  # Parse loose anchor-format patch content.
+    def _apply_hunks(lines, hunks)  # Apply parsed hunks to a list of lines.
+    def _parse_unified_diff(content)  # Parse unified diff into hunks using fuzzy anchor matching.
+    def _detect_format(content)  # Detect patch format. Returns 'loose', 'unified', or None.
+    def _resolve_service_path(self, service_name)  # Convert a service name to its file path.
+    def apply(self, patch_filename: str) -> str  # Version target files and apply a patch from patches/ directory.
+    def _apply_content(self, content)  # Apply patch content (auto-detect format).
+    def revert(self, service_name: str, version: str='latest') -> str  # Revert a service file to a previous version.
+    def history(self, service_name: str) -> str  # Show version/patch history for a service file.
+    def default(self, *args) -> str  # Show help and patch format examples.
+
+── irc/packages/csc-services/csc_services/patch_test_dummy.py ──
+  class patch_test_dummy(Service):  # A dummy service used exclusively as a patch test target.
+    def __init__(self, server_instance)
+    def hello(self)  # Return a greeting.
+    def add(self, a, b)  # Add two numbers.
+    def status(self)  # Return status string.
+    def multiply(self, x, y)  # Multiply two numbers.
+    def default(self, *args)  # Fallback handler.
+
+── irc/packages/csc-services/csc_services/pki.py ──
+# PKI service — IRC command handler for certificate lifecycle.
+  _SHORTNAME_RE = re.compile('^[a-z0-9][a-z0-9.\\-]{0,62}[a-z0-9]$')
+  EASYRSA_DIR = Path('/etc/openvpn/easy-rsa')
+  EASYRSA_BIN = EASYRSA_DIR / 'easyrsa'
+  PKI_DIR = EASYRSA_DIR / 'pki'
+  CA_CRT = PKI_DIR / 'ca.crt'
+  CRL_PEM = PKI_DIR / 'crl.pem'
+  ISSUED_DIR = PKI_DIR / 'issued'
+  TOKEN_FILE = Path('/opt/csc/tmp/csc/run/pki_tokens.json')
+  APPROVED_FILE = Path('/opt/csc/irc/etc/approved_servers.json')
+  PKI_LOG = Path('/opt/csc/logs/pki.log')
+  TOKEN_TTL = 86400
+  class Pki(Service):  # PKI certificate management service for S2S TLS links.
+    def _require_flag(self, flag_list=('a', 'A'))  # Check if caller has required oper flags. Returns (ok, nick).
+    def token(self, shortname=None)  # Generate a one-time enrollment token for a server.
+    def list(self)  # Show all issued certificates.
+    def revoke(self, shortname=None)  # Revoke a certificate and regenerate CRL.
+    def status(self)  # Show CA health, CRL age, token count, issued cert count.
+    def pending(self)  # Show tokens issued but not yet used.
+    def approve(self, shortname=None)  # Add a server to the pre-approved enrollment list and push to GitHub.
+    def remove(self, shortname=None)  # Remove a server from the pre-approved enrollment list and push to GitHub.
+    def approved(self)  # List all pre-approved servers.
+    def default(self, *args)  # Default handler — show help.
+  def _load_approved()  # Load approved server list.
+  def _save_approved(approved)  # Atomically save approved server list.
+  def _load_tokens()  # Load token store from disk.
+  def _save_tokens(tokens)  # Atomically save token store.
+  def _write_pki_log(message)  # Append a timestamped entry to the PKI log.
+  def _prune_expired(tokens)  # Remove tokens older than TOKEN_TTL.
+  def _is_revoked(serial)  # Check if a certificate serial is in the CRL.
+
+── irc/packages/csc-services/csc_services/platform.py ──
+# Platform Service - System inventory and capability queries.
+  class platform(Service):  # Service for querying platform capabilities from IRC.
+    def __init__(self, server_instance)
+    def _load(self)  # Load current platform data from disk.
+    def info(self, *args) -> str  # Full system inventory.
+    def capabilities(self, *args) -> str  # List available tools and features.
+    def can(self, tool_name: str='', *args) -> str  # Check if a specific tool is available.
+    def hardware(self, *args) -> str  # Show hardware details.
+    def docker(self, *args) -> str  # Show Docker status details.
+    def agents(self, *args) -> str  # Show AI agent availability.
+    def refresh(self, *args) -> str  # Re-detect and refresh platform data.
+    def default(self, *args) -> str  # Show available commands.
+
+── irc/packages/csc-services/csc_services/prompts.py ──
+# Prompts Service - Legacy Compatibility Wrapper
+
+── irc/packages/csc-services/csc_services/proof.py ──
+  class Proof(Service):  # Proof of concept service
+    def __init__(self, service_layer=None)
+    def run(self, *args)  # Execute proof of concept
+    def default(self, *args)  # Default handler
+
+── irc/packages/csc-services/csc_services/run_agent_executor.py ──
+# RunAgentExecutor: Pure Python executor for running AI agents without bash/batch scripts.
+  class RunAgentExecutor:  # Execute an AI agent for a queued workorder.
+    def __init__(self, agent_name: str, queue_entry_path: Path, project_root: Optional[Path]=None)  # Initialize executor with queue entry metadata.
+    def _find_project_root() -> Path  # Find project root by looking for CLAUDE.md or csc-service.json.
+    def _load_queue_entry(self) -> bool  # Load queue metadata from orders.json in same directory as orders.md.
+    def _prepare_environment(self) -> Dict[str, str]  # Prepare environment variables for agent execution.
+    def _build_command(self) -> Optional[Tuple[list, str]]  # Build the claude command for executing the agent.
+    def _journal_start(self) -> bool  # Write START marker to WIP file with timestamp.
+    def _journal_complete(self) -> bool  # Write COMPLETE marker to WIP file.
+    def _journal_error(self, message: str)  # Write error message to WIP file (and stderr).
+    def execute(self) -> int  # Main execution flow: load, prepare, build, run, journal.
+  def main()  # Entry point when run as: python run_agent_executor.py <agent> <queue_entry>
+
+── irc/packages/csc-services/csc_services/server_test.py ──
+  def does_it_work(self, *args)
+
+── irc/packages/csc-services/csc_services/service.py ──
+  class Service(IRCProtocolMixin, Crypto):  # Base class for all CSC services, supporting MVC-like dynamic execution.
+    def parse_service_command(text)  # Parse a service command from channel text.
+    def __init__(self, server_instance=None, *args, **kwargs)
+    def default(self, *args)
+    def handle_command(self, class_name_raw, method_name_raw, args, source_name, source_address)  # Executes a command by dynamically loading a service module.
+
+── irc/packages/csc-services/csc_services/sv433685.py ──
+  class sv433685:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv435758.py ──
+  class sv435758:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv436473.py ──
+  class sv436473:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv436505.py ──
+  class sv436505:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv43706.py ──
+  class sv43706:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv439885.py ──
+  class sv439885:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e2647.py ──
+  class sv6e2647:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e3089.py ──
+  class sv6e3089:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e3685.py ──
+  class sv6e3685:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e5758.py ──
+  class sv6e5758:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e6473.py ──
+  class sv6e6473:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e6505.py ──
+  class sv6e6505:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e706.py ──
+  class sv6e706:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/sv6e9885.py ──
+  class sv6e9885:
+    def __init__(self, server=None)
+    def does_it_work(self, *args)
+    def default(self, *args)
+
+── irc/packages/csc-services/csc_services/version.py ──
+  class version(Service):  # Chatline-callable wrapper for the server's built-in file versioning system.
+    def create(self, filepath: str) -> str  # Creates a new version backup of the specified file.
+    def restore(self, filepath: str, version: str='latest') -> str  # Restores a file to a specific version (default: latest).
+    def history(self, filepath: str) -> str  # Shows version history for a file.
+    def list(self) -> str  # Lists all files that have version backups.
+    def default(self, *args) -> str  # Shows available commands for the Version service.
+
+── irc/packages/csc-services/csc_services/wakeword.py ──
+# Wakeword Service - Manages global wakeword list for AI message filtering.
+  WAKEWORDS_FILE = 'wakewords.json'
+  WAKEWORDS_DEFAULT = {'version': 1, 'words': []}
+  class wakeword(Service):  # Wakeword management service for AI message filtering.
+    def __init__(self, server_instance)
+    def _get_storage_path(self)  # Get the path to wakewords.json.
+    def _load_wakewords(self)  # Load wakewords from disk. Returns list of lowercase words.
+    def _save_wakewords(self, words)  # Save wakewords to disk atomically.
+    def add(self, *args) -> str  # Add a wakeword (case-insensitive).
+    def delete(self, *args) -> str  # Remove a wakeword.
+    def __getattr__(self, name)
+    def remove(self, *args) -> str  # Alias for delete.
+    def list(self, *args) -> str  # Show all wakewords.
+    def default(self, *args) -> str  # Show available wakeword commands.
+
+── irc/packages/csc-services/csc_services/workorders.py ──
+# Prompts Service - Work Queue Management
+  class workorders(Service):  # Service for managing prompt files in a work queue system.
+    def __init__(self, server_instance)
+    def urgency(self, *args) -> str  # Get or set default urgency level for new workorders.
+    def _sanitize_filename(self, description)  # Convert description to safe filename component.
+    def _format_prompt_list(self, dir_name, files)  # Format a numbered list of workorders with urgency and tags.
+    def add(self, *args) -> str  # Create a new workorder with metadata and execution mode support.
+    def list(self, *args) -> str  # List workorders in specified directory or all directories.
+    def read(self, filename: str) -> str  # Read and display a prompt file.
+    def edit(self, *args) -> str  # Edit an existing prompt file.
+    def append(self, *args) -> str  # Append content to an existing prompt file.
+    def _resolve_prompt(self, ref, from_dir='ready')  # Resolve a prompt reference (number or filename) to a filepath.
+    def assign(self, *args) -> str  # Assign a workorder to an agent with execution mode support.
+    def move(self, *args) -> str  # Move a prompt between directories.
+    def delete(self, filename: str) -> str  # Delete a prompt file.
+    def status(self) -> str  # Show status of all prompt directories.
+    def archive(self, filename: str) -> str  # Archive a completed prompt from done/ to archive/.
+    def default(self, *args) -> str  # Show available commands.
+  class prompts(workorders):  # Compatibility alias for legacy prompts service.
+
+── irc/packages/csc-services/pyproject.toml ──
+# [build-system]

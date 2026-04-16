@@ -1,0 +1,14 @@
+CSC XREF - SYMBOLS STARTING WITH 'U'
+==================================================
+
+UDPInbound: irc/packages/csc-bridge/csc_bridge/transports/udp_inbound.py (in csc-bridge)
+UDPOutbound: irc/packages/csc-bridge/csc_bridge/transports/udp_outbound.py (in csc-bridge)
+UDPUpstreamHandle: irc/packages/csc-bridge/csc_bridge/transports/udp_outbound.py (in csc-bridge)
+User: irc/packages/csc-server/csc_server/user.py (in csc-server)
+UserMixin: irc/packages/csc-server/csc_server/user_mixin.py (in csc-server)
+uninstall_android: irc/deploy/install.py (in other)
+uninstall_crontab_linux: irc/deploy/install.py (in other)
+uninstall_linux: irc/deploy/install.py (in other)
+uninstall_macos: irc/deploy/install.py (in other)
+uninstall_windows: irc/deploy/install.py (in other)
+unit_active: tests/test_csc_lin_integration.py (in tests)

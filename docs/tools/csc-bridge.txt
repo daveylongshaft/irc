@@ -1,0 +1,388 @@
+CSC-BRIDGE SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-bridge/csc_bridge.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-bridge/csc_bridge.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-bridge/csc_bridge.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-bridge/csc_bridge.egg-info/requires.txt ──
+# csc-crypto>=0.1.0
+
+── irc/packages/csc-bridge/csc_bridge.egg-info/top_level.txt ──
+# csc_bridge
+
+── irc/packages/csc-bridge/csc_bridge/Bridge.log ──
+# [2026-03-23 09:41:41,614] [csc_bridge] Inbound transport started: TCPInbound
+
+── irc/packages/csc-bridge/csc_bridge/__init__.py ──
+# CSC Bridge - IRC protocol bridge proxy for CSC ecosystem
+
+── irc/packages/csc-bridge/csc_bridge/_backup_pre_multitunnel/bridge.py ──
+# Core bridge orchestrator -- bridges inbound clients to the CSC server.
+  class Bridge:  # Bridges multiple inbound transports to an outbound transport.
+    def __init__(self, inbound_transports: List[InboundTransport], outbound_transport: Optional[OutboundTransport], session_timeout: int=300, encrypt: bool=False, normalize_mode: Optional[str]=None, daemon_mode: bool=False)  # Initialize the bridge with transports and configuration.
+    def start(self)  # Start all transports and background threads.
+    def stop(self)  # Stop all transports, destroy all sessions, and clean up.
+    def _on_client_data(self, data: bytes, client_id: ClientID, inbound: InboundTransport)  # Callback invoked by inbound transports when data arrives from a client.
+    def _create_session(self, client_id: ClientID, inbound: InboundTransport) -> Optional[ClientSession]  # Create a new session for a client.
+    def _handle_disconnect(self, client_id: ClientID)  # Handle a client disconnect event.
+    def _destroy_session(self, session: ClientSession)  # Clean up and destroy a session, closing server connection gracefully.
+    def _sniff_nick(self, session: ClientSession, data: bytes)  # Extract and store the nick from NICK commands in client data.
+    def _forward_to_server(self, session: ClientSession, data: bytes)  # Forward client data to the CSC server with encryption and normalization.
+    def _handle_control_command(self, session: ClientSession, data: bytes)  # Delegate control command handling to the session's control handler.
+    def _forward_to_client(self, session: ClientSession, data: bytes)  # Forward server data back to the client with optional normalization.
+    def _server_listener(self, session: ClientSession)  # Poll server for responses and forward to client (per-session thread).
+    def _keepalive_loop(self)  # Send periodic keepalive PING to idle sessions (background thread).
+    def _cleanup_loop(self)  # Remove sessions that have been idle longer than session_timeout.
+    def session_count(self) -> int  # Return the number of active sessions.
+    def list_sessions(self) -> List[dict]  # Return a list of summary dicts for all active sessions.
+    def get_lobby_sessions(self) -> List[ClientSession]  # Return a list of all sessions currently in the LOBBY state.
+
+── irc/packages/csc-bridge/csc_bridge/_backup_pre_multitunnel/control_handler.py ──
+# Control Plane for the Bridge Daemon.
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_ISUPPORT = '005'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_NICKNAMEINUSE = '433'
+  MOTD_TEXT = "\nWelcome to the CSC Bridge Daemon!\n---------------------------------------...
+  class ControlHandler:  # Handles IRC protocol logic for clients in the LOBBY state.
+    def __init__(self, session, bridge)  # Initializes the control handler, storing references to session and bridge, and setting up authentication state.
+    def handle_line(self, line: bytes)  # Processes a raw line from the client, handling authentication, keepalive, and control commands.
+    def _handle_command(self, text)  # Parses and executes /trans commands including connect, history, fav (favorite), and menu.
+    def _subcmd_connect(self, args)  # Handler for 'connect' subcommand.
+    def _subcmd_history(self, args)  # Handler for 'history' subcommand.
+    def _subcmd_fav(self, args)  # Handler for 'fav' subcommand.
+    def _subcmd_menu(self, args)  # Handler for 'menu' subcommand.
+    def _do_connect(self, conn_str)  # Parse connection string and establish upstream connection.
+    def _try_auth(self)  # Attempts authentication once both nick and username are provided, validating against BridgeData.
+    def _send_welcome(self)  # Sends the full IRC welcome sequence including 001-005 and MOTD to the authenticated client.
+    def _send_numeric(self, numeric, text)  # Send a numeric IRC reply to the current client.
+    def send_notice(self, text)  # Send an IRC NOTICE message to the current client.
+    def _send_raw(self, line)  # Send a raw IRC line to the client over the inbound transport.
+    def _broadcast_lobby_message(self, message: str)  # Broadcast a chat message to all other clients in the lobby.
+
+── irc/packages/csc-bridge/csc_bridge/_backup_pre_multitunnel/main.py ──
+# CSC Bridge Daemon - Entry Point
+  class BridgeLog(Log):
+    def __init__(self)
+  def _find_csc_root() -> Path  # Resolve the active CSC root from cwd/env rather than package install location.
+  def main()  # Load configuration from etc/csc-service.json via Platform, create transports, start bridge.
+
+── irc/packages/csc-bridge/csc_bridge/bridge.py ──
+# Core bridge orchestrator -- bridges inbound clients to the CSC server.
+  BREAK_TO_PARTYLINE = b'*#*#*#*'
+  class Bridge:  # Bridges multiple inbound transports to an outbound transport.
+    def __init__(self, inbound_transports: List[InboundTransport], outbound_transport: Optional[OutboundTransport], session_timeout: int=300, encrypt: bool=True, normalize_mode: Optional[str]=None, daemon_mode: bool=False, tunnel_manager: Optional[object]=None)  # Initialize the bridge with transports and configuration.
+    def start(self)  # Start all transports and background threads.
+    def stop(self)  # Stop all transports, destroy all sessions, and clean up.
+    def _on_client_data(self, data: bytes, client_id: ClientID, inbound: InboundTransport)  # Callback invoked by inbound transports when data arrives from a client.
+    def _create_session(self, client_id: ClientID, inbound: InboundTransport) -> Optional[ClientSession]  # Create a new session for a client.
+    def _apply_tunnel_crypto(self, session: ClientSession, config)  # Apply per-tunnel encryption configuration to a session.
+    def _handle_disconnect(self, client_id: ClientID)  # Handle a client disconnect event.
+    def _destroy_session(self, session: ClientSession)  # Clean up and destroy a session, closing server connection gracefully.
+    def _sniff_nick(self, session: ClientSession, data: bytes)  # Extract and store the nick from NICK commands in client data.
+    def _forward_to_server(self, session: ClientSession, data: bytes)  # Forward client data to the CSC server with encryption and normalization.
+    def _handle_control_command(self, session: ClientSession, data: bytes)  # Delegate control command handling to the session's control handler.
+    def _forward_to_client(self, session: ClientSession, data: bytes)  # Forward server data back to the client with optional normalization.
+    def _server_listener(self, session: ClientSession)  # Poll server for responses and forward to client (per-session thread).
+    def _keepalive_loop(self)  # Send periodic keepalive PING to idle sessions (background thread).
+    def _cleanup_loop(self)  # Remove sessions that have been idle longer than session_timeout.
+    def session_count(self) -> int  # Return the number of active sessions.
+    def list_sessions(self) -> List[dict]  # Return a list of summary dicts for all active sessions.
+    def get_lobby_sessions(self) -> List[ClientSession]  # Return a list of all sessions currently in the LOBBY state.
+    def add_tunnel(self, config)  # Add a new tunnel (delegates to TunnelManager).
+    def del_tunnel(self, name: str, drain: bool=False)  # Remove a tunnel (delegates to TunnelManager).
+    def list_tunnels(self) -> List[dict]  # List all configured tunnels (delegates to TunnelManager).
+
+── irc/packages/csc-bridge/csc_bridge/bridge_config.example.json ──
+# {
+
+── irc/packages/csc-bridge/csc_bridge/config-local.json ──
+# {
+
+── irc/packages/csc-bridge/csc_bridge/config-remote.json ──
+# {
+
+── irc/packages/csc-bridge/csc_bridge/config.json ──
+# {
+
+── irc/packages/csc-bridge/csc_bridge/control_handler.py ──
+# Control Plane for the Bridge Daemon.
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_ISUPPORT = '005'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_NICKNAMEINUSE = '433'
+  MOTD_TEXT = "\nWelcome to the CSC Bridge Daemon!\n---------------------------------------...
+  class ControlHandler:  # Handles IRC protocol logic for clients in the LOBBY state.
+    def __init__(self, session, bridge)  # Initializes the control handler, storing references to session and bridge, and setting up authentication state.
+    def handle_line(self, line: bytes)  # Processes a raw line from the client, handling authentication, keepalive, and control commands.
+    def _handle_command(self, text)  # Parses and executes /trans commands including connect, history, fav (favorite), and menu.
+    def _subcmd_connect(self, args)  # Handler for 'connect' subcommand.
+    def _subcmd_history(self, args)  # Handler for 'history' subcommand.
+    def _subcmd_fav(self, args)  # Handler for 'fav' subcommand.
+    def _subcmd_menu(self, args)  # Handler for 'menu' subcommand.
+    def _do_connect(self, conn_str)  # Parse connection string and establish upstream connection.
+    def _try_auth(self)  # Attempts authentication once both nick and username are provided, validating against BridgeData.
+    def _send_welcome(self)  # Sends the full IRC welcome sequence including 001-005 and MOTD to the authenticated client.
+    def _send_numeric(self, numeric, text)  # Send a numeric IRC reply to the current client.
+    def send_notice(self, text)  # Send an IRC NOTICE message to the current client.
+    def _send_raw(self, line)  # Send a raw IRC line to the client over the inbound transport.
+    def _broadcast_lobby_message(self, message: str)  # Broadcast a chat message to all other clients in the lobby.
+
+── irc/packages/csc-bridge/csc_bridge/data_bridge.py ──
+# Data persistence for the Bridge Daemon.
+  class BridgeData(Data):  # - What it does: Manages persistent storage for the Bridge Daemon, including
+    def __init__(self)  # Initializes BridgeData by loading bridge_data.json and ensuring the "users" key exists.
+    def create_user(self, username, password)  # Creates a new user account with salted password hash, empty history, favorites, and settings.
+    def validate_user(self, username, password)  # Validates user credentials by comparing the provided password's salted hash against the stored hash.
+    def add_history(self, username, conn_str)  # Adds a connection string to the user's history list, moving it to the top if already present.
+    def get_history(self, username) -> List[str]  # Retrieve the connection history for a user.
+    def set_favorite(self, username, alias, conn_str)  # Stores a connection string under an alias in the user's favorites dictionary.
+    def get_favorite(self, username, alias) -> Optional[str]  # Retrieves a connection string from the user's favorites by alias.
+    def get_favorites(self, username) -> Dict[str, str]  # Retrieves all favorites for a user as a dictionary mapping alias to connection string.
+    def _hash_password(self, password, salt)  # Generates a SHA256 hash of the password concatenated with the salt.
+
+── irc/packages/csc-bridge/csc_bridge/irc.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_WHOISUSER = '311'
+  RPL_WHOISSERVER = '312'
+  RPL_WHOISOPERATOR = '313'
+  RPL_ENDOFWHOIS = '318'
+  RPL_WHOWASUSER = '314'
+  RPL_ENDOFWHOWAS = '369'
+  ERR_WASNOSUCHNICK = '406'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  RPL_UMODEIS = '221'
+  RPL_AWAY = '301'
+  RPL_UNAWAY = '305'
+  RPL_NOWAWAY = '306'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_NOPRIVILEGES = '481'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_UMODEUNKNOWNFLAG = '501'
+  ERR_USERSDONTMATCH = '502'
+  ERR_CHANNELISFULL = '471'
+  ERR_UNKNOWNMODE = '472'
+  ERR_INVITEONLYCHAN = '473'
+  ERR_BADCHANNELKEY = '475'
+  RPL_INVITING = '341'
+  RPL_WHOISCHANNELS = '319'
+  RPL_BANLIST = '367'
+  RPL_ENDOFBANLIST = '368'
+  ERR_BANNEDFROMCHAN = '474'
+  ERR_BANLISTFULL = '478'
+  class IRCMessage:  # Represents a parsed IRC message conforming to RFC 1459/2812 wire format.
+  def parse_irc_message(line: str) -> IRCMessage  # Parses an IRC wire-format line into structured IRCMessage components.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Builds an IRC wire-format string from message components.
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Builds an IRC server numeric reply in standard format.
+
+── irc/packages/csc-bridge/csc_bridge/irc_constants.py ──
+# IRC protocol constants for CSC/RFC normalization.
+  RFC_COMMANDS = {'NICK', 'USER', 'PASS', 'OPER', 'QUIT', 'JOIN', 'PART', 'MODE', 'TOPIC', 'NA...
+  CSC_COMMANDS = {'ISOP', 'BUFFER', 'AI', 'IDENT', 'RENAME', 'CRYPTOINIT'}
+  CSC_TO_RFC_MAP = {'IDENT': 'NICK', 'RENAME': 'NICK'}
+  CSC_ISUPPORT_TOKENS = ['CHANTYPES=#', 'PREFIX=(ov)@+', 'CHANMODES=b,k,l,imnpst', 'NETWORK=CSC-Netwo...
+
+── irc/packages/csc-bridge/csc_bridge/irc_normalizer.py ──
+# Protocol normalization layer for the CSC bridge.
+  class IrcNormalizer:  # Handles stateful normalization of IRC messages between dialects.
+    def __init__(self, mode: str)  # Initializes the normalizer with the specified mode and sets up state tracking for registration progress.
+    def normalize_client_to_server(self, block: str, session) -> Optional[str]  # Normalizes a block of text from client to server, splitting on CR-LF and processing each line.
+    def _normalize_client_line(self, line: str, session) -> Optional[str]  # Normalizes a single IRC line from the client based on the configured mode.
+    def normalize_server_to_client(self, block: str, session) -> Optional[str]  # Normalizes a block of text from server to client, splitting on CR-LF and processing each line.
+    def _normalize_server_line(self, line: str, session) -> Optional[str]  # Normalizes a single IRC line from the server based on the configured mode.
+    def _handle_cap_ls(self, session, msg)  # Handler for CAP LS and CAP LIST subcommands.
+    def _handle_cap_req(self, session, msg)  # Handler for CAP REQ subcommand.
+    def _handle_cap_end(self, session, msg)  # Handler for CAP END subcommand.
+    def _send_notice(self, session, text: str)  # Sends a local NOTICE message to the client using the session's inbound transport.
+    def _send_numeric(self, session, numeric: str, target: str, text: str)  # Sends a local numeric reply to the client using the session's inbound transport.
+    def _send_raw_to_client(self, session, raw_line: str)  # Send raw data back to the client using session.inbound.
+
+── irc/packages/csc-bridge/csc_bridge/irc_utils.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_ISUPPORT = '005'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_UNKNOWNCOMMAND = '421'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_CHANOPRIVSNEEDED = '482'
+  ERR_SASLFAIL = '904'
+  class IRCMessage:  # Represents a parsed IRC message conforming to RFC 1459/2812 wire format.
+  def parse_irc_message(line: str) -> IRCMessage  # Parses an IRC wire-format line into structured IRCMessage components.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Builds an IRC wire-format string from message components.
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Builds an IRC server numeric reply in standard format.
+
+── irc/packages/csc-bridge/csc_bridge/log.log ──
+# [2026-04-05 19:18:03] [Platform] [INFO] [STORAGE] Creating channels.json with defaults
+
+── irc/packages/csc-bridge/csc_bridge/main.py ──
+# CSC Bridge Daemon - Entry Point
+  class BridgeLog(Log):
+    def __init__(self)
+  def _find_csc_root() -> Path  # Resolve the active CSC root from cwd/env rather than package install location.
+  def main()  # Load configuration from etc/csc-service.json via Platform, create transports, start bridge.
+
+── irc/packages/csc-bridge/csc_bridge/session.py ──
+# Client session tracking for the bridge proxy.
+  class ClientSession:  # Tracks state for a single proxied client connection.
+    def touch(self)  # Update last_activity to the current time.
+    def age(self) -> float  # Return the number of seconds since this session was created.
+    def idle(self) -> float  # Return the number of seconds since the last activity on this session.
+
+── irc/packages/csc-bridge/csc_bridge/transports/__init__.py ──
+
+── irc/packages/csc-bridge/csc_bridge/transports/base.py ──
+# Abstract base classes for inbound and outbound transports.
+  class InboundTransport(ABC):  # Accepts connections/datagrams from clients and delivers data to the bridge.
+    def start(self, on_data: Callable[[bytes, ClientID], None]) -> None  # Start listening for client connections/datagrams.
+    def send_to_client(self, client_id: ClientID, data: bytes) -> None  # Send data back to a specific connected client.
+    def stop(self) -> None  # Stop listening, close all client connections, and release resources.
+    def remove_client(self, client_id: ClientID) -> None  # Clean up resources for a specific disconnected client.
+  class OutboundTransport(ABC):  # Sends data upstream to the CSC server on behalf of proxied clients.
+    def create_upstream(self, session_id: str) -> UpstreamHandle  # Create a new upstream connection/socket for a client session.
+    def send(self, handle: UpstreamHandle, data: bytes) -> None  # Send data to the CSC server through a session's upstream handle.
+    def recv(self, handle: UpstreamHandle, timeout: float=1.0) -> Optional[bytes]  # Receive data from the CSC server on a session's upstream handle.
+    def close(self, handle: UpstreamHandle) -> None  # Close an upstream handle and release its resources.
+
+── irc/packages/csc-bridge/csc_bridge/transports/tcp_inbound.py ──
+# TCP inbound transport -- listens for standard IRC clients over TCP.
+  class TCPClientID:  # Identifier for a TCP client connection.
+    def __init__(self, conn: socket.socket, addr: tuple, conn_id: int)  # Initialize a TCP client identifier.
+    def __hash__(self)  # Hash based on connection ID for use as dictionary key.
+    def __eq__(self, other)  # Compare equality based on connection ID.
+    def __repr__(self)  # Return a human-readable representation for logging.
+  class TCPInbound(InboundTransport):  # Accepts TCP connections from IRC clients, line-buffers on \r\n.
+    def __init__(self, host: str='127.0.0.1', port: int=6667)  # Initialize the TCP inbound transport.
+    def start(self, on_data: Callable[[bytes, ClientID], None]) -> None  # Bind the server socket, start listening, and launch the accept thread.
+    def _accept_loop(self)  # Accept loop running on the accept thread.
+    def _handle_client(self, client_id: TCPClientID)  # Read IRC lines from a TCP client, delivering each complete line.
+    def send_to_client(self, client_id: ClientID, data: bytes) -> None  # Send data to a specific connected TCP client.
+    def remove_client(self, client_id: ClientID) -> None  # Remove a client connection and close its socket.
+    def _cleanup_client(self, client_id: TCPClientID)  # Remove a client from tracking and close its socket.
+    def stop(self) -> None  # Stop accepting connections, close all clients, and shut down.
+
+── irc/packages/csc-bridge/csc_bridge/transports/tcp_outbound.py ──
+# TCP outbound transport -- sends data upstream to the CSC server via TCP.
+  class TCPUpstreamHandle:  # Wraps a single TCP connection dedicated to one client session.
+    def __init__(self, sock: socket.socket, server_addr: tuple)  # Initialize the upstream handle with a connected socket.
+    def close(self)  # Close the underlying TCP connection.
+  class TCPOutbound(OutboundTransport):  # Creates per-session TCP connections for forwarding traffic to the CSC server.
+    def __init__(self, server_host: str='127.0.0.1', server_port: int=9525)  # Initialize the TCP outbound transport with the target server address.
+    def create_upstream(self, session_id: str) -> TCPUpstreamHandle  # Establish a new TCP connection to the server for a client session.
+    def send(self, handle: TCPUpstreamHandle, data: bytes) -> None  # Send data to the CSC server through a session's TCP connection.
+    def recv(self, handle: TCPUpstreamHandle, timeout: float=1.0) -> Optional[bytes]  # Receive data from the CSC server on a session's TCP connection.
+    def close(self, handle: TCPUpstreamHandle) -> None  # Close an upstream TCP connection and remove it from tracking.
+
+── irc/packages/csc-bridge/csc_bridge/transports/udp_inbound.py ──
+# UDP inbound transport -- listens for CSC client datagrams.
+  class UDPInbound(InboundTransport):  # Accepts UDP datagrams from CSC clients on a single bound socket.
+    def __init__(self, host: str='127.0.0.1', port: int=9526)  # Initialize the UDP inbound transport.
+    def start(self, on_data: Callable[[bytes, ClientID], None]) -> None  # Bind the socket and start the background listener thread.
+    def _listen_loop(self)  # Main receive loop running on the listener thread.
+    def send_to_client(self, client_id: ClientID, data: bytes) -> None  # Send a datagram back to a specific CSC client.
+    def remove_client(self, client_id: ClientID) -> None  # Remove a client from internal tracking.
+    def stop(self) -> None  # Stop the listener thread and close the UDP socket.
+
+── irc/packages/csc-bridge/csc_bridge/transports/udp_outbound.py ──
+# UDP outbound transport -- sends data upstream to the CSC server.
+  class UDPUpstreamHandle:  # Wraps a single UDP socket dedicated to one client session.
+    def __init__(self, sock: socket.socket, server_addr: tuple)  # Initialize the upstream handle with a socket and server address.
+    def close(self)  # Close the underlying UDP socket.
+  class UDPOutbound(OutboundTransport):  # Creates per-session UDP sockets for forwarding traffic to the CSC server.
+    def __init__(self, server_host: str='127.0.0.1', server_port: int=9525)  # Initialize the UDP outbound transport with the target server address.
+    def create_upstream(self, session_id: str) -> UDPUpstreamHandle  # Create a new UDP upstream socket for a client session.
+    def send(self, handle: UDPUpstreamHandle, data: bytes) -> None  # Send a datagram to the CSC server through a session's upstream socket.
+    def recv(self, handle: UDPUpstreamHandle, timeout: float=1.0) -> Optional[bytes]  # Receive a datagram from the CSC server on a session's upstream socket.
+    def close(self, handle: UDPUpstreamHandle) -> None  # Close an upstream handle and remove it from internal tracking.
+
+── irc/packages/csc-bridge/csc_bridge/tunnel.py ──
+# Tunnel configuration and management for CSC Bridge.
+  class TunnelConfig:  # Configuration for a single bridge tunnel.
+    def from_dict(cls, d: dict) -> 'TunnelConfig'  # Parse tunnel config from dict (config file format).
+    def from_conn_str(cls, name: str, listen_str: str, remote_str: str, encrypt: str='none') -> 'TunnelConfig'  # Parse tunnel config from partyline command format (proto:host:port).
+    def to_dict(self) -> dict  # Convert to JSON-serializable dict (for config save/log).
+  class TunnelEntry:  # Live tunnel instance with active inbound transport.
+    def make_outbound(self)  # Create a fresh outbound transport for a new session.
+
+── irc/packages/csc-bridge/csc_bridge/tunnel_manager.py ──
+# Tunnel manager for CSC Bridge - manages unlimited configurable tunnels.
+  class TunnelManager:  # Manages multiple independent tunnels with per-tunnel routing and crypto.
+    def __init__(self)
+    def bind_bridge(self, bridge)  # Bind the manager to a Bridge instance (called once from Bridge.__init__).
+    def add_tunnel(self, config: TunnelConfig) -> TunnelEntry  # Add a new tunnel, creating and starting its inbound listener.
+    def del_tunnel(self, name: str, drain: bool=False)  # Remove a tunnel, stopping its listener and optionally destroying active sessions.
+    def list_tunnels(self) -> List[dict]  # Return list of tunnel status dicts.
+    def route_session(self, inbound) -> Optional[TunnelEntry]  # Find the TunnelEntry that owns a given inbound transport (by object identity).
+    def reload_config(self, new_tunnel_dicts: List[dict])  # Reload tunnel configuration from a list of dicts.
+
+── irc/packages/csc-bridge/pyproject.toml ──
+# [build-system]

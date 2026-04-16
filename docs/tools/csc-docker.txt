@@ -1,0 +1,5 @@
+CSC-DOCKER SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-docker/docker_client.bat ──
+# @echo off

@@ -1,0 +1,10 @@
+CSC XREF - SYMBOLS STARTING WITH 'J'
+==================================================
+
+Jules: irc/packages/csc-clients/csc_clients/jules/jules.py (in csc-clients)
+JulesConfig: irc/packages/csc-clients/csc_clients/jules/config.py (in csc-clients)
+JulesMonitor: irc/packages/csc-loop/csc_loop/infra/jules_monitor.py (in csc-loop)
+Julius: irc/packages/csc-clients/csc_clients/julius/julius.py (in csc-clients)
+json_dump: packages/enc-ext-vfs/enc_ext_vfs/vfs.py (in other)
+json_load: packages/enc-ext-vfs/enc_ext_vfs/vfs.py (in other)
+jules_available: irc/packages/csc-loop/csc_loop/infra/pm.py (in csc-loop)

@@ -1,0 +1,266 @@
+CSC-CLIENTS SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-clients/README.md ──
+# # CSC Clients
+
+── irc/packages/csc-clients/csc_clients.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-clients/csc_clients.egg-info/SOURCES.txt ──
+# README.md
+
+── irc/packages/csc-clients/csc_clients.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-clients/csc_clients.egg-info/requires.txt ──
+# csc-services>=0.1.0
+
+── irc/packages/csc-clients/csc_clients.egg-info/top_level.txt ──
+# build
+
+── irc/packages/csc-clients/csc_clients/agent_executor.py ──
+# Agent executor: bridges queue_worker to RunAgentExecutor.
+  class AgentExecutor:  # Wrapper around RunAgentExecutor for queue_worker compatibility.
+    def __init__(self, csc_root: Path)  # Initialize executor with CSC project root.
+    def execute(self, agent_name: str, workorder_path: Path, log_file_path: Path) -> int  # Execute an agent for a workorder.
+
+── irc/packages/csc-clients/csc_clients/chatgpt/chatgpt.bat ──
+# @echo off
+
+── irc/packages/csc-clients/csc_clients/claude/claude.bat ──
+# @echo off
+
+── irc/packages/csc-clients/csc_clients/client/__init__.py ──
+# CSC Human Client module.
+
+── irc/packages/csc-clients/csc_clients/client/aliases.py ──
+  class Aliases:  # Manages command aliases for the client.
+    def __init__(self, Client)  # Initializes the Aliases class.
+    def add_alias(self, alias_string)  # Adds a new alias or updates an existing one.
+    def remove_alias(self, alias_name)  # Removes an existing alias.
+    def list_aliases(self)  # Returns a formatted string of all defined aliases.
+    def expand_aliases_in_string(self, command_string)  # Repeatedly finds and expands all occurrences of aliases within a
+    def _expand_aliases_single_pass(self, command_string)  # Performs a single pass of alias expansion on a command string.
+    def _count_template_args(self, template)  # Counts the number of unique positional arguments ($1, $2, etc.) and
+    def _expand_single_alias(self, template, args)  # Expands a single alias template with the provided arguments.
+
+── irc/packages/csc-clients/csc_clients/client/client.py ──
+  class Client(Service):  # UDP client with IRC protocol support, identity, macros, aliases, and text-file uploads.
+    def __init__(self, config_path=None, input_file=None, output_file=None)  # Initializes the instance.
+    def _load_config(self)  # Loads client configuration from JSON, creating defaults as needed.
+    def _save_config(self)  # Saves all client data back to config file.
+    def _disconnect_gracefully(self)  # Send QUIT and close connection.
+    def _connect_to_server(self, host, port)  # Establish new server connection and re-register.
+    def _configure_translator(self, host, port)  # Configure translator proxy and reconnect.
+    def _disable_translator(self)  # Disable translator and connect directly to server.
+    def _add_to_server_history(self, host, port)  # Add server to history (max 3 entries).
+    def _handle_server_command(self, args: str)  # /server <host> [port]
+    def _handle_reconnect_command(self)  # /reconnect
+    def _handle_disconnect_command(self)  # /disconnect
+    def _handle_translator_command(self, args: str)  # /translator <host> <port>  - Configure translator proxy
+    def _handle_status_command(self)  # /status
+    def _handle_ping_command(self)  # /ping
+    def identify(self)  # Send IRC registration sequence: NICK + USER.
+    def _write_to_output(self, text)  # Write text to output_file if set, always also print to stdout.
+    def run(self, interactive=True)  # Starts listener thread and handles input.
+    def _is_fifo(self)  # Return True if input_file is a POSIX FIFO.
+    def _input_loop_file(self)  # Input loop for --infile / --fifo mode.
+    def _input_loop(self)  # Handles blocking user input in a separate thread.
+    def _handle_server_message_data(self, msg_data)  # Decodes and routes a message received from the server.
+    def _handle_irc_line(self, line)  # Parse and handle a single IRC line from the server.
+    def _handle_numeric(self, parsed)  # Handle IRC numeric replies.
+    def _is_authorized(self, nick, channel=None)  # Check if a nick is authorized to command this client.
+    def _handle_privmsg_recv(self, parsed)  # Handle received PRIVMSG, including nick-prefixed command execution.
+    def _handle_local_file_session_line(self, sender_nick, text, target)  # Handle a line during an active local file upload session.
+    def _detect_outbound_ip(self)  # Best-effort local IPv4 address detection for DCC offers.
+    def _ftp_path(self, path: str) -> str
+    def _handle_dcc_offer(self, sender_nick: str, ctcp_body: str) -> bool
+    def _stream_file_to_socket(self, local_path: str, peer_sock)
+    def _start_dcc_send_session(self, target: str, file_name: str, file_size: int, sender_factory)
+    def _bridge_socket_to_ftp_put(self, offer: dict, ftp_path: str, ip: str, port: int)
+    def _bridge_ftp_get_to_dcc(self, ftp_path: str, ip: str, port: int, peer_sock)
+    def _ftp_command(self, args: str)  # Handle IRC operator FTP commands.
+    def _dcc_command(self, args: str)  # Handle DCC send/accept helper commands.
+    def _handle_notice_recv(self, parsed)  # Handle received NOTICE, including ISOP responses and VFS protocol.
+    def _handle_vfs_notice(self, text: str)  # Handle VFS protocol NOTICEs from the server.
+    def _handle_ftp_notice(self, text: str)  # Handle FTP protocol NOTICEs from the server.
+    def _vfs_command(self, args: str)  # Handle /vfs subcommands.
+    def handle_server_message(self, msg: str)  # Legacy handler — prints messages received from the server.
+    def process_command(self, cmd: str)  # Processes user commands with alias/macro expansion.
+    def print_local_help(self)  # Displays available client-side commands.
+    def send_file(self, filepath: str)  # Sends a text file to the server as PRIVMSG to current channel.
+
+── irc/packages/csc-clients/csc_clients/client/client_file_handler.py ──
+  class ClientFileHandler:  # Handles file uploads sent TO this client from other users.
+    def __init__(self, client)
+    def has_active_session(self, nick)
+    def start_session(self, addr_or_nick, line)  # Begins a new upload session from a <begin file="..."> or <append file="..."> tag.
+    def process_chunk(self, addr_or_nick, line)  # Buffers a line of text for an active upload session.
+    def complete_session(self, addr_or_nick)  # Completes the session, versions if needed, and writes to disk.
+    def abort_session(self, addr_or_nick)  # Aborts an in-progress upload session.
+
+── irc/packages/csc-clients/csc_clients/client/client_service_handler.py ──
+  class ClientServiceHandler:  # Handles local service execution for the client.
+    def __init__(self, client)
+    def execute(self, cmd_text, nick)  # Parses and executes a service command locally.
+    def _handle_builtin(self, method, args)  # Handles core built-in services.
+    def _handle_plugin(self, plugin_name_raw, method_name, args)  # Mirror of server/service.py dynamic loading logic.
+    def get_help(self)
+
+── irc/packages/csc-clients/csc_clients/client/data.py ──
+  class Data(Log):  # Extends the log class.
+    def __init__(self)  # Initializes the Data class.
+    def connect(self)  # Connects to a data source file.
+    def put_data(self, key: str, value, flush=True)  # Stores a key-value pair and saves the entire data store to file.
+    def store_data(self)  # Persists the current data to the storage backend.
+    def get_data(self, key: str)  # Retrieves a value from the in-memory data store.
+    def init_data(self, source_filename='default')  # Initializes or re-initializes the data object for a subclass instance.
+    def run(self)  # Main execution method.
+
+── irc/packages/csc-clients/csc_clients/client/ftp_dcc_utils.py ──
+# Utility helpers for the IRC FTP/DCC client surface.
+  def split_command_args(args: str) -> list[str]  # Split a local command string, honoring shell-style quotes.
+  def normalize_ftp_path(path: str, cwd: str='/') -> str  # Normalize an ftp:/ path or relative FTP path into an absolute VFS path.
+  def resolve_ftp_upload_target(local_path: str, ftp_target: str, cwd: str='/') -> str  # Resolve an upload target, appending the source filename if a directory was given.
+  def dcc_ip_to_int(ip_str: str) -> int  # Encode an IPv4 address as a DCC integer token.
+  def dcc_int_to_ip(value: str) -> str  # Decode a DCC integer token into an IPv4 address.
+  def parse_dcc_send(ctcp_body: str) -> dict | None  # Parse a CTCP DCC SEND payload.
+
+── irc/packages/csc-clients/csc_clients/client/irc.py ──
+# IRC message parser, formatter, and constants for RFC 1459/2812 compliance.
+  SERVER_NAME = 'csc-server'
+  RPL_WELCOME = '001'
+  RPL_YOURHOST = '002'
+  RPL_CREATED = '003'
+  RPL_MYINFO = '004'
+  RPL_LIST = '322'
+  RPL_LISTEND = '323'
+  RPL_NOTOPIC = '331'
+  RPL_TOPIC = '332'
+  RPL_NAMREPLY = '353'
+  RPL_ENDOFNAMES = '366'
+  RPL_MOTDSTART = '375'
+  RPL_MOTD = '372'
+  RPL_ENDOFMOTD = '376'
+  RPL_YOUREOPER = '381'
+  ERR_NOSUCHNICK = '401'
+  ERR_NOSUCHCHANNEL = '403'
+  ERR_CANNOTSENDTOCHAN = '404'
+  ERR_NORECIPIENT = '411'
+  ERR_NOTEXTTOSEND = '412'
+  ERR_NONICKNAMEGIVEN = '431'
+  ERR_ERRONEUSNICKNAME = '432'
+  ERR_NICKNAMEINUSE = '433'
+  ERR_USERNOTINCHANNEL = '441'
+  ERR_NOTONCHANNEL = '442'
+  ERR_NOTREGISTERED = '451'
+  ERR_NEEDMOREPARAMS = '461'
+  ERR_ALREADYREGISTRED = '462'
+  ERR_PASSWDMISMATCH = '464'
+  ERR_CHANOPRIVSNEEDED = '482'
+  class IRCMessage:  # Parsed IRC message.
+  def parse_irc_message(line: str) -> IRCMessage  # Parse an IRC wire-format line into an IRCMessage.
+  def format_irc_message(prefix: Optional[str], command: str, params: Optional[List[str]]=None, trailing: Optional[str]=None) -> str  # Build an IRC wire-format string (without trailing \r\n).
+  def numeric_reply(server_name: str, numeric: str, target_nick: str, *text_parts) -> str  # Build a numeric reply line.
+
+── irc/packages/csc-clients/csc_clients/client/log.py ──
+  class Log(Root):  # Extends the root class.
+    def __init__(self, server=None)  # Initializes the Log class.
+    def log(self, message: str)  # Logs a message to the central project log file and prints to console.
+    def help(self)  # Displays base help information for the class.
+    def test(self)  # Runs a base self-test for the class.
+
+── irc/packages/csc-clients/csc_clients/client/macros.py ──
+  class Macros(Log):  # Manages command macros for the client.
+    def __init__(self, data_object)  # Initializes the Macros class.
+    def add_macro(self, macro_string)  # Adds a new macro or updates an existing one.
+    def remove_macro(self, macro_name)  # Removes an existing macro.
+    def list_macros(self)  # Returns a formatted string of all defined macros.
+    def expand_macro(self, command_name)  # Expands a macro into a sequence of command strings.
+
+── irc/packages/csc-clients/csc_clients/client/main.py ──
+  def main()
+
+── irc/packages/csc-clients/csc_clients/client/network.py ──
+  class Network(Version):
+    def __init__(self, host='127.0.0.1', port=9525, name='network')  # Initializes the Network class.
+    def _network_listener(self)  # Listens for all incoming data and filters keepalives.
+    def start_listener(self)  # Starts the background network listener thread.
+    def get_message(self)  # Gets one message tuple (bytes, addr) from the buffer.
+    def send(self, message)  # Send a message to the server, encoding if necessary.
+    def sock_send(self, data, addr)  # Sends data in chunks, handling both string and bytes types safely.
+    def maybe_send_keepalive(self)  # Sends a periodic keep-alive packet silently.
+    def close(self)  # Cleanly close the network socket and stop the listener thread.
+    def connected_for(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-clients/csc_clients/client/root.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  class Root:  # The first and lowest class in the project's inheritance hierarchy.
+    def __init__(self)  # Initializes the Root class.
+    def get_command_keyword(self)  # Returns the system command keyword.
+    def run(self)  # A placeholder method for subclasses to override.
+
+── irc/packages/csc-clients/csc_clients/client/secret.py ──
+  SCRIPT_DIR = dirname(Path(__file__).absolute())
+  def get_gemini_api_key()  # Retrieves the Gemini API key.
+  def get_claude_api_key()  # Retrieves the Claude API key.
+  def get_known_core_files()  # Returns a list of known core files.
+  def load_initial_core_file_context() -> str  # Loads content of key core files to provide initial context to Gemini.
+  def get_system_instructions(initial_file_context: str) -> str  # Returns the system instructions.
+
+── irc/packages/csc-clients/csc_clients/client/version.py ──
+  class Version(Data):  # Extends the Data class.
+    def __init__(self)  # Initializes the Version class.
+    def get_version_dir_for_file(self, filepath: str) -> Path  # Generates a unique version history directory for a given file.
+    def _get_version_info(self, file_backup_dir: Path) -> dict  # Reads version metadata from the 'versions.json' file for a specific file.
+    def _write_version_info(self, file_backup_dir: Path, version_info: dict)  # Writes updated version info back to the metadata file.
+    def restore_version(self, filepath: str, version: str='latest')  # Restores a file to a specific version from its backup history.
+    def create_new_version(self, filepath: str)  # Creates a new, sequentially numbered version of a file.
+
+── irc/packages/csc-clients/csc_clients/dmrbot/dmrbot.bat ──
+# @echo off
+
+── irc/packages/csc-clients/csc_clients/gemini/gemini.bat ──
+# @echo off
+
+── irc/packages/csc-clients/csc_clients/jules/__init__.py ──
+
+── irc/packages/csc-clients/csc_clients/jules/config.py ──
+# Jules configuration - reads from csc-service.json.
+  class JulesConfig:  # Jules configuration loaded from csc-service.json.
+    def __init__(self, config_path=None)
+    def enabled(self)
+    def api_key_path(self)
+    def max_concurrent_sessions(self)
+    def auto_approve_plans(self)
+    def github_repo(self)
+    def github_branch(self)
+
+── irc/packages/csc-clients/csc_clients/jules/jules.py ──
+# Jules client for workorder execution via Jules REST API.
+  JULES_API_BASE = 'https://jules.googleapis.com/v1alpha'
+  class Jules(Log):  # Jules API client for autonomous coding tasks via REST API.
+    def __init__(self)
+    def _load_api_key(self) -> str  # Load Jules API key from config file.
+    def _api_headers(self) -> dict  # Build API request headers.
+    def submit_workorder(self, workorder_path: str, repo_url: str) -> str  # Submit workorder to Jules via REST API, return session ID.
+    def _create_session(self, prompt: str, repo_url: str) -> str  # Create Jules session via REST API.
+    def check_status(self, session_id: str) -> dict  # Check session status via REST API.
+    def list_sessions(self) -> list  # List all sessions via REST API.
+    def get_results(self, session_id: str) -> dict  # Get session activities/results via REST API.
+    def approve_plan(self, session_id: str) -> bool  # Approve a pending plan via REST API.
+    def send_message(self, session_id: str, message: str) -> bool  # Send a message to an active session.
+    def cancel_session(self, session_id: str) -> bool  # Cancel active session (not directly supported, send cancel message).
+
+── irc/packages/csc-clients/csc_clients/julius/__init__.py ──
+
+── irc/packages/csc-clients/csc_clients/julius/julius.py ──
+# Julius client — queue/check Jules plans for autonomous plan-review.
+  class Julius(Data):  # Client for queuing and checking Jules plan review decisions.
+    def __init__(self, csc_root: str=None) -> None  # Initialize Julius client with paths.
+    def _initialize_paths(self, csc_root: str=None) -> None  # Resolve CSC root and plan-review queue directories.
+    def submit_plan_for_review(self, session_id: str, plan_content: str) -> bool  # Queue a Jules plan for review by the plan-review agent.
+    def check_plan_approval(self, session_id: str) -> dict | None  # Check if a plan has been reviewed and return the decision.
+
+── irc/packages/csc-clients/pyproject.toml ──
+# [build-system]

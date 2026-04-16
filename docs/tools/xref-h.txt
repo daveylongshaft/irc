@@ -1,0 +1,6 @@
+CSC XREF - SYMBOLS STARTING WITH 'H'
+==================================================
+
+Handler: irc/bin/s2s-debug-viewer.py (in bin-scripts)
+Help: irc/packages/csc-services/csc_services/help.py (in csc-services)
+handle_client: bin/sudo_server.py (in bin-scripts)

@@ -1,0 +1,293 @@
+CSC-FTPD SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-ftpd/csc_ftpd.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-ftpd/csc_ftpd.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-ftpd/csc_ftpd.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-ftpd/csc_ftpd.egg-info/requires.txt ──
+# csc-network>=0.1.0
+
+── irc/packages/csc-ftpd/csc_ftpd.egg-info/top_level.txt ──
+# csc_ftpd
+
+── irc/packages/csc-ftpd/csc_ftpd/__init__.py ──
+# csc-ftpd: Distributed FTP daemon (drftpd-style).
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_authorizer.py ──
+# pyftpdlib authorizer: authenticates FTP clients from ftpd_users.json.
+  class FtpAuthorizer(DummyAuthorizer):  # Authenticates FTP clients from a JSON users file.
+    def __init__(self, users_path, default_home='/')  # Initialize the authorizer.
+    def load_users(self)  # (Re)load users from the JSON file.
+    def validate_authentication(self, username, password, handler)  # Override to provide better error messages.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_config.py ──
+# FTP daemon configuration loader.
+  class FtpConfig:  # Load/validate ftpd config from csc-service.json.
+    def __init__(self, config_dict=None, csc_root=None)  # Initialize from a dict or by loading from disk.
+    def _find_csc_root(self)  # Find project root: CSC_HOME env, then cwd, then walk up.
+    def _load_from_disk(self)  # Load the ftpd section from csc-service.json.
+    def _load_tls_paths(self)  # Load S2S TLS cert paths from csc-service.json (top-level keys).
+    def is_master(self)
+    def is_slave(self)
+    def passive_range(self)  # Return (low, high) tuple for passive port range.
+    def has_tls(self)  # Check if TLS certs are configured.
+    def validate(self)  # Validate config. Returns (ok, reason).
+    def __repr__(self)
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_data_server.py ──
+# TCP data server for S2S file transfers.
+  TRANSFER_BUFSIZE = 65536
+  CONNECT_TIMEOUT = 10
+  ACCEPT_TIMEOUT = 60
+  DATA_PORT_BASE = 9541
+  class FtpDataServer:  # TCP data channel for a single file transfer.
+    def __init__(self, serve_root, bind_host='0.0.0.0')
+    def _alloc_port(self)  # Allocate the next available data port.
+    def vpath_to_local(self, vpath)  # Convert virtual path to local filesystem path.
+    def serve_file(self, vpath, callback_port=None)  # Open a TCP listener and wait for one connection to pull the file.
+    def pull_file(self, vpath, source_host, source_port)  # Connect to a remote source and pull a file.
+    def push_file(self, vpath, target_host, target_port)  # Connect OUT to a receiver's listener and push a file.
+    def accept_and_recv(self, vpath, callback_port=None)  # Open a TCP listener and wait for source to connect and push file.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_file_ops.py ──
+# High-level file operations that integrate with FTP slave and S2S bridge.
+  class FtpFileOps:  # File operations with FTP slave + S2S bridge integration.
+    def __init__(self, slave=None, bridge=None, announce=None)
+    def rename(self, old_path, new_path)  # Rename a file and notify S2S peers.
+    def lock(self, vpath, lock_id=None, ttl=7200)  # Lock a file to suppress sync during edits.
+    def unlock(self, vpath, lock_id)  # Unlock a file, allowing sync to resume.
+    def path_to_vpath(self, path)  # Convert an absolute path to a virtual path relative to serve_root.
+    def _file_md5(path, chunk_size=65536)  # Compute MD5 hash of a file.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_handler.py ──
+# pyftpdlib FTPHandler subclass for the master.
+  RELAY_BUFSIZE = 65536
+  class FtpHandler(FTPHandler):  # FTP handler with slave-routed transfers.
+    def ftp_RETR(self, file)  # Handle RETR: download a file from a slave.
+    def ftp_STOR(self, file, mode='w')  # Handle STOR: upload a file to a slave.
+    def ftp_DELE(self, path)  # Handle DELE: delete a file from all slaves that hold it.
+    def ftp_RNFR(self, path)  # Handle RNFR: rename-from (first half of two-step rename).
+    def ftp_RNTO(self, path)  # Handle RNTO: rename-to (second half of two-step rename).
+    def ftp_SIZE(self, path)  # Handle SIZE: return file size from index.
+    def ftp_MDTM(self, path)  # Handle MDTM: return file modification time from index.
+    def _resolve_vpath(self, ftppath)  # Resolve an FTP path to a virtual path.
+    def _create_relay_listener(self)  # Create a TCP listener socket for relay on the passive port range.
+    def _open_data_channel(self)  # Open the pyftpdlib data channel to the FTP client.
+    def _close_data_channel(self)  # Close the pyftpdlib data channel.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_master.py ──
+# Master FTP daemon.
+  class FtpMaster:  # Master daemon: TLS listener for slaves + pyftpdlib FTP server.
+    def __init__(self, config)  # Initialize the master.
+    def start(self)  # Start both the slave listener and FTP server in daemon threads.
+    def stop(self)  # Signal shutdown.
+    def get_slave(self, slave_id)  # Get a slave connection by ID.
+    def pick_slave_for_upload(self)  # Pick the best slave for an upload (most free disk space).
+    def on_slave_disconnect(self, slave_id)  # Called when a slave disconnects.
+    def on_transfer_complete(self, transfer_id, slave_id, success, nbytes, error)  # Called when a slave reports transfer completion.
+    def _run_slave_listener(self)  # Accept TLS connections from slaves on the control port.
+    def _handle_slave_connect(self, raw_conn, addr, ctx)  # Handle a new slave connection: TLS handshake + REGISTER.
+    def _run_ftp_server(self)  # Run the pyftpdlib FTP server for clients.
+    def _build_ssl_context(self)  # Build SSL context for slave listener (mTLS).
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_master_index.py ──
+# Virtual file index for the FTP master.
+  class FtpMasterIndex:  # Virtual file index: maps vpath -> slave(s) + file metadata.
+    def __init__(self, index_path)  # Initialize the index.
+    def _load(self)  # Load index from disk if it exists.
+    def _persist(self)  # Atomically write index to disk (temp + rename).
+    def update_from_inventory(self, slave_id, files)  # Replace all entries for a slave with a full inventory.
+    def apply_delta(self, slave_id, added=None, removed=None, modified=None)  # Apply incremental inventory changes for a slave.
+    def rename_entry(self, old_vpath, new_vpath)  # Atomically rename an index entry from old_vpath to new_vpath.
+    def remove_slave(self, slave_id)  # Remove all entries for a disconnected slave.
+    def lookup(self, vpath)  # Look up which slave(s) hold a file.
+    def pick_slave(self, vpath)  # Pick the best slave for a file download (most recent mtime).
+    def list_dir(self, vdir)  # List files and subdirectories under a virtual directory.
+    def all_paths(self)  # Return all virtual paths in the index.
+    def _normalize_path(path)  # Normalize a virtual path: ensure leading /, no trailing /, forward slashes.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_protocol.py ──
+# Master-slave JSON-over-TLS wire protocol.
+  class FtpProtocol:  # Wire protocol constants and serialization for master-slave comms.
+    def encode(cmd, **kwargs)  # Encode a protocol message as newline-terminated bytes.
+    def decode(data)  # Decode a single protocol message from bytes or str.
+    def make_register(slave_id, serve_root, capacity_bytes)  # Build a REGISTER message.
+    def make_register_ack(accepted, master_id, reason='', vfs_cipher_key='')  # Build a REGISTER_ACK message.
+    def make_inventory(files)  # Build an INVENTORY message.
+    def make_inventory_delta(added=None, removed=None, modified=None)  # Build an INVENTORY_DELTA message.
+    def make_heartbeat(disk_free, active_transfers, load_avg)  # Build a HEARTBEAT message.
+    def make_transfer_complete(transfer_id, bytes_transferred, success, error='')  # Build a TRANSFER_COMPLETE message.
+    def make_send_file(transfer_id, path, client_host, client_port)  # Build a SEND_FILE command (master -> slave, for RETR).
+    def make_recv_file(transfer_id, path, client_host, client_port)  # Build a RECV_FILE command (master -> slave, for STOR).
+    def make_mirror_file(transfer_id, path, target_slave_id, target_host)  # Build a MIRROR_FILE command (master -> slave, for FXP).
+    def make_delete_file(path)  # Build a DELETE_FILE command.
+    def make_rename_file(path, new_path)  # Build a RENAME_FILE command.
+    def make_lock_file(path, lock_id, ttl)  # Build a LOCK_FILE command.
+    def make_unlock_file(path, lock_id)  # Build an UNLOCK_FILE command.
+    def make_inventory_request()  # Build an INVENTORY_REQUEST command.
+    def recv_line(sock)  # Read one newline-terminated message from a socket.
+    def send_msg(sock, data)  # Send pre-encoded message bytes over a socket.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_proxy.py ──
+# Transparent FTP control-channel proxy for slave nodes.
+  _DATA_TIMEOUT = 30
+  _BUF = 65536
+  class FtpControlProxy:  # Proxy one client's FTP control session to the master.
+    def __init__(self, client_sock, client_addr, master_host, master_port, slave_ip)
+    def run(self)  # Run the proxy until the session ends.
+    def _relay_client_to_master(self, master)
+    def _rewrite_client_line(self, line, master)  # Intercept PORT commands so the master connects back to us.
+    def _relay_master_to_client(self, master)
+    def _rewrite_master_line(self, line)  # Intercept 227 PASV response; spawn local data listener.
+  class FtpProxyListener:  # Listen on ftp_control_port and spawn FtpControlProxy per client.
+    def __init__(self, config, slave_ip=None)  # Args:
+    def start(self)  # Start listener in a daemon thread.
+    def stop(self)
+    def _run(self)
+    def _detect_local_ip(master_host)  # Find local IP used to reach master_host.
+  def _ip_to_ftp(ip_str)  # Convert '10.10.10.3' to '10,10,10,3'.
+  def _ftp_to_ip_port(ftp_addr)  # Parse FTP PASV address '10,10,10,1,195,149' -> ('10.10.10.1', 50069).
+  def _port_to_ftp(port)  # Convert port int to FTP p1,p2 notation.
+  def _relay(src, dst, label='relay')  # Relay bytes from src to dst until EOF or error.
+  def _bridge_data(client_sock, master_host, master_pasv_port)  # Bridge a PASV data connection: client_sock <-> master_host:master_pasv_port.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_s2s_bridge.py ──
+# Bridge between FTPD and S2S for slave-to-slave file sync.
+  DEDUP_TTL = 300
+  INVENTORY_CHUNK_SIZE = 500
+  _BUILTIN_EXCLUDES = ['.git/**', '.gitignore', '.gitmodules', '.trash/**', '.claude/**', '**/*.pyc...
+  class FtpS2sBridge:  # Bridge between the local FTPD slave and the S2S network.
+    def __init__(self, slave, s2s_network, advertise_host=None)  # Initialize the bridge.
+    def _detect_host(self)  # Detect the local IP to advertise to peers.
+    def _load_manifest(self)  # Load the manifest from disk, or return empty dict.
+    def _save_manifest(self)  # Atomic-write the manifest to disk (tmp + rename).
+    def _update_manifest(self, vpath, md5, size, mtime)  # Update a single entry in the manifest and persist.
+    def _is_seen(self, md5, vpath)  # Check if we already have this exact file version.
+    def _mark_seen(self, md5, vpath)  # Record that we have this file version.
+    def _prune_seen(self)  # Remove expired entries from seen set.
+    def notify_file_changed(self, vpath, size, md5)  # Called when a local file is created or modified.
+    def notify_files_changed(self, file_infos)  # Batch notify for multiple file changes.
+    def handle_syncfile(self, link, rest)  # Handle incoming SYNCFILE: try to pull the file via TCP.
+    def handle_rsyncfile(self, link, rest)  # Handle incoming RSYNCFILE: receiver wants us to push the file.
+    def handle_syncfile_ack(self, link, rest)  # Handle incoming SYNCFILE_ACK: transfer confirmed.
+    def _request_reverse(self, xfer_id, vpath, size, md5)  # Open a listener and send RSYNCFILE asking source to push.
+    def _cascade(self, vpath, size, md5)  # Re-broadcast SYNCFILE so further peers can pull from us.
+    def send_inventory(self, link)  # Send our manifest to a peer as chunked SYNCINVENTORY messages.
+    def handle_syncinventory(self, link, rest)  # Handle incoming SYNCINVENTORY: reassemble chunks, then reconcile.
+    def _reconcile(self, link, remote_entries)  # Compare remote inventory against local manifest, pull newer files.
+    def _request_file_from_peer(self, link, vpath, size, md5)  # Request a specific file from a peer via SYNCFILE mechanism.
+    def notify_file_renamed(self, old_vpath, new_vpath, size, md5, mtime)  # Broadcast SYNCRENAME to all peers after a local rename.
+    def handle_syncrename(self, link, rest)  # Handle incoming SYNCRENAME: rename local file atomically.
+    def lock_file(self, vpath, lock_id, ttl=7200)  # Lock a file on the local slave.
+    def unlock_file(self, vpath, lock_id)  # Unlock a file on the local slave.
+    def cleanup(self)  # Prune expired dedup entries and stale pending transfers.
+  def _load_s2s_ignore(serve_root)  # Load ignore patterns from .s2s-ignore in serve_root.
+  def _is_excluded(vpath, patterns)  # Check if a virtual path matches any exclude pattern.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_slave.py ──
+# Slave FTP daemon.
+  class FtpSlave:  # Slave daemon: TLS connection to master, inventory, fs watcher, heartbeat.
+    def __init__(self, config)  # Initialize the slave.
+    def start(self)  # Start the slave in daemon threads (connect + heartbeat + watcher).
+    def stop(self)  # Signal shutdown.
+    def send_to_master(self, data)  # Send a pre-encoded protocol message to the master.
+    def schedule_inventory_delta(self)  # Signal that a filesystem change needs to be reported.
+    def set_s2s_bridge(self, bridge)  # Attach an FtpS2sBridge for peer-to-peer file sync.
+    def set_announce_callback(self, cb)  # Set a callback for announcing FTP operations to IRC.
+    def _run_connection(self)  # Main connection loop: connect, register, process commands.
+    def _connect_and_register(self)  # Establish TLS connection to master and send REGISTER.
+    def _command_loop(self)  # Process commands from master until disconnect.
+    def _handle_command(self, msg)  # Dispatch a command from the master.
+    def _send_inventory(self)  # Scan serve_root and send full inventory to master.
+    def _scan_files(self)  # Scan serve_root and return list of file metadata dicts.
+    def _file_md5(path, chunk_size=65536)  # Compute MD5 hash of a file.
+    def _run_heartbeat(self)  # Send periodic heartbeat to master.
+    def _run_fs_watcher(self)  # Watch serve_root for changes and send inventory deltas.
+    def _build_snapshot(self, root)  # Build a {vpath: file_info} snapshot of serve_root.
+    def lock_file(self, vpath, lock_id, ttl=7200)  # Lock a file to suppress sync during edits.
+    def unlock_file(self, vpath, lock_id)  # Unlock a file, allowing sync to resume.
+    def is_locked(self, vpath)  # Check if a file is currently locked (with TTL expiry cleanup).
+    def _get_slave_id(self)  # Determine slave ID from Platform or hostname.
+    def _get_disk_capacity(self)  # Get total disk capacity of serve_root in bytes.
+    def _get_disk_free(self)  # Get free disk space of serve_root in bytes.
+    def _get_load_avg(self)  # Get system load average (1-minute).
+    def _build_ssl_context(self)  # Build SSL context for connecting to master (mTLS).
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_slave_connection.py ──
+# Master-side representation of one connected slave.
+  class FtpSlaveConnection:  # Master-side: represents one connected slave.
+    def __init__(self, sock, addr, slave_id, master)  # Initialize a slave connection.
+    def start(self)  # Start the background reader thread for this slave.
+    def _read_loop(self)  # Continuously read protocol messages from the slave.
+    def _handle_message(self, msg)  # Dispatch an incoming protocol message from the slave.
+    def send_command(self, data)  # Send a pre-encoded command to this slave.
+    def request_inventory(self)  # Ask this slave to send a full inventory rescan.
+    def send_file(self, transfer_id, path, client_host, client_port)  # Instruct the slave to send (RETR) a file.
+    def recv_file(self, transfer_id, path, client_host, client_port)  # Instruct the slave to receive (STOR) a file.
+    def mirror_file(self, transfer_id, path, target_slave_id, target_host)  # Instruct the slave to mirror a file to another slave.
+    def delete_file(self, path)  # Instruct the slave to delete a file.
+    def rename_file(self, path, new_path)  # Instruct the slave to rename a file.
+    def lock_file(self, path, lock_id, ttl)  # Instruct the slave to lock a file.
+    def unlock_file(self, path, lock_id)  # Instruct the slave to unlock a file.
+    def disconnect(self)  # Close the connection and clean up.
+    def uptime(self)
+    def __repr__(self)
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_slave_transfer.py ──
+# Slave-side data transfer handler.
+  TRANSFER_BUFSIZE = 65536
+  class FtpSlaveTransfer:  # Slave-side: handles individual data transfers.
+    def __init__(self, slave)  # Initialize the transfer handler.
+    def active_count(self)  # Number of currently active transfers.
+    def handle_send_file(self, transfer_id, path, client_host, client_port)  # Handle SEND_FILE: read local file, stream to relay.
+    def handle_recv_file(self, transfer_id, path, client_host, client_port)  # Handle RECV_FILE: receive data from relay, write to local disk.
+    def _do_send(self, transfer_id, vpath, relay_host, relay_port)  # Send a local file to the master relay socket.
+    def _do_recv(self, transfer_id, vpath, relay_host, relay_port)  # Receive a file from the master relay socket and write to disk.
+    def _finish_transfer(self, transfer_id, total, success, error)  # Report transfer completion to master and clean up.
+    def _vpath_to_local(self, vpath)  # Convert a virtual path to a local filesystem path.
+    def delete_file(self, vpath)  # Delete a local file by virtual path.
+    def rename_file(self, vpath, new_vpath)  # Rename a local file by virtual path.
+
+── irc/packages/csc-ftpd/csc_ftpd/ftp_virtual_fs.py ──
+# pyftpdlib AbstractedFS: presents merged namespace from FtpMasterIndex.
+  class FtpVirtualFs(AbstractedFS):  # Virtual filesystem backed by FtpMasterIndex.
+    def __init__(self, root, cmd_channel)  # Initialize the virtual FS.
+    def root(self)
+    def root(self, value)
+    def cwd(self)
+    def cwd(self, path)
+    def ftp2fs(self, ftppath)  # Convert FTP path to internal virtual path.
+    def fs2ftp(self, fspath)  # Convert internal path back to FTP path.
+    def validpath(self, path)  # Check if path is valid (always True in virtual FS).
+    def isfile(self, path)  # Check if virtual path is a file.
+    def isdir(self, path)  # Check if virtual path is a directory.
+    def islink(self, path)
+    def lexists(self, path)
+    def getsize(self, path)  # Get file size from index metadata.
+    def getmtime(self, path)  # Get file modification time from index metadata.
+    def chdir(self, path)  # Change current working directory.
+    def mkdir(self, path)  # Directories are implicit in virtual FS -- no-op.
+    def rmdir(self, path)  # Cannot remove virtual directories directly.
+    def remove(self, path)  # Remove is handled via slave dispatch, not here.
+    def rename(self, src, dst)  # Rename not supported in virtual FS.
+    def chmod(self, path, mode)  # Chmod is not supported in virtual FS -- no-op.
+    def stat(self, path)  # Return a stat-like object for the virtual path.
+    def lstat(self, path)
+    def listdir(self, path)  # List directory contents.
+    def listdirinfo(self, path)  # List directory with full info (for LIST command).
+    def format_list(self, basedir, listing, ignore_err=True)  # Yield directory listing lines for LIST command (Unix ls -l style).
+    def format_mlsx(self, basedir, listing, perms, facts, ignore_err=True)  # Yield directory listing lines for MLSD/MLST commands.
+    def open(self, filename, mode)  # Open is intercepted by FtpHandler -- should not reach here.
+    def _resolve(self, path)  # Resolve a path relative to cwd.
+    def _normalize(path)  # Normalize a virtual path.
+  class _VirtualStat:  # Minimal stat-like object for virtual files.
+    def __init__(self, size=0, mtime=0, is_dir=False)
+    def __getitem__(self, idx)  # Support tuple-style access (os.stat_result compatibility).
+
+── irc/packages/csc-ftpd/pyproject.toml ──
+# [build-system]

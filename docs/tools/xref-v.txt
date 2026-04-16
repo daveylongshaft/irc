@@ -1,0 +1,7 @@
+CSC XREF - SYMBOLS STARTING WITH 'V'
+==================================================
+
+VFS: packages/enc-ext-vfs/enc_ext_vfs/vfs.py (in other)
+Version: irc/packages/csc-version/csc_version/version.py (in csc-version), irc/packages/csc-clients/csc_clients/client/version.py (in csc-clients)
+version: irc/packages/csc-services/csc_services/version.py (in csc-services)
+vfs: packages/enc-ext-vfs/tests/test_cli.py (in other), packages/enc-ext-vfs/tests/test_fat.py (in other), packages/enc-ext-vfs/tests/test_fuse_mount.py (in other), packages/enc-ext-vfs/tests/test_vfs.py (in other)

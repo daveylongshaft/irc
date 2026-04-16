@@ -1,0 +1,77 @@
+CSC-AI-API SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-ai-api/csc_ai_api.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-ai-api/csc_ai_api.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-ai-api/csc_ai_api.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-ai-api/csc_ai_api.egg-info/requires.txt ──
+# csc-clients>=0.1.0
+
+── irc/packages/csc-ai-api/csc_ai_api.egg-info/top_level.txt ──
+# csc_ai_api
+
+── irc/packages/csc-ai-api/csc_ai_api/__init__.py ──
+
+── irc/packages/csc-ai-api/csc_ai_api/ai_client.py ──
+  class AIClient(Client):  # Base class for all AI agents.
+    def __init__(self, config_path: Optional[str]=None, input_file: Optional[str]=None, output_file: Optional[str]=None)  # Initializes the AIClient and its associated managers.
+    def run(self, interactive: bool=True)  # Starts the AIClient, firing pre-connection events.
+    def _handle_numeric(self, parsed)  # Overrides numeric handler to fire post-connection perform scripts on RPL_WELCOME.
+    def _handle_privmsg_recv(self, parsed)  # Overrides PRIVMSG handler to implement AI response protocols.
+    def _on_standoff_expire(self, channel: str, messages: List[tuple])  # Callback when standoff timer expires. Triggers response with collected context.
+    def _dispatch_respond(self, channel: str, context: List[str])  # Dispatches the response generation to a separate thread.
+    def _respond_safe(self, channel: str, context: List[str])  # Helper method to call respond() safely and send the result.
+    def respond(self, context: List[str]) -> Optional[str]  # Generates a response based on the provided context.
+
+── irc/packages/csc-ai-api/csc_ai_api/context.py ──
+  class ContextManager:  # Manages per-channel backscroll buffers and direct mention detection.
+    def __init__(self, backscroll: int=20)
+    def buffer(self, channel: str, nick: str, text: str)  # Adds a message to the channel's backscroll buffer.
+    def get(self, channel: str, n: Optional[int]=None) -> List[str]  # Returns the last n lines of context for a specific channel.
+    def is_direct_mention(self, text: str, wakewords: List[str]) -> bool  # Checks if the text contains any of the provided wake words.
+    def set_backscroll(self, n: int)  # Updates the default backscroll limit for new buffers.
+
+── irc/packages/csc-ai-api/csc_ai_api/focus.py ──
+  class FocusManager:  # Manages the engagement window for the AI agent.
+    def __init__(self, window_secs: int=300)
+    def mark_responded(self, channel: str, window_secs: int=None)  # Enters or resets the focus window for a specific channel.
+    def is_focused(self, channel: str) -> bool  # Returns True if the agent is currently within the focus window for the channel.
+    def reset(self, channel: str)  # Clears focus for a channel immediately.
+    def set_window(self, secs: int)  # Updates the default focus window duration.
+
+── irc/packages/csc-ai-api/csc_ai_api/ignore.py ──
+  class IgnoreManager:  # Manages temporary silence state for the AI agent.
+    def __init__(self, timeout_secs: int=300)
+    def parse(self, text: str, my_nick: str)  # Parses !ignore commands to determine if this agent should be silenced.
+    def is_ignored(self) -> bool  # Returns True if the agent is currently in a silence period.
+    def clear(self)  # Clears the ignore state immediately.
+    def set_timeout(self, secs: int)  # Updates the default silence duration.
+
+── irc/packages/csc-ai-api/csc_ai_api/perform.py ──
+  class PerformManager:  # Manages IRC perform scripts and agent-specific configurations.
+    def __init__(self, config_path: Path)
+    def load(self)  # Loads the configuration from the INI file.
+    def fire(self, event: str, extra_vars: dict=None, send_fn: Optional[Callable[[str], None]]=None)  # Fires a lifecycle event, substituting variables and calling send_fn.
+    def get(self, section: str, key: str, fallback=None)  # Returns a configuration value.
+    def wakewords(self) -> List[str]  # Returns a list of wake words.
+    def channels(self) -> List[str]  # Returns a list of channels to join.
+    def nick(self) -> str
+    def server(self) -> str
+    def port(self) -> int
+
+── irc/packages/csc-ai-api/csc_ai_api/standoff.py ──
+  class StandoffManager:  # Handles coalescing delays for AI responses.
+    def __init__(self)
+    def add(self, channel: str, nick: str, text: str)  # Appends a message to the buffer for a specific channel.
+    def start_or_reset(self, channel: str, delay_ms: int, callback: Callable[[str, List[Tuple[str, str]]], None])  # Starts or resets the standoff timer for a channel.
+    def cancel(self, channel: str)  # Cancels the standoff timer for a channel without clearing the buffer.
+    def flush(self, channel: str) -> List[Tuple[str, str]]  # Returns and clears the buffered messages for a channel.
+    def _fire(self, channel: str, callback: Callable[[str, List[Tuple[str, str]]], None])  # Timer callback: flushes buffer and triggers the response handler.
+
+── irc/packages/csc-ai-api/pyproject.toml ──
+# [build-system]

@@ -1,0 +1,19 @@
+CSC XREF - SYMBOLS STARTING WITH 'E'
+==================================================
+
+EncExtVfsFuse: packages/enc-ext-vfs/enc_ext_vfs/fuse_mount.py (in other)
+EncryptedVFSStore: irc/packages/csc-data/csc_data/_enc_vfs.py (in csc-data)
+EntryAttributes: packages/enc-ext-vfs/enc_ext_vfs/fuse_layer.py (in other)
+edit_file: bin/archive/agent.py (in bin-scripts)
+enable: irc/packages/csc-cli/csc_cli/commands/config_cmd.py (in csc-cli)
+encrypt: irc/packages/csc-crypto/csc_crypto/crypto.py (in csc-crypto)
+enroll: irc/packages/csc-cli/csc_cli/commands/pki_cmd.py (in csc-cli)
+ensure_env: bin/claude-batch/common.py (in bin-scripts), irc/bin/claude-batch/libexec/common.py (in bin-scripts)
+estimate_cost_usd: bin/claude-batch/common.py (in bin-scripts)
+estimate_input_tokens: bin/claude-batch/common.py (in bin-scripts)
+exec_tool: bin/haiku_restructure_live.py (in bin-scripts)
+execute: irc/packages/csc-version/csc_version/staging_uploads/server_test.py (in csc-version)
+execute_shell_command: bin/archive/agent.py (in bin-scripts)
+execute_tool: ops/agents/chatgpt/bin/run_agent.py (in ops), ops/agents/claude/bin/run_agent.py (in ops), ops/agents/codellama/bin/run_agent.py (in ops), ops/agents/deepseek/bin/run_agent.py (in ops), ops/agents/dmr_qwen_task_runner/bin/run_agent.py (in ops), ops/agents/gemini-2.5-flash-lite/bin/run_agent.py (in ops), ops/agents/gemini-2.5-flash/bin/run_agent.py (in ops), ops/agents/gemini-2.5-pro/bin/run_agent.py (in ops), ops/agents/gemini-3-flash-preview/bin/run_agent.py (in ops), ops/agents/gemini-3-flash/bin/run_agent.py (in ops), ops/agents/gemini-3-pro-preview/bin/run_agent.py (in ops), ops/agents/gemini-3-pro/bin/run_agent.py (in ops), ops/agents/gemini-3.1-pro-preview/bin/run_agent.py (in ops), ops/agents/gemini/bin/run_agent.py (in ops), ops/agents/haiku/bin/run_agent.py (in ops), ops/agents/ollama-codellama/bin/run_agent.py (in ops), ops/agents/ollama-deepseek/bin/run_agent.py (in ops), ops/agents/ollama-qwen/bin/run_agent.py (in ops), ops/agents/opus/bin/run_agent.py (in ops), ops/agents/qwen/bin/run_agent.py (in ops), ops/agents/sonnet/bin/run_agent.py (in ops), ops/agents/templates/run_agent.py (in ops), ops/agents/test-agent/bin/run_agent.py (in ops), bin/batch-opus-git-fix.py (in bin-scripts), bin/batch-opus-queue-worker-fix.py (in bin-scripts), irc/bin/claude-batch/libexec/tools.py (in bin-scripts)
+extract_metadata_from_md: bin/task_converter.py (in bin-scripts)
+extract_task_from_md: bin/task_converter.py (in bin-scripts)

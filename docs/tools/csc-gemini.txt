@@ -1,0 +1,38 @@
+CSC-GEMINI SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-gemini/csc_gemini.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-gemini/csc_gemini.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-gemini/csc_gemini.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-gemini/csc_gemini.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-gemini/csc_gemini.egg-info/requires.txt ──
+# csc-ai-api>=0.1.0
+
+── irc/packages/csc-gemini/csc_gemini.egg-info/top_level.txt ──
+# csc_gemini
+
+── irc/packages/csc-gemini/csc_gemini/__init__.py ──
+
+── irc/packages/csc-gemini/csc_gemini/api.py ──
+  class GeminiAPI:  # Wraps the Google Generative AI SDK for Gemini interaction.
+    def __init__(self, api_key: str, model: str='gemini-2.0-flash')
+    def complete(self, context_lines: List[str], system_prompt: Optional[str]=None) -> str  # Formats context and sends to Gemini generation API.
+
+── irc/packages/csc-gemini/csc_gemini/client.py ──
+  class GeminiClient(AIClient):  # Gemini AI IRC client.
+    def __init__(self, config_path: Optional[str]=None, input_file: Optional[str]=None, output_file: Optional[str]=None)
+    def _resolve_api_key(self) -> str  # Resolves the API key from environment or data store.
+    def respond(self, context: List[str]) -> Optional[str]  # Generates a response using the Gemini API.
+
+── irc/packages/csc-gemini/csc_gemini/main.py ──
+  def main()  # Main entry point for the csc-gemini agent.
+
+── irc/packages/csc-gemini/pyproject.toml ──
+# [build-system]

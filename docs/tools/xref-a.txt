@@ -1,0 +1,19 @@
+CSC XREF - SYMBOLS STARTING WITH 'A'
+==================================================
+
+AIClient: irc/packages/csc-ai-api/csc_ai_api/ai_client.py (in csc-ai-api)
+APIKeyManager: irc/packages/csc-data/csc_data/api_key_manager.py (in csc-data)
+AccessControl: packages/enc-ext-vfs/enc_ext_vfs/acl.py (in other)
+Agent: irc/packages/csc-services/csc_services/agent.py (in csc-services)
+AgentExecutor: irc/packages/csc-data/csc_data/agent_executor.py (in csc-data), irc/packages/csc-clients/csc_clients/agent_executor.py (in csc-clients)
+Aliases: irc/packages/csc-clients/csc_clients/client/aliases.py (in csc-clients)
+abs_from_user_path: bin/claude-batch/common.py (in bin-scripts)
+abs_path: irc/bin/claude-batch/libexec/common.py (in bin-scripts)
+acl: packages/enc-ext-vfs/tests/test_acl.py (in other)
+add_project_root_to_path: irc/tests/conftest.py (in tests)
+aggregate_channel_lists: irc/packages/csc-server/csc_server/sync/link.py (in csc-server)
+aggregate_user_lists: irc/packages/csc-server/csc_server/sync/link.py (in csc-server)
+analyze_file: bin/analyze_project.py (in bin-scripts)
+analyze_spectrum: irc/benchmarks/fft_analysis.py (in tests)
+append_to_journal: bin/gemini-batch/gbatch_tool_run.py (in bin-scripts)
+assign_to_jules: irc/packages/csc-loop/csc_loop/infra/pm.py (in csc-loop)

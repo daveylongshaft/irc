@@ -1,0 +1,5 @@
+CSC XREF - SYMBOLS STARTING WITH 'Q'
+==================================================
+
+QueueDirectories: irc/packages/csc-loop/csc_loop/utils/queue_utils.py (in csc-loop)
+quick_test: tests/fifo_client_helper.py (in tests)

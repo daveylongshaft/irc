@@ -1,0 +1,1119 @@
+TESTS SUBMODULE MAP
+==================================================
+
+── irc/benchmarks/BASELINE_TEST_EXECUTION_REPORT.txt ──
+# ================================================================================
+
+── irc/benchmarks/BENCHMARKING_COMPLETE.md ──
+# # ✅ Complete Benchmarking & Catalog System
+
+── irc/benchmarks/BENCHMARK_ANALYSIS.md ──
+# # AI Agent Benchmark Analysis Report
+
+── irc/benchmarks/BENCHMARK_hello_world.md ──
+# # Benchmark 1: Simple "Hello World" Multi-Language Results
+
+── irc/benchmarks/FFT_ANALYSIS_RESULTS.md ──
+# # FFT Waveform Analysis - Benchmark Results
+
+── irc/benchmarks/FFT_BENCHMARK_ANALYSIS.md ──
+# # FFT Complex Benchmark Analysis
+
+── irc/benchmarks/benchmarks.json ──
+# {
+
+── irc/benchmarks/catalog.json ──
+# {
+
+── irc/benchmarks/fft_analysis.py ──
+# Complex FFT Waveform Analysis on Real Random Data
+  def generate_random_audio_data(num_samples=44100, bit_depth=16)  # Generate truly random audio data simulating real audio capture.
+  def compute_fft(audio_data, sample_rate=44100)  # Compute FFT and extract frequency spectrum.
+  def find_peaks(frequencies, magnitude, num_peaks=10, min_prominence=0.1)  # Find natural frequency peaks in the spectrum.
+  def analyze_spectrum(audio_data, sample_rate=44100)  # Complete spectrum analysis on random audio data.
+  def main()  # Run the complete FFT analysis benchmark.
+
+── irc/benchmarks/fft_benchmark.py ──
+# FFT Waveform Analysis Benchmark
+  def generate_synthetic_audio(duration=1.0, sample_rate=44100, frequencies=None, amplitudes=None)  # Generate synthetic audio data with known frequencies.
+  def perform_fft_analysis(audio_samples, sample_rate=44100)  # Perform FFT analysis on audio samples.
+  def main()  # Main benchmark execution
+
+── irc/benchmarks/fft_waveform_analysis.py ──
+# FFT Waveform Analysis Benchmark
+  SAMPLE_RATE = 44100
+  DURATION = 1.0
+  NUM_SAMPLES = int(SAMPLE_RATE * DURATION)
+  FREQUENCIES = [440.0, 880.0, 1320.0]
+  AMPLITUDES = [1.0, 0.5, 0.25]
+
+── irc/benchmarks/prompts/code-review.md ──
+# # Benchmark: code-review
+
+── irc/benchmarks/prompts/debug-test-failure.md ──
+# # Benchmark: debug-test-failure
+
+── irc/benchmarks/prompts/implement-feature.md ──
+# # Benchmark: implement-feature
+
+── irc/benchmarks/prompts/large-context-nav.md ──
+# # Benchmark: large-context-nav
+
+── irc/benchmarks/prompts/multi-file-refactor.md ──
+# # Benchmark: multi-file-refactor
+
+── irc/benchmarks/run_benchmark.py ──
+# Run benchmarks against AI agents and collect results.
+  BENCHMARKS_DIR = Path(__file__).resolve().parent
+  PROMPTS_DIR = BENCHMARKS_DIR / 'prompts'
+  RESULTS_DIR = BENCHMARKS_DIR / 'results'
+  METADATA_FILE = BENCHMARKS_DIR / 'benchmarks.json'
+  CSC_ROOT = BENCHMARKS_DIR.parent
+  AGENT_MODELS = {'haiku': 'claude-haiku-4-5-20251001', 'sonnet': 'claude-sonnet-4-6', 'opus':...
+  MAX_TOKENS = {'claude-opus-4-6': 32768, 'claude-sonnet-4-6': 32768, 'claude-haiku-4-5-2025...
+  MAX_TURNS = 50
+  def load_metadata()
+  def save_metadata(data)
+  def list_benchmarks()  # List available benchmark prompts.
+  def _import_tools()  # Import tool functions from run_agent.py.
+  def run_single(benchmark_name: str, agent_name: str, run_agent_mod) -> dict  # Run a single benchmark with an agent via the Anthropic API.
+  def show_results(benchmark_name: str=None)  # Show benchmark results with statistics.
+  def main()
+
+── irc/benchmarks/run_local_benchmarks.py ──
+# Run benchmarks on local ollama agents.
+  PROJECT_ROOT = Path(__file__).resolve().parent
+  class DummyServer:
+    def log(self, msg)
+  def main()
+
+── irc/benchmarks/variance.txt ──
+# VARIANCE REPORT
+
+── irc/tests/conftest.py ──
+  def add_project_root_to_path()  # Adds the project root to sys.path for the entire test session.
+
+── irc/tests/logs/test_agent_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_bridge.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_channel_normalization.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_csc_layer_packages_layout.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_curl_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_evolution_md.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_gbatch_audit.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_help_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_jules_monitor.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_layer_package_installer.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_module_manager_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_motive_state.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_nickserv_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_ntfy_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_oper_hierarchy.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_pki.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_plan_review.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_webhook_listener.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_wo_watcher.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/logs/test_workorders_service.log ──
+# ============================= test session starts ==============================
+
+── irc/tests/platform_gate.py ──
+# Platform gate helper for cross-platform tests.
+  def _current_platforms()  # Return set of platform tags for the current machine.
+  def require_platform(required, reason=None)  # Gate the entire test module to specific platform(s).
+  def skip_unless_platform(required, reason=None)  # Decorator to skip individual tests on wrong platform.
+
+── irc/tests/platform_skip_template.md ──
+# # Task: Run Test on Correct Platform — {{TEST_NAME}}
+
+── irc/tests/prompt_template.md ──
+# # Task: Fix Failing Test — {{TEST_NAME}}
+
+── irc/tests/test_csc_ai_api.py ──
+  def test_context_manager_backscroll()
+  def test_context_manager_mention()
+  def test_ignore_manager()
+  def test_focus_manager()
+  def test_standoff_manager_coalescing()
+  def test_perform_manager_vars(tmp_path)
+  def test_standoff_cancelled_on_mention()  # When a direct mention arrives, any pending standoff timer must be
+  def test_codex_client_instantiation(tmp_path)
+  def test_claude_client_instantiation(tmp_path)
+
+── irc/tests/test_csc_layer_packages_layout.py ──
+  REPO_ROOT = Path(__file__).resolve().parents[1]
+  def _read(path: str) -> str
+  def test_layer_packages_use_package_chain_imports()
+  def test_data_package_has_active_encrypted_impl_and_old_data_backup()
+  def test_layer_package_manifests_require_lower_layers()
+  def test_find_csc_root_walks_up_to_marker_file()
+
+── irc/tests/test_csc_server_dispatcher.py ──
+  REPO_ROOT = Path(__file__).resolve().parents[1]
+  PACKAGES_DIR = REPO_ROOT / 'packages'
+  def _reload_server_module()
+  def test_server_executes_service_command_from_queued_privmsg(tmp_path, monkeypatch)
+  def test_server_does_not_execute_untargeted_service_command(tmp_path, monkeypatch)
+  def test_server_does_not_execute_service_command_for_other_target(tmp_path, monkeypatch)
+  def test_server_requires_queued_sender_authorization_for_local_target(tmp_path, monkeypatch)
+  def test_server_responds_to_ping_from_queued_command(tmp_path, monkeypatch)
+  def test_server_completes_registration_from_nick_and_user(tmp_path, monkeypatch)
+  def test_server_rejects_oper_before_registration(tmp_path, monkeypatch)
+  def test_server_oper_auth_updates_session_context(tmp_path, monkeypatch)
+  def test_server_enriches_queue_metadata_from_session_context(tmp_path, monkeypatch)
+  def test_server_uses_registered_oper_context_for_later_service_command(tmp_path, monkeypatch)
+  def test_server_broadcasts_channel_privmsg_after_join(tmp_path, monkeypatch)
+  def test_server_supports_names_and_list(tmp_path, monkeypatch)
+  def test_server_quit_removes_session_from_channels(tmp_path, monkeypatch)
+  def test_sync_mesh_receive_preserves_auth_metadata_for_remote_execution(tmp_path, monkeypatch)
+  def test_sync_mesh_stub_methods_announce_loudly()
+
+── irc/tests/test_csc_server_queue_persistence.py ──
+  REPO_ROOT = Path(__file__).resolve().parents[1]
+  PACKAGES_DIR = REPO_ROOT / 'packages'
+  def test_server_command_log_restores_pending_queue(tmp_path, monkeypatch)
+
+── irc/tests/test_evolution_md.py ──
+# Tests for docs/EVOLUTION.md — validate structure, content, and accuracy.
+  REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+  EVOLUTION_PATH = os.path.join(REPO_ROOT, 'docs', 'EVOLUTION.md')
+  class TestEvolutionMdExists(unittest.TestCase):  # Verify the file exists and is non-trivial.
+    def test_file_exists(self)
+    def test_file_is_not_empty(self)
+  class TestEvolutionMdStructure(unittest.TestCase):  # Verify required sections are present.
+    def setUpClass(cls)
+    def _has_heading_containing(self, text)  # Check that a markdown heading contains the given text (case-insensitive).
+    def test_has_origin_section(self)  # The origin / copy-paste era must be covered.
+    def test_has_invariants_section(self)  # Invariants that survived every iteration must be documented.
+    def test_has_trajectory_section(self)  # The forward trajectory must be documented.
+    def test_has_significance_section(self)  # Why this story matters must be addressed.
+  class TestEvolutionMdContent(unittest.TestCase):  # Verify key historical facts are mentioned.
+    def setUpClass(cls)
+    def _mentions(self, text)
+    def test_mentions_syscmdr(self)
+    def test_mentions_gotta_startsomewhere(self)
+    def test_mentions_irc(self)
+    def test_mentions_gemini(self)
+    def test_mentions_federation(self)
+    def test_mentions_queue_worker(self)
+    def test_mentions_heartbeat(self)
+    def test_mentions_command_protocol(self)
+    def test_mentions_autonomous_mode(self)
+    def test_mentions_pr_review(self)
+    def test_mentions_three_repo_split(self)
+    def test_mentions_4400_commits(self)
+    def test_mentions_economic_participation(self)
+  class TestEvolutionMdTone(unittest.TestCase):  # Verify the document meets tone requirements.
+    def setUpClass(cls)
+    def test_not_corporate_boilerplate(self)  # Should not read like a corporate press release.
+    def test_is_narrative_not_bullet_list(self)  # The document should be primarily narrative prose, not a bullet list.
+    def test_mentions_march_2026(self)  # Should be dated to current period.
+
+── irc/tests/test_gbatch_audit.py ──
+# Tests for the diff audit layer in gbatch_tools.py.
+  _GBATCH_DIR = Path(__file__).resolve().parent.parent.parent / 'bin' / 'gemini-batch'
+  class TestSlugifyWoId(unittest.TestCase):
+    def test_empty_string(self)
+    def test_none_like_empty(self)
+    def test_spaces_become_underscores(self)
+    def test_truncates_at_40_chars(self)
+    def test_normal_id_unchanged(self)
+    def test_exactly_40_chars(self)
+  class TestPathToSlug(unittest.TestCase):
+    def test_path_under_csc_root(self)
+    def test_path_outside_csc_root(self)
+    def test_nested_path(self)
+  class TestSaveDiff(unittest.TestCase):
+    def setUp(self)
+    def tearDown(self)
+    def _audit_files(self)
+    def test_new_file_creates_dot_new(self)
+    def test_edit_creates_dot_patch(self)
+    def test_delete_creates_dot_deleted(self)
+    def test_identical_content_no_file(self)
+    def test_both_none_no_file(self)
+    def test_wo_id_in_filename(self)
+    def test_audit_failure_does_not_raise(self)
+    def test_patch_is_reversible(self)
+  class TestMarkWoDone(unittest.TestCase):
+    def setUp(self)
+    def tearDown(self)
+    def test_done_marker_created(self)
+    def test_fail_marker_created(self)
+    def test_marker_is_zero_bytes(self)
+    def test_failure_does_not_raise(self)
+    def test_timestamp_in_filename(self)
+  class TestWriteFileAudit(unittest.TestCase):  # Integration tests: write_file calls _save_diff correctly.
+    def setUp(self)
+    def tearDown(self)
+    def test_new_file_produces_dot_new_audit(self)
+    def test_edit_produces_dot_patch_audit(self)
+  class TestDeleteFileAudit(unittest.TestCase):  # Integration tests: delete_file calls _save_diff correctly.
+    def setUp(self)
+    def tearDown(self)
+    def test_delete_produces_dot_deleted_audit(self)
+    def test_delete_missing_file_no_audit(self)
+
+── irc/tests/test_memory_store.py ──
+  REPO_ROOT = Path(__file__).resolve().parents[1]
+  def test_memory_store_indexes_entries_and_status_views(tmp_path)
+  def test_upsert_updates_existing_entry(tmp_path)
+  def test_invalid_status_falls_back_to_reference(tmp_path)
+  def test_append_note_unknown_slug_raises(tmp_path)
+  def test_duplicate_link_not_added_twice(tmp_path)
+
+── irc/tests/test_motive_state.py ──
+# Tests for the daily motive-state alignment system.
+  REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+  MOTIVE_STATE_PATH = os.path.join(REPO_ROOT, 'docs', 'MOTIVE_STATE.md')
+  ALIGNMENT_SCRIPT = os.path.join(REPO_ROOT, 'bin', 'check_motive_alignment.py')
+  PROGRESS_FILE = os.path.join(REPO_ROOT, 'logs', 'motive_state_progress.json')
+  TEMPLATE_PATH = os.path.join(REPO_ROOT, 'workorders', 'recurring', 'daily-motive-state-check....
+  class TestMotiveStateMdExists(unittest.TestCase):  # Verify docs/MOTIVE_STATE.md exists and is non-trivial.
+    def test_file_exists(self)
+    def test_file_is_not_empty(self)
+  class TestMotiveStateMdStructure(unittest.TestCase):  # Verify required sections in MOTIVE_STATE.md.
+    def setUpClass(cls)
+    def _has_heading_containing(self, text)
+    def _mentions(self, text)
+    def test_has_core_statement(self)
+    def test_has_autonomy_pillar(self)
+    def test_has_cross_platform_pillar(self)
+    def test_has_self_orchestrating_pillar(self)
+    def test_has_multi_ai_pillar(self)
+    def test_has_daily_alignment_questions(self)
+    def test_has_decision_rubric(self)
+    def test_has_metrics_reference(self)
+    def test_has_90_day_plan(self)
+  class TestAlignmentScriptExists(unittest.TestCase):  # Verify the alignment script exists and is valid Python.
+    def test_script_exists(self)
+    def test_script_is_valid_python(self)
+    def test_script_has_main_function(self)
+    def test_script_has_checker_class(self)
+  class TestMotiveStateChecker(unittest.TestCase):  # Test the MotiveStateChecker class directly.
+    def setUpClass(cls)
+    def test_checker_instantiates(self)
+    def test_check_alignment_returns_dict(self)
+    def test_scores_have_required_keys(self)
+    def test_scores_are_numeric(self)
+    def test_scores_in_range(self)
+    def test_overall_alignment_is_average(self)
+    def test_save_progress_creates_file(self)
+    def test_biggest_gap_is_valid_pillar(self)
+    def test_next_priority_is_nonempty_string(self)
+  class TestDailyWorkorderTemplate(unittest.TestCase):  # Verify the daily workorder template exists and has required content.
+    def test_template_exists(self)
+    def test_template_is_not_empty(self)
+    def test_template_has_steps(self)
+    def test_template_references_script(self)
+    def test_template_has_decision_table(self)
+    def test_template_has_success_criteria(self)
+  class TestProgressFile(unittest.TestCase):  # Verify logs/motive_state_progress.json exists and is valid.
+    def test_file_exists(self)
+    def test_file_is_valid_json(self)
+    def test_has_motive_state_field(self)
+    def test_has_scores_array(self)
+    def test_has_targets(self)
+    def test_score_entry_has_required_fields(self)
+    def test_score_values_are_numeric(self)
+
+── irc/tests/test_queue_worker_target_repo.py ──
+# Tests for queue_worker target_repo support.
+  TEST_DIR = Path(__file__).resolve().parent
+  REPO_ROOT = TEST_DIR.parent
+  class TestParseWorkorderFrontmatter:  # Tests for parsing YAML-like front-matter from workorder files.
+    def test_parse_target_repo_csc(self)  # Parse workorder with target_repo: csc.
+    def test_parse_target_repo_fahu(self)  # Parse workorder with target_repo: fahu.
+    def test_parse_no_frontmatter(self)  # Parse workorder without front-matter (legacy).
+    def test_parse_incomplete_frontmatter(self)  # Handle incomplete front-matter gracefully.
+    def test_parse_list_values(self)  # Parse list values in front-matter.
+    def test_parse_missing_file(self)  # Handle missing file gracefully.
+  class TestGetTargetRepoRemote:  # Tests for deriving git remote URLs based on target_repo.
+    def test_get_irc_remote_from_csc_origin(self, mock_run)  # Derive irc.git URL by replacing /csc.git with /irc.git.
+    def test_get_fahu_remote_from_csc_origin(self, mock_run)  # Derive facingaddictionwithhope.git URL by replacing /csc.git.
+    def test_get_fahu_remote_fallback(self, mock_run)  # Fall back to hardcoded fahu URL if git command fails.
+    def test_get_csc_remote_none_defaults_to_irc(self, mock_run)  # Default to irc.git when target_repo is None.
+    def test_get_csc_remote_string_defaults_to_irc(self, mock_run)  # Default to irc.git when target_repo is 'csc'.
+
+── irc/tests/test_s2s_null_safety.py ──
+# Test S2S null safety checks in PR #9.
+  def _check_file_syntax(filepath)  # Parse a Python file and verify syntax is valid.
+  def _get_test_file_path(filename)  # Get absolute path to file relative to test directory.
+  def test_server_py_syntax()  # Test that server.py has valid Python syntax.
+  def test_info_handler_syntax()  # Test that info.py handler has valid syntax.
+  def test_messaging_handler_syntax()  # Test that messaging.py handler has valid syntax.
+  def test_registration_handler_syntax()  # Test that registration.py handler has valid syntax.
+  def _check_s2s_null_safety_pattern(filepath, pattern_desc)  # Verify that file contains the S2S null safety pattern.
+  def test_server_py_has_s2s_safety()  # Test that server.py send_to_nick has S2S null safety pattern.
+  def test_info_handler_has_s2s_safety()  # Test that info.py WHOIS has S2S null safety pattern.
+  def test_messaging_handler_has_s2s_safety()  # Test that messaging.py PRIVMSG has S2S null safety pattern.
+  def test_registration_handler_has_s2s_safety()  # Test that registration.py nick collision check has S2S null safety pattern.
+  def test_send_to_nick_with_no_s2s_network()  # Test send_to_nick handles missing s2s_network gracefully.
+  def test_s2s_network_tuple_unpacking()  # Test S2S get_user_from_network tuple unpacking works.
+  def test_s2s_null_checks_prevent_crashes()  # Test that the three-part null check (link and remote_info and link.is_connected) works.
+  def test_s2s_hasattr_check()  # Test hasattr check for s2s_network attribute.
+
+── irc/tests/test_s2s_relay.py ──
+# Integration test: S2S bidirectional relay (leaf -> hub topology).
+  _REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+  class FakeChannelManager:
+    def __init__(self)
+    def get_channel(self, name)
+    def get_all_channels(self)
+    def list_channels(self)
+  class FakeChatBuffer:
+    def append(self, *args, **kwargs)
+  class FakeServer:
+    def __init__(self, server_id)
+    def broadcast_to_channel(self, channel_name, message, exclude=None)
+    def send_to_nick(self, nick, message)
+    def log(self, msg, *args, **kwargs)
+    def _log(self, msg)
+    def sync_from_disk(self)
+  class TestS2SLinkEstablishment:
+    def test_hub_has_leaf_in_links(self, linked_pair)
+    def test_leaf_has_hub_in_links(self, linked_pair)
+  class TestS2SBidirectionalRelay:
+    def test_hub_to_leaf_syncmsg(self, linked_pair)  # Message broadcast from hub arrives at leaf's broadcast_to_channel.
+    def test_leaf_to_hub_syncmsg(self, linked_pair)  # Message broadcast from leaf arrives at hub's broadcast_to_channel.
+    def test_bidirectional_independent(self, linked_pair)  # Both directions work simultaneously without interfering.
+  class TestS2STiebreaker:  # Verify tiebreaker does not break links when both ends
+    def test_simultaneous_connect_both_get_link(self)  # Both servers connect to each other at the same time.
+  class TestS2SSyncKey:  # VFS cipher key distribution via SYNCKEY.
+    def test_hub_key_delivered_to_leaf(self)  # Hub's pre-configured VFS key arrives at leaf after link.
+    def test_key_locked_after_adoption(self)  # Once a key is adopted, a conflicting key is rejected.
+    def test_mesh_key_propagation(self)  # Key propagates A->B->C in a chain (mesh routing).
+  def _free_udp_port()
+  def linked_pair()  # Returns (hub_net, leaf_net, hub_server, leaf_server).
+  def _cleanup_vfs_key()  # Remove vfs.key from cwd if present (test isolation).
+
+── tests/CURRENT_TEST_STATUS.md ──
+# # Current Test Status
+
+── tests/OFFICIAL_S2S_LEVEL_1_TEST.py ──
+# LEVEL 1: Single Server Basic Functionality Test
+  SERVER_HOST = '127.0.0.1'
+  SERVER_PORT = 9525
+  CHANNEL = '#general'
+  TS = int(time.time()) % 100000
+  CLIENT_NICK = f'l1t{TS}'
+  TEST_MSG = f'l1ping{TS}'
+  class CscClientFifo:  # Manages a csc-client subprocess driven via FIFO.
+    def __init__(self, nick, host, port)
+    def start(self)
+    def send(self, line)
+    def stop(self)
+  class Level1ServerTest:
+    def __init__(self)
+    def report(self, name, ok, msg='')
+    def step_1_connect_register(self)
+    def step_2_join_channel(self)
+    def step_3_send_message(self)
+    def step_4_quit(self)
+    def cleanup(self)
+    def run(self)
+  def _server_logs_since(since_ts)  # Read csc-server journal lines since a timestamp string.
+  def _wait_for_log(check, timeout=10.0, since_ts=None)  # Poll server journal until check(full_text) is True.
+  def test_level1_server_basic()  # pytest entry point.
+
+── tests/OFFICIAL_S2S_LEVEL_2_TEST.py ──
+# LEVEL 2 SERVER TEST: S2S Federation and Cross-Server Communication
+  SERVER_EF6E_HOST = '127.0.0.1'
+  SERVER_EF6E_PORT = 9525
+  SERVER_4346_HOST = '10.10.10.2'
+  SERVER_4346_PORT = 9525
+  SERVER_EF6E_NAME = 'haven.ef6e'
+  SERVER_4346_NAME = 'haven.4346'
+  CHANNEL = '#general'
+  TS = int(time.time()) % 100000
+  C1_NICK = f's2a{TS}'
+  C2_NICK = f's2b{TS}'
+  MSG_1TO2 = f'ping12x{TS}'
+  MSG_2TO1 = f'ping21x{TS}'
+  NICK_C1_NEW = f's2a{TS}n'
+  S2S_WAIT = 4.0
+  class CscClientFifo:  # Manages a csc-client subprocess driven via FIFO.
+    def __init__(self, nick, host, port)
+    def start(self)
+    def send(self, line)
+    def stop(self)
+  class Level2S2STest:
+    def __init__(self)
+    def report(self, name, ok, msg='')
+    def step_1_verify_s2s_link(self)  # Check that S2S link is active by looking for link-related log entries.
+    def step_2_client1_register(self)  # Register client1 on haven.ef6e (local).
+    def step_3_client2_register(self)  # Register client2 on haven.4346 (remote via VPN).
+    def step_4_both_join(self)  # Both clients JOIN #general.
+    def step_5_privmsg_ef6e_to_4346(self)  # c1 (ef6e) sends PRIVMSG, verify server processes it.
+    def step_6_privmsg_4346_to_ef6e(self)  # c2 (4346) sends PRIVMSG, check if it arrives on ef6e via S2S.
+    def step_7_nick_change_sync(self)  # c1 changes nick, check if logged.
+    def step_8_quit_sync(self)  # c2 quits, check if ef6e sees QUIT propagated via S2S.
+    def cleanup(self)
+    def run(self)
+  def _server_logs_since(since_ts)  # Read local csc-server journal.
+  def _wait_for_log(check, timeout=10.0, since_ts=None)  # Poll local server journal until check(full_text) is True.
+  def test_level2_s2s_federation()  # pytest entry point.
+
+── tests/fifo_client_helper.py ──
+# FIFO Client Test Helper
+  class FIFOClientTest:  # Helper for FIFO-based IRC client testing.
+    def __init__(self, csc_root=None, server_host='localhost', server_port=9525, timeout=10)  # Initialize FIFO client test.
+    def _find_csc_root(self)  # Auto-detect CSC project root.
+    def _start_client(self)  # Start csc-client in FIFO mode.
+    def send_command(self, cmd, delay=0.1)  # Send a command to the client via FIFO.
+    def send_commands(self, commands, delay=0.1)  # Send multiple commands.
+    def read_output(self, clear=True)  # Read accumulated output from client.
+    def _clear_output(self)  # Clear the output file.
+    def log_result(self, result_msg)  # Log a result back to IRC (appears in client output).
+    def cleanup(self)  # Stop client and clean up.
+    def __enter__(self)  # Context manager entry.
+    def __exit__(self, exc_type, exc_val, exc_tb)  # Context manager exit.
+  def quick_test(commands, check_output_contains=None, csc_root=None)  # Run a quick test sequence.
+
+── tests/logs/test_0000_verify_client_bridge_localserver_service_commands.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_0001_level1_server_basic.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_0002_level2_s2s_federation.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_agent_cli.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_agent_executor.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_agent_service.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_backup_service.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_cryptserv_service.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_example_fifo.log ──
+# ============================= test session starts =============================
+
+── tests/logs/test_jules_client.log ──
+# ============================= test session starts =============================
+
+── tests/s2s_link.py ──
+# Comprehensive S2S Linking Test (Robust Version)
+  LOCAL_SERVER = ('127.0.0.1', 9525)
+  REMOTE_SERVER = ('10.10.10.2', 9525)
+  LOCAL_NAME = 'haven.ef6e'
+  REMOTE_NAME = 'haven.4346'
+  TIMEOUT = 10
+  BASE_NICK_LOCAL = 's2s_test_a'
+  BASE_NICK_REMOTE = 's2s_test_b'
+  USER_HOST = 's2s.test'
+  USER_REALNAME = 'S2S Test User'
+  def send_command(sock, command)  # Send IRC command.
+  def wait_for(sock, pattern, timeout=TIMEOUT)  # Wait for a specific pattern to appear in any received datagram.
+  def register_client(sock, server_name, base_nick)  # Register a client with nick, return actual nick used.
+  def print_results()  # Print test results and exit status.
+  def test_s2s_link()  # Run comprehensive S2S link tests. Exit on first failure.
+
+── tests/s2s_link_s2stest.py ──
+# Comprehensive S2S Linking Test (Robust Version)
+  LOCAL_SERVER = ('127.0.0.1', 19525)
+  REMOTE_SERVER = ('127.0.0.1', 29525)
+  LOCAL_NAME = 'haven.19525'
+  REMOTE_NAME = 'haven.29525'
+  TIMEOUT = 10
+  BASE_NICK_LOCAL = 's2s_test_a'
+  BASE_NICK_REMOTE = 's2s_test_b'
+  USER_HOST = 's2s.test'
+  USER_REALNAME = 'S2S Test User'
+  def send_command(sock, command)  # Send IRC command.
+  def wait_for(sock, pattern, timeout=TIMEOUT)  # Wait for a specific pattern to appear in any received datagram.
+  def register_client(sock, server_name, base_nick)  # Register a client with nick, return actual nick used.
+  def print_results()  # Print test results and exit status.
+  def test_s2s_link()  # Run comprehensive S2S link tests. Exit on first failure.
+
+── tests/s2s_link_win.py ──
+# S2S Linking Test — Windows version (run from haven.4346)
+  LOCAL_SERVER = ('127.0.0.1', 9525)
+  REMOTE_SERVER = ('10.10.10.1', 9525)
+  LOCAL_NAME = 'haven.4346'
+  REMOTE_NAME = 'haven.ef6e'
+  TIMEOUT = 10
+  BASE_NICK_LOCAL = 's2s_win_a'
+  BASE_NICK_REMOTE = 's2s_win_b'
+  def send(sock, command)  # Send IRC command to a connected UDP socket.
+  def drain(sock, timeout=0.5)  # Read and discard all pending data on sock.
+  def recv_until(sock, pattern, timeout=TIMEOUT, label='')  # Wait for pattern in received data. Returns (found, full_message).
+  def register(sock, base_nick, server_label)  # Register a client, handling nick-in-use. Returns actual nick.
+  def ok(msg)
+  def fail(msg)
+  def results()
+  def run()
+
+── tests/s2s_link_win_s2stest.py ──
+# S2S Linking Test — Windows version (run from haven.4346)
+  LOCAL_SERVER = ('127.0.0.1', 19525)
+  REMOTE_SERVER = ('127.0.0.1', 29525)
+  LOCAL_NAME = 'haven.19525'
+  REMOTE_NAME = 'haven.29525'
+  TIMEOUT = 10
+  BASE_NICK_LOCAL = 's2s_win_a'
+  BASE_NICK_REMOTE = 's2s_win_b'
+  def send(sock, command)  # Send IRC command to a connected UDP socket.
+  def drain(sock, timeout=0.5)  # Read and discard all pending data on sock.
+  def recv_until(sock, pattern, timeout=TIMEOUT, label='')  # Wait for pattern in received data. Returns (found, full_message).
+  def register(sock, base_nick, server_label)  # Register a client, handling nick-in-use. Returns actual nick.
+  def ok(msg)
+  def fail(msg)
+  def results()
+  def run()
+
+── tests/test_0000_verify_client_bridge_localserver_service_commands.py ──
+# Bridge Connectivity & Encryption Test
+  def test_0000_verify_client_bridge_localserver_service_commands()  # Test bridge connectivity, encryption, command execution, and graceful shutdown.
+
+── tests/test_0001_level1_server_basic.py ──
+# LEVEL 1: Single Server Basic Functionality Test
+  SERVER_HOST = '127.0.0.1'
+  SERVER_PORT = 9525
+  CHANNEL = '#general'
+  CLIENT_NICK = 'test_client'
+  TEST_TOKEN = 'test_token'
+  SERVICE_NAME = 'server_test'
+  EXPECTED_RESPONSE = 'It Works!'
+  class Level1ServerTest:
+    def __init__(self)
+    def report_step(self, step_name, passed, message='')  # Report a test step result.
+    def step_1_connect(self)  # Step 1: Connect to server.
+    def step_2_register(self)  # Step 2: Register with NICK and USER.
+    def step_3_join_channel(self)  # Step 3: JOIN #general channel.
+    def step_4_upload_service_module(self)  # Step 4: Upload service module and auto-activate it.
+    def step_5_execute_command(self)  # Step 5: Execute approved service module command.
+    def step_6_verify_response(self)  # Step 6: Verify command response in channel.
+    def step_7_quit(self)  # Step 7: Send QUIT and disconnect gracefully.
+    def run(self)  # Run the complete Level 1 test.
+  def test_0001_level1_server_basic()  # Test entry point.
+
+── tests/test_0001_level1_server_basic_s2stest.py ──
+# LEVEL 1: Single Server Basic Functionality Test
+  SERVER_HOST = '127.0.0.1'
+  SERVER_PORT = 19525
+  CHANNEL = '#general'
+  CLIENT_NICK = 'test_client'
+  TEST_TOKEN = 'test_token'
+  SERVICE_NAME = 'server_test'
+  EXPECTED_RESPONSE = 'It Works!'
+  class Level1ServerTest:
+    def __init__(self)
+    def report_step(self, step_name, passed, message='')  # Report a test step result.
+    def step_1_connect(self)  # Step 1: Connect to server.
+    def step_2_register(self)  # Step 2: Register with NICK and USER.
+    def step_3_join_channel(self)  # Step 3: JOIN #general channel.
+    def step_4_upload_service_module(self)  # Step 4: Upload service module and auto-activate it.
+    def step_5_execute_command(self)  # Step 5: Execute approved service module command.
+    def step_6_verify_response(self)  # Step 6: Verify command response in channel.
+    def step_7_quit(self)  # Step 7: Send QUIT and disconnect gracefully.
+    def run(self)  # Run the complete Level 1 test.
+  def test_0001_level1_server_basic()  # Test entry point.
+
+── tests/test_0002_level2_s2s_federation.py ──
+# LEVEL 2 SERVER TEST: S2S Federation and Cross-Server Communication
+  SERVER_4346_HOST = '127.0.0.1'
+  SERVER_EF6E_HOST = '10.10.10.1'
+  SERVER_PORT = 9525
+  SERVER_4346_NAME = 'haven.4346'
+  SERVER_EF6E_NAME = 'haven.ef6e'
+  CHANNEL = '#general'
+  TS = int(time.time()) % 10000
+  C1_BASE = f's2a{TS}'
+  C2_BASE = f's2b{TS}'
+  SVC_EF6E = f'sv6e{TS}'
+  SVC_4346 = f'sv43{TS}'
+  SVC_RESPONSE_EF6E = 'Ef6eWorks!'
+  SVC_RESPONSE_4346 = 'Sv4346Works!'
+  TOK_8 = f'tok8x{TS}'
+  TOK_9 = f'tok9x{TS}'
+  S2S_WAIT = 4.0
+  RECV_TIMEOUT = 10.0
+  class IRCClient:
+    def __init__(self, host, port, nick)
+    def connect(self)
+    def send(self, line)
+    def recv_until(self, check, timeout=RECV_TIMEOUT)  # Read datagrams until check(line) is True or timeout. Returns (lines, found).
+    def drain(self, timeout=1.0)  # Drain pending messages without blocking long.
+    def register(self)
+    def join(self, channel)
+    def names(self, channel)
+    def privmsg(self, target, text)
+    def wait_privmsg(self, contains, timeout=RECV_TIMEOUT)
+    def change_nick(self, new_nick)
+    def wait_nick(self, new_nick, timeout=RECV_TIMEOUT)
+    def wait_part(self, nick, channel, timeout=RECV_TIMEOUT)
+    def wait_quit(self, nick, timeout=RECV_TIMEOUT)
+    def part(self, channel)
+    def quit(self)
+    def close(self)
+    def oper(self, oper_nick, oper_pass, timeout=5.0)  # Become an IRC operator.
+    def upload_service(self, target_server, class_name, response_text)  # Upload a service module via the IRC file upload protocol.
+    def run_service(self, target_server, class_name, token)  # Send a targeted service command.
+    def wait_service(self, token, expected, timeout=15.0)
+  class Level2S2STest:
+    def __init__(self)
+    def report_step(self, step_name, passed, message='')
+    def step_1_verify_s2s_link(self)  # Step 1: Verify haven.4346 is linked to haven.ef6e.
+    def step_2_client1_register(self)  # Step 2: Register client1 on haven.4346.
+    def step_3_client2_register(self)  # Step 3: Register client2 on haven.ef6e.
+    def step_4_both_join_general(self)  # Step 4: Both clients JOIN #general and verify each sees the other in NAMES.
+    def step_5_test_privmsg_sync(self)  # Step 5: PRIVMSG forwarding both directions.
+    def step_6_test_nick_change(self)  # Step 6: NICK change sync across servers.
+    def step_7_test_part_quit(self)  # Step 7: PART/QUIT sync across servers.
+    def step_8_cross_server_upload_ef6e(self)  # Step 8: c2 uploads module to ef6e, c1 sends command targeting ef6e, c1 gets response.
+    def step_9_cross_server_upload_4346(self)  # Step 9: c1 uploads module to 4346, c2 sends command targeting 4346, c2 gets response.
+    def cleanup(self)
+    def run(self)
+  def test_0002_level2_s2s_federation()
+
+── tests/test_0002_level2_s2s_federation_s2stest.py ──
+# LEVEL 2 SERVER TEST: S2S Federation and Cross-Server Communication
+  SERVER_4346_HOST = '127.0.0.1'
+  SERVER_EF6E_HOST = '127.0.0.1'
+  SERVER_4346_PORT = 19525
+  SERVER_EF6E_PORT = 29525
+  SERVER_PORT = SERVER_4346_PORT
+  SERVER_4346_NAME = 'haven.19525'
+  SERVER_EF6E_NAME = 'haven.29525'
+  CHANNEL = '#general'
+  TS = int(time.time()) % 10000
+  C1_BASE = f's2a{TS}'
+  C2_BASE = f's2b{TS}'
+  SVC_EF6E = f'sv6e{TS}'
+  SVC_4346 = f'sv43{TS}'
+  SVC_RESPONSE_EF6E = 'Ef6eWorks!'
+  SVC_RESPONSE_4346 = 'Sv4346Works!'
+  TOK_8 = f'tok8x{TS}'
+  TOK_9 = f'tok9x{TS}'
+  S2S_WAIT = 4.0
+  RECV_TIMEOUT = 10.0
+  class IRCClient:
+    def __init__(self, host, port, nick)
+    def connect(self)
+    def send(self, line)
+    def recv_until(self, check, timeout=RECV_TIMEOUT)  # Read datagrams until check(line) is True or timeout. Returns (lines, found).
+    def drain(self, timeout=1.0)  # Drain pending messages without blocking long.
+    def register(self)
+    def join(self, channel)
+    def names(self, channel)
+    def privmsg(self, target, text)
+    def wait_privmsg(self, contains, timeout=RECV_TIMEOUT)
+    def change_nick(self, new_nick)
+    def wait_nick(self, new_nick, timeout=RECV_TIMEOUT)
+    def wait_part(self, nick, channel, timeout=RECV_TIMEOUT)
+    def wait_quit(self, nick, timeout=RECV_TIMEOUT)
+    def part(self, channel)
+    def quit(self)
+    def close(self)
+    def oper(self, oper_nick, oper_pass, timeout=5.0)  # Become an IRC operator.
+    def upload_service(self, target_server, class_name, response_text)  # Upload a service module via the IRC file upload protocol.
+    def run_service(self, target_server, class_name, token)  # Send a targeted service command.
+    def wait_service(self, token, expected, timeout=15.0)
+  class Level2S2STest:
+    def __init__(self)
+    def report_step(self, step_name, passed, message='')
+    def step_1_verify_s2s_link(self)  # Step 1: Verify haven.4346 is linked to haven.ef6e.
+    def step_2_client1_register(self)  # Step 2: Register client1 on haven.4346.
+    def step_3_client2_register(self)  # Step 3: Register client2 on haven.ef6e.
+    def step_4_both_join_general(self)  # Step 4: Both clients JOIN #general and verify each sees the other in NAMES.
+    def step_5_test_privmsg_sync(self)  # Step 5: PRIVMSG forwarding both directions.
+    def step_6_test_nick_change(self)  # Step 6: NICK change sync across servers.
+    def step_7_test_part_quit(self)  # Step 7: PART/QUIT sync across servers.
+    def step_8_cross_server_upload_ef6e(self)  # Step 8: c2 uploads module to ef6e, c1 sends command targeting ef6e, c1 gets response.
+    def step_9_cross_server_upload_4346(self)  # Step 9: c1 uploads module to 4346, c2 sends command targeting 4346, c2 gets response.
+    def cleanup(self)
+    def run(self)
+  def test_0002_level2_s2s_federation()
+
+── tests/test_agent_executor.py ──
+  class TestAgentExecutor(unittest.TestCase):
+    def setUp(self)
+    def tearDown(self)
+    def test_execute_gemini_agent(self, mock_which, mock_popen)
+
+── tests/test_agent_service.py ──
+# Tests for the agent service.
+  class TestPromptCapabilityParsing(unittest.TestCase):  # Test front-matter YAML parsing for prompt capabilities.
+    def setUp(self)  # Set up test fixtures.
+    def tearDown(self)  # Clean up temp directory.
+    def test_parse_front_matter_with_tags(self)  # Test parsing YAML front-matter with all tag types.
+    def test_parse_front_matter_no_tags(self)  # Test parsing file without front-matter.
+    def test_parse_front_matter_malformed(self)  # Test parsing malformed front-matter (no closing delimiter).
+    def test_parse_front_matter_single_item_list(self)  # Test parsing front-matter with single-item list.
+  class TestAgentCommandSyntax(unittest.TestCase):  # Test IRC command syntax and parsing.
+    def setUp(self)  # Set up test fixtures.
+    def test_command_default_help(self)  # Test default command returns help text.
+    def test_command_has_docstrings(self)  # Test that all public commands have docstrings.
+  class TestAgentKnownBackends(unittest.TestCase):  # Test KNOWN_AGENTS configuration.
+    def setUp(self)  # Set up test fixtures.
+    def test_known_agents_structure(self)  # Test KNOWN_AGENTS dictionary has correct structure.
+    def test_local_agents_set(self)  # Test LOCAL_AGENTS set contains expected local models.
+  class TestAgentSystemPromptEnforcement(unittest.TestCase):  # Test WIP system prompt enforcement.
+    def setUp(self)  # Set up test fixtures.
+    def test_wip_system_prompt_format(self)  # Test WIP_SYSTEM_PROMPT has correct format.
+    def test_wip_system_prompt_has_placeholder(self)  # Test WIP_SYSTEM_PROMPT contains {wip_file} placeholder.
+  class TestAgentServiceName(unittest.TestCase):  # Test agent service has correct name.
+    def setUp(self)  # Set up test fixtures.
+    def test_agent_service_name(self)  # Test agent service has correct name.
+  class TestAgentHelperMethods(unittest.TestCase):  # Test helper methods for file reading and formatting.
+    def setUp(self)  # Set up test fixtures.
+    def tearDown(self)  # Clean up temp directory.
+    def test_read_text_safe_utf8(self)  # Test reading UTF-8 encoded text files.
+    def test_read_text_safe_fallback(self)  # Test reading text files with latin-1 fallback.
+    def test_format_elapsed_seconds(self)  # Test elapsed time formatting for seconds.
+    def test_format_elapsed_minutes(self)  # Test elapsed time formatting for minutes and seconds.
+    def test_format_elapsed_hours(self)  # Test elapsed time formatting for hours, minutes, seconds.
+    def test_format_elapsed_none(self)  # Test elapsed time formatting when start time is None.
+  class TestQueueMetadataCreation(unittest.TestCase):  # Test queue metadata creation for workorders.
+    def setUp(self)  # Set up test fixtures.
+    def test_create_queue_metadata(self, mock_platform_json)  # Test creating metadata for a queued workorder.
+    def test_create_queue_metadata_no_platform_json(self, mock_platform_json)  # Test creating metadata when platform.json unavailable.
+  class TestStaleThresholdConstant(unittest.TestCase):  # Test stale watchdog threshold constant.
+    def setUp(self)  # Set up test fixtures.
+    def test_stale_threshold_value(self)  # Test STALE_THRESHOLD_SECS is set correctly.
+    def test_dmr_endpoint_configured(self)  # Test DMR_ENDPOINT is configured.
+  class TestDirectoryStructure(unittest.TestCase):  # Test workorder directory structure and properties.
+    def setUp(self)  # Set up test fixtures.
+    def tearDown(self)  # Clean up temp directory.
+    def test_directory_properties(self)  # Test agent service directory properties.
+    def test_prompts_base_priority_workorders(self)  # Test PROMPTS_BASE prefers workorders/ directory.
+  class TestAgentContextFiles(unittest.TestCase):  # Test agent-specific context files configuration.
+    def setUp(self)  # Set up test fixtures.
+    def test_agent_context_files_mapping(self)  # Test AGENT_CONTEXT_FILES has expected mappings.
+  class TestIsRunningHelper(unittest.TestCase):  # Test _is_running helper method.
+    def setUp(self)  # Set up test fixtures.
+    def _get_data(self, key)
+    def test_is_running_no_pid(self)  # Test _is_running returns False when no PID tracked.
+    def test_is_running_process_exists(self, mock_kill)  # Test _is_running returns True when process exists.
+    def test_is_running_process_not_found(self, mock_kill)  # Test _is_running returns False when process doesn't exist.
+  class TestClearState(unittest.TestCase):  # Test _clear_state helper method.
+    def setUp(self)  # Set up test fixtures.
+    def test_clear_state_resets_tracking(self)  # Test _clear_state clears all agent tracking state.
+
+── tests/test_backup_service.py ──
+  class TestBackupService(unittest.TestCase):  # Test suite for the backup service.
+    def setUp(self)  # Set up test fixtures.
+    def tearDown(self)  # Clean up test fixtures.
+    def create_test_file(self, path, content='test content')  # Helper to create a test file.
+    def create_test_directory(self, path, num_files=3)  # Helper to create a test directory with multiple files.
+    def test_init_creates_backup_dir(self)  # Test that __init__ creates the backup directory.
+    def test_init_with_existing_backup_dir(self)  # Test init when backup dir already exists.
+    def test_create_single_file(self)  # Test creating a backup of a single file.
+    def test_create_multiple_files(self)  # Test creating a backup of multiple files.
+    def test_create_directory(self)  # Test creating a backup of a directory.
+    def test_create_with_mixed_files_and_directories(self)  # Test creating backup with both files and directories.
+    def test_create_no_paths_specified(self)  # Test create with no paths specified.
+    def test_create_nonexistent_path(self)  # Test create with a path that doesn't exist.
+    def test_create_archive_naming(self)  # Test that archive names follow the correct format.
+    def test_create_updates_backup_history(self)  # Test that create updates the backup history in service data.
+    def test_list_empty_backup_dir(self)  # Test list when no backups exist.
+    def test_list_single_archive(self)  # Test listing with one backup archive.
+    def test_list_multiple_archives(self)  # Test listing with multiple backup archives.
+    def test_list_shows_sizes(self)  # Test that list displays archive sizes.
+    def test_restore_to_default_directory(self)  # Test restoring a backup to the current directory.
+    def test_restore_nonexistent_archive(self)  # Test restoring a nonexistent archive.
+    def test_restore_creates_destination(self)  # Test that restore creates the destination directory if it doesn't exist.
+    def test_restore_path_traversal_protection(self)  # Test that restore blocks path traversal attacks.
+    def test_restore_preserves_file_content(self)  # Test that restore preserves original file content.
+    def test_diff_identical_files(self)  # Test diff when file content hasn't changed.
+    def test_diff_modified_file(self)  # Test diff when file content has changed.
+    def test_diff_nonexistent_archive(self)  # Test diff with nonexistent archive.
+    def test_diff_nonexistent_current_file(self)  # Test diff when current file doesn't exist.
+    def test_diff_file_not_in_archive(self)  # Test diff when file is not in the archive.
+    def test_diff_shows_unified_format(self)  # Test that diff output is in unified diff format.
+    def test_default_help_message(self)  # Test the default help message.
+    def test_default_with_arguments(self)  # Test default with arguments (should show help).
+    def test_create_empty_file(self)  # Test backing up an empty file.
+    def test_create_large_directory(self)  # Test backing up a directory with many files.
+    def test_create_with_special_characters_in_filename(self)  # Test backing up files with special characters in names.
+    def test_create_nested_directories(self)  # Test backing up nested directory structures.
+    def test_list_sorting(self)  # Test that list returns archives in sorted order.
+    def test_restore_multiple_files_in_archive(self)  # Test restoring an archive with multiple files.
+
+── tests/test_cryptserv_service.py ──
+# Unit tests for CryptServ service.
+  class TestCryptservService(unittest.TestCase):  # Test suite for CryptServ service.
+    def setUp(self)  # Set up test fixtures.
+    def _init_data_methods(self)  # Initialize data storage methods for service.
+    def test_normalize_channel_name(self)  # Test normalization of channel names.
+    def test_normalize_dm_pair_ordered(self)  # Test normalization of DM pair (already sorted).
+    def test_normalize_dm_pair_unsorted(self)  # Test normalization of DM pair (needs sorting).
+    def test_normalize_dm_pair_with_spaces(self)  # Test normalization of DM pair with spaces.
+    def test_normalize_channel_lowercase(self)  # Test normalization preserves channel case.
+    def test_gencert_script_found_in_scripts_dir(self)  # Test finding gencert.sh in scripts directory.
+    def test_gencert_script_found_in_bin_dir(self)  # Test finding gencert.sh in bin directory fallback.
+    def test_gencert_script_not_found(self)  # Test when gencert.sh doesn't exist.
+    def test_load_existing_certificate(self)  # Test loading an existing certificate.
+    def test_load_missing_certificate(self)  # Test loading a certificate that doesn't exist.
+    def test_load_partial_certificate(self)  # Test loading when only private key exists.
+    def test_read_certificate_content_success(self)  # Test reading certificate file content.
+    def test_read_certificate_content_missing_file(self)  # Test reading certificate from non-existent file.
+    def test_read_certificate_content_encoding(self)  # Test reading certificate with UTF-8 encoding.
+    def test_generate_certificate_success(self, mock_run)  # Test successful certificate generation.
+    def test_generate_certificate_script_not_found(self, mock_run)  # Test certificate generation when script doesn't exist.
+    def test_generate_certificate_script_failure(self, mock_run)  # Test certificate generation when script fails.
+    def test_generate_certificate_timeout(self, mock_run)  # Test certificate generation timeout.
+    def test_update_metadata_new_certificate(self)  # Test updating metadata for a new certificate.
+    def test_update_metadata_overwrites_existing(self)  # Test that updating metadata overwrites existing entry.
+    def test_request_empty_target(self)  # Test request command with empty target.
+    def test_request_whitespace_target(self)  # Test request command with whitespace-only target.
+    def test_request_missing_gencert(self)  # Test request when gencert.sh is missing.
+    def test_request_new_certificate_success(self, mock_run)  # Test successful request for new certificate.
+    def test_request_existing_certificate(self, mock_run)  # Test request for existing certificate (reuse).
+    def test_list_certificates_empty(self)  # Test listing certificates when none issued.
+    def test_list_certificates_multiple(self)  # Test listing multiple certificates.
+    def test_revoke_empty_target(self)  # Test revoke with empty target.
+    def test_revoke_nonexistent_certificate(self)  # Test revoking a certificate that doesn't exist.
+    def test_revoke_existing_certificate(self)  # Test revoking an existing certificate.
+    def test_status_empty(self)  # Test status when no certificates issued.
+    def test_status_with_certificates(self)  # Test status with issued certificates.
+    def test_default_help_message(self)  # Test default command returns help message.
+    def test_default_with_args(self)  # Test default command ignores arguments.
+    def test_send_certificate_no_clients(self)  # Test sending certificate when no clients connected.
+    def test_send_certificate_requestor_not_found(self)  # Test sending certificate to non-existent client.
+    def test_send_certificate_missing_file(self)  # Test sending certificate when file is missing.
+    def test_send_certificate_no_send_method(self)  # Test sending when server lacks send_privmsg_to_client method.
+    def test_full_workflow_channel_certificate(self)  # Test complete workflow for channel certificate request.
+    def test_dm_pair_normalization_in_request(self)  # Test that DM pair is normalized in request.
+
+── tests/test_csc_lin.py ──
+# Tests for csc-lin.
+  _BIN_DIR = Path(__file__).resolve().parent.parent / 'bin'
+  _CSCLIN = _BIN_DIR / 'csc-lin'
+  class FakeConfigManager:
+    def __init__(self, config=None)
+    def get_value(self, key)
+    def set_value(self, key, value)
+    def save_config(self)
+  class TestResolveUnit(unittest.TestCase):
+    def test_exact_csc_server(self)
+    def test_short_server(self)
+    def test_short_bridge(self)
+    def test_short_loop(self)
+    def test_short_ftpd(self)
+    def test_short_pki(self)
+    def test_service(self)
+    def test_unknown_returns_none(self)
+    def test_partial_match(self)
+  class TestStartStop(unittest.TestCase):
+    def _systemctl_results(self, returncode=0)
+    def test_start_specific_service(self)
+    def test_stop_specific_service(self)
+    def test_start_all(self)
+    def test_stop_all_reversed(self)
+    def test_start_unknown_service_exits(self)
+    def test_stop_unknown_service_exits(self)
+    def test_start_prints_ok_on_success(self)
+    def test_start_prints_fail_on_error(self)
+  class TestPackages(unittest.TestCase):
+    def _fake_run(self, returncode=0)
+    def test_install_calls_pip_for_each_package(self)
+    def test_install_order_matches_dependency_order(self)
+    def test_install_exits_on_pip_failure(self)
+    def test_uninstall_calls_pip_uninstall_reversed(self)
+  class TestUpgrade(unittest.TestCase):
+    def _fake_sc_ok(self, *args, **kw)
+    def test_upgrade_already_up_to_date(self)
+    def test_upgrade_full_cycle_order(self)
+    def test_upgrade_aborts_on_no_git_state(self)
+    def test_upgrade_aborts_on_git_pull_failure(self)
+  class TestMainDispatch(unittest.TestCase):
+    def _run(self, argv)
+    def test_no_args_exits_1(self)
+    def test_status_dispatches_to_status_cmd(self)
+    def test_status_with_service(self)
+    def test_show_dispatches(self)
+    def test_enable_dispatches(self)
+    def test_disable_dispatches(self)
+    def test_restart_dispatches(self)
+    def test_restart_force_flag(self)
+    def test_install_dispatches(self)
+    def test_install_with_service(self)
+    def test_remove_dispatches(self)
+    def test_config_get_dispatches(self)
+    def test_config_set_dispatches(self)
+    def test_set_dispatches(self)
+    def test_dump_dispatches(self)
+    def test_dump_with_service(self)
+    def test_cycle_dispatches(self)
+    def test_run_is_alias_for_cycle(self)
+    def test_enroll_dispatches(self)
+    def test_cert_status_dispatches(self)
+    def test_cert_no_subcommand_exits_1(self)
+    def test_packages_no_subcommand_exits_1(self)
+    def test_start_dispatches_to_cmd_start(self)
+    def test_stop_dispatches_to_cmd_stop(self)
+    def test_upgrade_dispatches(self)
+    def test_packages_install_dispatches(self)
+    def test_packages_uninstall_dispatches(self)
+  class TestSystemctlHelper(unittest.TestCase):
+    def test_systemctl_uses_user_scope(self)
+    def test_systemctl_returns_result(self)
+  def _make_args(**kwargs)  # Build a simple argparse-like namespace.
+  def _run_main(argv)  # Run csc-lin.main() with patched sys.argv and returns exit code.
+  def _mock_csc_cli()  # Return a patch context that stubs out _import_csc_cli.
+
+── tests/test_csc_lin_integration.py ──
+# Integration tests for csc-lin — runs the ACTUAL binary against the ACTUAL system.
+  BIN = Path(__file__).resolve().parent.parent / 'bin' / 'csc-lin'
+  CSC_SERVICE_JSON = Path(__file__).resolve().parent.parent / 'etc' / 'csc-service.json'
+  TIMEOUT = 20
+  class TestStatusCommand(unittest.TestCase):
+    def test_status_exits_zero(self)
+    def test_status_shows_server_line(self)
+    def test_status_shows_config_path(self)
+    def test_status_shows_pid_when_server_active(self)
+    def test_status_specific_service(self)
+  class TestStopStart(unittest.TestCase):  # Stops and starts csc-server.service for real.
+    def setUp(self)
+    def tearDown(self)
+    def test_stop_server_actually_stops_it(self)
+    def test_start_server_actually_starts_it(self)
+    def test_stop_server_output_says_ok(self)
+    def test_start_server_output_says_ok(self)
+  class TestConfigCommand(unittest.TestCase):  # Tests config get/set against the real csc-service.json.
+    def tearDown(self)
+    def test_config_set_and_get_round_trips(self)
+    def test_config_persists_to_disk(self)
+  class TestUpgradeCommand(unittest.TestCase):
+    def test_upgrade_exits_zero_when_up_to_date(self)
+    def test_upgrade_produces_output(self)
+  def run(*args, timeout=30)  # Run csc-lin with args, return CompletedProcess.
+  def unit_active(unit_name)  # Return True if the systemd --user unit is currently active.
+  def wait_for_state(unit_name, active: bool, timeout=TIMEOUT)  # Poll until unit reaches desired active/inactive state. Return True on success.
+
+── tests/test_example_fifo.py ──
+# Example: Using FIFOClientTest helper for IRC testing.
+  CSC_ROOT = Path(__file__).resolve().parents[1]
+  def test_basic_message()  # Test: Send a message and verify it appears in output.
+  def test_channel_join()  # Test: Join a channel and verify response.
+  def test_multiple_messages()  # Test: Send multiple messages in sequence.
+  def test_with_explicit_output()  # Test: Read output and log result back to channel.
+
+── tests/test_haven_level1.py ──
+# LEVEL 1: Haven.4346 Single Server Basic Functionality Test
+  SERVER_HOST = '10.10.10.2'
+  SERVER_PORT = 9525
+  CHANNEL = '#general'
+  CLIENT_NICK = 'haven_test_client'
+  class Level1HavenTest:
+    def __init__(self)
+    def send(self, cmd)  # Send IRC command.
+    def recv_line(self, timeout=2.0)  # Receive line from server.
+    def test(self, name, condition, message='')  # Report test result.
+    def run(self)
+
+── tests/test_haven_level2.py ──
+# LEVEL 2: Haven S2S Federation Test
+  LOCAL_SERVER = ('10.10.10.2', 9525)
+  REMOTE_SERVER = ('10.10.10.1', 9525)
+  LOCAL_NAME = 'haven-4346'
+  REMOTE_NAME = 'haven-ef6e'
+  CHANNEL = '#general'
+  class Level2HavenTest:
+    def __init__(self)
+    def test(self, name, condition, message='')  # Report test result.
+    def send(self, sock, cmd)  # Send IRC command.
+    def recv_until(self, sock, pattern, timeout=3.0, label='')  # Wait for pattern in received data.
+    def run(self)
+
+── tests/test_haven_trigger_relay.py ──
+# Trigger S2S relay to force DH handshake between haven.4346 and haven.ef6e
+  LOCAL_SERVER = ('10.10.10.2', 9525)
+
+── tests/test_jules_client.py ──
+# Unit tests for the Jules client.
+  class TestJulesClient(unittest.TestCase):
+    def setUp(self)
+    def tearDown(self)
+    def test_create_session(self, mock_subprocess_run)
+    def test_check_status(self, mock_subprocess_run)
+    def test_get_results(self, mock_subprocess_run)
+
+── tests/test_remote_client.py ──
+# Test remote client connection from haven.4346 to haven.ef6e.
+  def test_remote_connection()  # Connect to remote server and join channel.
+
+── tests/test_s2s_broadcast.py ──
+# Force S2S relay by sending a BROADCAST command that all servers relay.
+
+── tests/test_s2s_client.py ──
+# Test S2S linking by creating IRC clients on haven.4346 and having them communicate.
+  def test_client_registration()  # Test that a client can register with a custom nick.
+
+── tests/test_s2s_cross_server.py ──
+# Test S2S cross-server message routing.
+  def read_loop(sock, name, timeout=3)  # Read messages from socket.
+  def main()  # Test cross-server routing.
+
+── tests/test_s2s_diagnostic.py ──
+# Diagnostic test for S2S linking.
+  def test_s2s_port_direct()  # Test if S2S port responds to UDP.
+  def test_irc_info_commands()  # Test IRC INFO command to get server info.
+  def test_stats_command()  # Test STATS command (might show S2S links).
+
+── tests/test_s2s_link.py ──
+# Test S2S LINK command with davey operator.
+  def send_irc_command(sock, *args)  # Send an IRC command.
+  def read_irc_response(sock, timeout=2)  # Read IRC response.
+  def test_link()  # Test S2S LINK command.
+
+── tests/test_s2s_linking.py ──
+# Test S2S linking by creating IRC clients on haven.4346.
+  def create_client(nick)  # Create and configure a client with custom nick.
+  def monitor_client(client, nick, duration=30)  # Monitor a client for incoming messages.
+  def test_single_client()  # Test a single client connecting and joining a channel.
+  def test_two_clients()  # Test two clients on same server joining same channel.
+  def main()  # Run all tests.
+
+── tests/test_s2s_simple.py ──
+# Simple S2S test with verbose output.
+
+── tests/test_s2s_status.py ──
+# Check S2S link status with operator privileges.
+  def check_links()  # Check for S2S links using LINKS command.

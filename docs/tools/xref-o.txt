@@ -1,0 +1,6 @@
+CSC XREF - SYMBOLS STARTING WITH 'O'
+==================================================
+
+OrdersAssembler: irc/packages/csc-services/csc_services/orders_assembler.py (in csc-services)
+OutboundTransport: irc/packages/csc-bridge/csc_bridge/transports/base.py (in csc-bridge)
+ok: tests/s2s_link_win.py (in tests), tests/s2s_link_win_s2stest.py (in tests)

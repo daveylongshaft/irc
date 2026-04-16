@@ -1,0 +1,31 @@
+CSC-DMRBOT SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-dmrbot/csc_dmrbot.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-dmrbot/csc_dmrbot.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-dmrbot/csc_dmrbot.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-dmrbot/csc_dmrbot.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-dmrbot/csc_dmrbot.egg-info/requires.txt ──
+# csc-ai-api>=0.1.0
+
+── irc/packages/csc-dmrbot/csc_dmrbot.egg-info/top_level.txt ──
+# csc_dmrbot
+
+── irc/packages/csc-dmrbot/csc_dmrbot/__init__.py ──
+
+── irc/packages/csc-dmrbot/csc_dmrbot/client.py ──
+  class DmrClient(AIClient):  # dmrbot IRC client.
+    def respond(self, context: List[str]) -> Optional[str]  # Stub implementation for dmrbot response.
+
+── irc/packages/csc-dmrbot/csc_dmrbot/main.py ──
+  def main()  # Main entry point for the csc-dmrbot agent.
+
+── irc/packages/csc-dmrbot/pyproject.toml ──
+# [build-system]

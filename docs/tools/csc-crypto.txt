@@ -1,0 +1,61 @@
+CSC-CRYPTO SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-crypto/csc_crypto.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-crypto/csc_crypto.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-crypto/csc_crypto.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-crypto/csc_crypto.egg-info/requires.txt ──
+# csc-network>=0.1.0
+
+── irc/packages/csc-crypto/csc_crypto.egg-info/top_level.txt ──
+# build
+
+── irc/packages/csc-crypto/csc_crypto/__init__.py ──
+
+── irc/packages/csc-crypto/csc_crypto/connection.py ──
+# Connection: transport + crypto state for a single network peer.
+  CONN_STATE_UNKNOWN = 'UNKNOWN'
+  CONN_STATE_UP = 'UP'
+  CONN_STATE_DOWN = 'DOWN'
+  CONN_EXPIRY_SECONDS = 121
+  class Connection:  # Transport + crypto state for a single network peer.
+    def __init__(self, server, host: str, port: int, addr: tuple | None=None)
+    def send_address(self) -> tuple[str, int]  # Where to send outbound data.
+    def resolve(self) -> set[str]  # Resolve host to a set of IPs for soft validation.
+    def addr_matches(self, addr: tuple[str, int] | None) -> bool  # Soft check: is addr consistent with our configured endpoint?
+    def update_addr(self, new_addr: tuple[str, int]) -> None  # Update last_addr on recv. Logs changes and reindexes User session.
+    def sendto(self, data: bytes) -> None  # Send data to this connection's peer.
+    def record_recv(self, nbytes: int, addr: tuple[str, int] | None=None) -> None  # Record receipt of nbytes. Updates last_seen, addr, stats.
+    def set_crypto_key(self, key: bytes) -> None  # Set AES key, compute key_hash, register with server.
+    def clear_crypto(self) -> None  # Unregister key_hash, clear all crypto state.
+    def matches_key_hash(self, hash_bytes: bytes) -> bool  # Does this connection own the given key_hash?
+    def start_dh(self) -> DHExchange  # Create a new DH exchange and store as pending.
+    def complete_dh(self, other_public: int) -> bytes  # Finish DH exchange: compute shared key, set crypto, return key.
+    def is_expired(self) -> bool  # True if no recv in CONN_EXPIRY_SECONDS (121s = 2 missed pings + grace).
+    def stats_dict(self) -> dict  # Transport + crypto stats snapshot.
+    def to_dict(self) -> dict  # Full state dict.
+    def __repr__(self) -> str
+
+── irc/packages/csc-crypto/csc_crypto/crypto.py ──
+# Cryptographic layer and primitives for CSC transports.
+  DH_PRIME = int('FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA6...
+  DH_GENERATOR = 2
+  class Crypto(Network):  # Layer class inserted between Network and Service.
+  class DHExchange:  # Diffie-Hellman key exchange using RFC 3526 Group 14.
+    def __init__(self, p: int=None, g: int=None)
+    def compute_shared_key(self, other_public: int) -> bytes
+    def format_init_message(self) -> str
+    def format_reply_message(self) -> str
+    def parse_init_message(line: str) -> tuple[int, int, int]
+    def parse_reply_message(line: str) -> int
+  def encrypt(key: bytes, plaintext: bytes) -> bytes
+  def decrypt(key: bytes, data: bytes) -> bytes
+  def is_encrypted(data: bytes) -> bool
+
+── irc/packages/csc-crypto/pyproject.toml ──
+# [build-system]

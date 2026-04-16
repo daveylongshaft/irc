@@ -1,0 +1,8 @@
+CSC XREF - SYMBOLS STARTING WITH 'N'
+==================================================
+
+Network: irc/packages/csc-network/csc_network/network.py (in csc-network), irc/packages/csc-clients/csc_clients/client/network.py (in csc-clients)
+Nickserv: irc/packages/csc-services/csc_services/nickserv.py (in csc-services)
+normalize_ftp_path: irc/packages/csc-clients/csc_clients/client/ftp_dcc_utils.py (in csc-clients)
+ntfy: irc/packages/csc-services/csc_services/ntfy.py (in csc-services)
+numeric_reply: irc/packages/csc-services/csc_services/irc.py (in csc-services), irc/packages/csc-clients/csc_clients/client/irc.py (in csc-clients), irc/packages/csc-bridge/csc_bridge/irc.py (in csc-bridge), irc/packages/csc-bridge/csc_bridge/irc_utils.py (in csc-bridge)

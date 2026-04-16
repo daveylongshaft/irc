@@ -1,0 +1,38 @@
+CSC-CODEX SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-codex/csc_codex.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-codex/csc_codex.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-codex/csc_codex.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-codex/csc_codex.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-codex/csc_codex.egg-info/requires.txt ──
+# csc-ai-api>=0.1.0
+
+── irc/packages/csc-codex/csc_codex.egg-info/top_level.txt ──
+# csc_codex
+
+── irc/packages/csc-codex/csc_codex/__init__.py ──
+
+── irc/packages/csc-codex/csc_codex/api.py ──
+  class CodexAPI:  # Wraps the OpenAI client for Codex interaction.
+    def __init__(self, api_key: str, model: str='gpt-3.5-turbo')
+    def complete(self, context_lines: List[str], system_prompt: Optional[str]=None) -> str  # Formats context and sends to OpenAI chat completions.
+
+── irc/packages/csc-codex/csc_codex/client.py ──
+  class CodexClient(AIClient):  # Codex AI IRC client.
+    def __init__(self, config_path: Optional[str]=None, input_file: Optional[str]=None, output_file: Optional[str]=None)
+    def _resolve_api_key(self) -> str  # Resolves the API key from environment or data store.
+    def respond(self, context: List[str]) -> Optional[str]  # Generates a response using the Codex API.
+
+── irc/packages/csc-codex/csc_codex/main.py ──
+  def main()  # Main entry point for the csc-codex agent.
+
+── irc/packages/csc-codex/pyproject.toml ──
+# [build-system]

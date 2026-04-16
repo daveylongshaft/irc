@@ -1,0 +1,17 @@
+CSC XREF - SYMBOLS STARTING WITH 'W'
+==================================================
+
+WIPJournal: irc/packages/csc-loop/csc_loop/utils/wip_journal.py (in csc-loop)
+WOState: bin/claude-batch/cbatch_parallel.py (in bin-scripts)
+WebhookHandler: irc/packages/csc-loop/csc_loop/infra/webhook_listener.py (in csc-loop)
+WebhookServer: irc/packages/csc-loop/csc_loop/infra/webhook_listener.py (in csc-loop)
+WindowsServiceDetector: irc/packages/csc-platform/csc_platform/platform_service_windows.py (in csc-platform)
+WindowsServiceProvider: irc/packages/csc-platform/csc_platform/platform_service_windows.py (in csc-platform)
+WoSyncClient: irc/packages/csc-loop/csc_loop/infra/wo_sync_client.py (in csc-loop)
+WoWatcher: irc/packages/csc-loop/csc_loop/infra/wo_watcher.py (in csc-loop)
+wait_for: tests/s2s_link.py (in tests), tests/s2s_link_s2stest.py (in tests)
+wait_for_state: tests/test_csc_lin_integration.py (in tests)
+wakeword: irc/packages/csc-services/csc_services/wakeword.py (in csc-services)
+workorders: irc/packages/csc-services/csc_services/workorders.py (in csc-services)
+write_agent_data: irc/packages/csc-loop/csc_loop/infra/queue_worker.py (in csc-loop)
+write_file: bin/gemini-batch/gbatch_tools.py (in bin-scripts), irc/bin/claude-batch/libexec/tools.py (in bin-scripts), irc/deploy/install.py (in other)

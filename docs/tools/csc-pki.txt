@@ -1,0 +1,57 @@
+CSC-PKI SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-pki/csc_pki.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-pki/csc_pki.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-pki/csc_pki.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-pki/csc_pki.egg-info/requires.txt ──
+# csc-network>=0.1.0
+
+── irc/packages/csc-pki/csc_pki.egg-info/top_level.txt ──
+# csc_pki
+
+── irc/packages/csc-pki/csc_pki/__init__.py ──
+# PKI certificate enrollment subsystem for CSC S2S TLS links.
+
+── irc/packages/csc-pki/csc_pki/enrollment_server.py ──
+# PKI enrollment WSGI server.
+  _SHORTNAME_RE = re.compile('^[a-z0-9][a-z0-9.\\-]{0,62}[a-z0-9]$')
+  EASYRSA_DIR = Platform.PROJECT_ROOT / 'etc' / 'easy-rsa'
+  EASYRSA_BIN = EASYRSA_DIR / ('easyrsa.bat' if os.name == 'nt' else 'easyrsa')
+  PKI_DIR = EASYRSA_DIR / 'pki'
+  CA_CRT = PKI_DIR / 'ca.crt'
+  CRL_PEM = PKI_DIR / 'crl.pem'
+  ISSUED_DIR = PKI_DIR / 'issued'
+  TOKEN_FILE = plat.run_dir / 'pki_tokens.json'
+  APPROVED_FILE = Path('/opt/csc/irc/etc/approved_servers.json')
+  PKI_LOG = Platform.get_logs_dir() / 'pki.log'
+  CERT_DIR = Platform.get_etc_dir()
+  TOKEN_TTL = 86400
+  BIND_HOST = '127.0.0.1'
+  BIND_PORT = 9530
+  class PKIRequestHandler(BaseHTTPRequestHandler):  # HTTP request handler for PKI enrollment endpoints.
+    def log_message(self, format, *args)  # Suppress default HTTP logging — we use PKI log instead.
+    def _send_json(self, code, data)  # Send a JSON response.
+    def _send_file(self, path, content_type='application/x-pem-file')  # Send a file as response.
+    def _read_body(self)  # Read and parse JSON request body.
+    def do_GET(self)  # Handle GET requests.
+    def do_POST(self)  # Handle POST requests.
+    def _handle_enroll(self)  # Handle certificate enrollment request.
+    def _handle_renew(self)  # Handle certificate renewal via mTLS.
+  def _load_approved()  # Load approved server list from repo-tracked JSON. Returns dict shortname → metadata.
+  def _load_tokens()  # Load token store from disk.
+  def _save_tokens(tokens)  # Atomically save token store.
+  def _write_pki_log(message)  # Append a timestamped entry to the PKI log.
+  def _sign_csr(shortname, csr_pem)  # Import CSR and sign it with EasyRSA. Returns cert chain PEM or raises.
+  def run_server(host=BIND_HOST, port=BIND_PORT)  # Start the PKI enrollment HTTP server.
+
+── irc/packages/csc-pki/csc_pki/main.py ──
+# PKI subsystem entry point.
+
+── irc/packages/csc-pki/pyproject.toml ──
+# [build-system]

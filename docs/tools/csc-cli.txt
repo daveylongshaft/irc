@@ -1,0 +1,109 @@
+CSC-CLI SUBMODULE MAP
+==================================================
+
+── irc/packages/csc-cli/csc_cli.egg-info/PKG-INFO ──
+# Metadata-Version: 2.4
+
+── irc/packages/csc-cli/csc_cli.egg-info/SOURCES.txt ──
+# pyproject.toml
+
+── irc/packages/csc-cli/csc_cli.egg-info/dependency_links.txt ──
+
+── irc/packages/csc-cli/csc_cli.egg-info/entry_points.txt ──
+# [console_scripts]
+
+── irc/packages/csc-cli/csc_cli.egg-info/requires.txt ──
+# csc-platform>=0.1.0
+
+── irc/packages/csc-cli/csc_cli.egg-info/top_level.txt ──
+# build
+
+── irc/packages/csc-cli/csc_cli/__init__.py ──
+
+── irc/packages/csc-cli/csc_cli/commands/__init__.py ──
+
+── irc/packages/csc-cli/csc_cli/commands/codex_cmd.py ──
+# Codex Cloud commands: submit, status, list, apply, diff.
+  def _find_codex_bin()  # Find the codex CLI binary path (cross-platform).
+  def _run_codex(args, timeout=60, cwd=None)  # Run codex CLI command, return (stdout, stderr, returncode).
+  def _get_csc_root()  # Find CSC project root.
+  def _get_codex_env(config_manager)  # Get the Codex environment label from config.
+  def _get_tracking()  # Load codex task tracking file.
+  def _save_tracking(data)  # Save codex task tracking file.
+  def codex_submit(args, config_manager)  # Submit a workorder to Codex Cloud.
+  def codex_status(args, config_manager)  # Show status of Codex Cloud tasks (tracked ones).
+  def codex_list(args, config_manager)  # List all Codex Cloud tasks (from cloud API).
+  def codex_apply(args, config_manager)  # Apply diffs from a completed Codex Cloud task.
+  def codex_diff(args, config_manager)  # Show the diff for a Codex Cloud task.
+  def codex_login(args, config_manager)  # Check Codex login status or trigger login.
+
+── irc/packages/csc-cli/csc_cli/commands/config_cmd.py ──
+# Config commands: config get/set, enable, disable, set, dump, import.
+  SERVICE_KEY_MAP = {'queue-worker': 'enable_queue_worker', 'test-runner': 'enable_test_runner', ...
+  def _resolve_key(service, setting)  # Resolve a service+setting to a config key.
+  def enable(args, config_manager)  # Enable a service.
+  def disable(args, config_manager)  # Disable a service.
+  def config(args, config_manager)  # Get or set a config value.
+  def set_value(args, config_manager)  # Set a top-level config value (shorthand).
+  def dump(args, config_manager)  # Export config to stdout as JSON.
+  def import_cmd(args, config_manager)  # Import config from stdin JSON.
+  def _parse_value(s)  # Parse a string value to int, float, bool, or string.
+
+── irc/packages/csc-cli/csc_cli/commands/pki_cmd.py ──
+# PKI CLI commands: enroll, cert status.
+  def _run_hidden(cmd, **kwargs)  # Run subprocess with hidden window on Windows.
+  def _get_openssl_cmd()  # Return path to openssl executable.
+  def _get_server_shortname()  # Read the server shortname from server_name file or hostname.
+  def _generate_key_and_csr(shortname)  # Generate a private key and CSR using openssl subprocess.
+  def enroll(args, config_manager)  # Enroll this server for a TLS certificate.
+  def cert_status(args, config_manager)  # Show local certificate status.
+
+── irc/packages/csc-cli/csc_cli/commands/service_cmd.py ──
+# Service lifecycle commands: restart, install, remove, cycle.
+  IS_WINDOWS = os.name == 'nt'
+  WIN_SERVICES = {'CSC-SERVER': ('csc_server.main', 'CSC IRC Server', {'CSC_HEADLESS': 'true'}...
+  WIN_SERVICE_ALIASES = {v[0].split('.')[0].replace('_', '-'): k for (k, v) in WIN_SERVICES.items()}
+  OLD_WIN_SERVICES = ['CSC-CSC-SERVER', 'CSC-CSC-BRIDGE', 'CSC-CSC-SERVICE', 'csc-service']
+  LINUX_UNITS = {'csc-server': ('csc-server.service', 'user'), 'csc-loop': ('csc-loop.service...
+  def _nssm()  # Return path to nssm.EXE.
+  def _python()  # Return path to a Python executable suitable for running as a Windows service.
+  def _project_root()  # Return project root path.
+  def _sudo_run(cmd_str)  # Run a shell command with elevation via sudo.py if available, else direct.
+  def _nssm_run(*args, check=False)
+  def _net(action, svc_name)
+  def _systemctl(scope, *args)
+  def _win_remove_service(svc_name, silent=False)
+  def _win_resolve(service_name)  # Resolve a short or full service name to the WIN_SERVICES key.
+  def _win_install_service(svc_name, module, display, extra_env=None)
+  def install(args, config_manager)
+  def remove(args, config_manager)
+  def restart(args, config_manager)
+  def cycle(args, config_manager)
+
+── irc/packages/csc-cli/csc_cli/commands/status_cmd.py ──
+# Status commands: status, show.
+  IS_WINDOWS = os.name == 'nt'
+  INPROC_SERVICES = {'enable_queue_worker': 'queue-worker', 'enable_test_runner': 'test-runner', ...
+  UNIT_SERVICES = {'server': ('csc-server.service', 'user', 'enable_server'), 'bridge': ('csc-b...
+  PARENT_UNIT = ('csc-service.service', 'user')
+  def _is_pid_alive(pid)  # Check if a process is running.
+  def _get_csc_loop_pid()  # Read PID from run/csc-service.pid if it exists and is alive.
+  def _systemd_active(unit, scope='user')  # Return 'active', 'inactive', 'failed', or 'unknown'.
+  def _systemd_pid(unit, scope='user')  # Return MainPID for a systemd unit, or PID from file on Windows.
+  def _windows_service_state(svc_name)
+  def _ss_ports_for_pid(pid)  # Return list of (proto, local_addr) tuples for a PID using ss.
+  def _server_stats()  # Read server state files and return a dict of stats.
+  def _net_info_server(state)  # Return port and stats lines for csc-server.
+  def _net_info_bridge(state)  # Return port info lines for csc-bridge.
+  def _fifo_clients()  # Scan /proc for running csc-client --fifo processes.
+  def status(args, config_manager)  # Show service status - real runtime state from systemd.
+  def _do_status(args, config_manager)
+  def _show_service_status(service, cfg)  # Show status for a single named service.
+  def show(args, config_manager)  # Display service configuration details.
+
+── irc/packages/csc-cli/csc_cli/csc_ctl.py ──
+# csc-ctl: Cross-platform CLI for managing CSC services.
+  def main()
+
+── irc/packages/csc-cli/pyproject.toml ──
+# [build-system]

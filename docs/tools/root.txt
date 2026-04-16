@@ -1,0 +1,29 @@
+ROOT SUBMODULE MAP
+==================================================
+
+── README.md ──
+# CSC - Collaborative Service Cloud
+
+── RELAY_SETUP.md ──
+# # CSC Claude Relay System
+
+── SETUP_ROLE_LINKS.md ──
+# Role Links Setup
+
+── current_status.md ──
+# # S2S Link Fix - Current Status (2026-04-06 20:10)
+
+── debug_test.py ──
+
+── setup-role-links.bat ──
+# @echo off
+
+── setup-role-links.sh ──
+# #!/bin/bash
+
+── start_server.py ──
+
+── test_csc_root.py ──
+
+── test_simple.bat ──
+# @echo off
