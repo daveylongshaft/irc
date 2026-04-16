@@ -43,8 +43,8 @@ class SyncMesh:
     """
 
     _SEEN_COMMANDS_MAX = 10000
-    _KEEPALIVE_INTERVAL = 30  # Send PING every 30 seconds
-    _KEEPALIVE_TIMEOUT = 120  # Reset link if no response for 120 seconds
+    _IDLE_THRESHOLD = 60  # Send PING when idle for 60 seconds
+    _MAX_UNANSWERED_PINGS = 2  # Timeout after 2 unanswered PINGs
     _DH_TIMEOUT = 10  # Re-initiate DH if no reply for 10 seconds
 
     def __init__(self, server, logger: Callable[[str], None]):
@@ -381,44 +381,48 @@ class SyncMesh:
         )
 
     def heartbeat_tick(self) -> None:
-        """Maintain S2S links: initiate DH, send PING, detect timeouts.
+        """Idle-based keepalive for S2S links.
 
-        Called periodically from the main server loop. Aggressively keeps
-        all configured links up by re-initiating DH if replies are slow,
-        sending PING on encrypted links, and resetting links that die.
+        Called when the command queue drains (no work left). Loops through
+        all links and:
+        - DH pending + timed out: re-initiate DH
+        - Encrypted + timed out (2 unanswered PINGs): reset and re-DH
+        - Encrypted + idle (>60s no traffic): send PING
+        - No crypto, no DH: initiate DH
+
+        Idle is measured by last_seen and last_ping_sent on the Connection.
+        Any recv (data, PONG, SYNCLINE) resets the idle clock and clears
+        ping_waiting. This means PINGs only fire during genuine silence.
         """
         now = time.time()
         for link in self.server.iter_links():
             conn = link.connection
 
-            # Case 1: DH is pending - check if it's taking too long, re-initiate
+            # Case 1: DH is pending -- check if it timed out
             if conn.dh_pending is not None:
                 if conn.dh_timed_out(self._DH_TIMEOUT):
-                    conn.record_timeout()
                     self._logger(
                         f"[KEEPALIVE] Link {link.name} DH timeout "
-                        f"(no reply for {now - conn.dh_initiated_at:.0f}s), "
-                        f"timeouts={conn.timeout_count}, re-initiating"
+                        f"(no reply for {now - conn.dh_initiated_at:.0f}s), re-initiating"
                     )
                     self._initiate_link_dh(link)
                 continue
 
-            # Case 2: Link encrypted - send PING keepalive
+            # Case 2: Link encrypted -- idle-based PING / timeout
             if conn.crypto_key is not None:
-                # Check if link has gone silent
-                if conn.is_expired():
-                    conn.record_timeout()
+                # 2 unanswered PINGs = connection dead, reset
+                if conn.is_timed_out(self._MAX_UNANSWERED_PINGS):
                     self._logger(
-                        f"[KEEPALIVE] Link {link.name} expired "
-                        f"(no response for {now - conn.last_seen:.0f}s), "
-                        f"timeouts={conn.timeout_count}, resetting"
+                        f"[KEEPALIVE] Link {link.name} timed out "
+                        f"({conn.ping_waiting} unanswered PINGs, "
+                        f"last_seen {now - conn.last_seen:.0f}s ago), resetting"
                     )
                     conn.clear_crypto()
                     self._initiate_link_dh(link)
                     continue
 
-                # Send PING if it's been long enough
-                if conn.ping_due(self._KEEPALIVE_INTERVAL):
+                # Idle > threshold and no recent PING sent -- send PING
+                if conn.is_idle(self._IDLE_THRESHOLD):
                     ping_envelope = CommandEnvelope(
                         command_id=f"ping-{link.id[:8]}-{int(now)}",
                         kind="PING",
@@ -431,10 +435,13 @@ class SyncMesh:
                     wire = (line + "\r\n").encode("utf-8")
                     conn.sendto(wire)
                     conn.record_ping_sent()
-                    self._logger(f"[KEEPALIVE] Sent PING to {link.name}")
+                    self._logger(
+                        f"[KEEPALIVE] Sent PING to {link.name} "
+                        f"(idle {now - conn.last_seen:.0f}s, waiting={conn.ping_waiting})"
+                    )
                 continue
 
-            # Case 3: Link has no crypto and no pending DH - re-initiate
+            # Case 3: No crypto, no pending DH -- initiate
             self._logger(f"[KEEPALIVE] Link {link.name} has no crypto or pending DH, initiating")
             self._initiate_link_dh(link)
 

@@ -33,8 +33,10 @@ CONN_STATE_UNKNOWN = "UNKNOWN"
 CONN_STATE_UP = "UP"
 CONN_STATE_DOWN = "DOWN"
 
-# 2 missed 60s pings + 1s grace
-CONN_EXPIRY_SECONDS = 121
+# Default idle threshold before sending a keepalive PING
+CONN_IDLE_THRESHOLD = 60.0
+# Number of unanswered PINGs before timeout
+CONN_MAX_UNANSWERED_PINGS = 2
 
 
 class Connection:
@@ -53,7 +55,7 @@ class Connection:
         "dh_pending",
         "dh_initiated_at",
         "last_ping_sent",
-        "timeout_count",
+        "ping_waiting",
         "state",
         "opened_at",
         "last_seen",
@@ -76,7 +78,7 @@ class Connection:
         self.dh_pending: DHExchange | None = None
         self.dh_initiated_at: float = 0.0
         self.last_ping_sent: float = 0.0
-        self.timeout_count: int = 0
+        self.ping_waiting: int = 0
         self.state: str = CONN_STATE_UNKNOWN
         self.opened_at: float = time.time()
         self.last_seen: float = 0.0
@@ -177,10 +179,11 @@ class Connection:
             self.state = CONN_STATE_UP
 
     def record_recv(self, nbytes: int, addr: tuple[str, int] | None = None) -> None:
-        """Record receipt of nbytes. Updates last_seen, addr, stats."""
+        """Record receipt of nbytes. Updates last_seen, addr, stats, resets ping_waiting."""
         self.recv_msgs += 1
         self.recv_bytes += nbytes
         self.last_seen = time.time()
+        self.ping_waiting = 0
         self.state = CONN_STATE_UP
         if addr is not None:
             self.update_addr(addr)
@@ -238,11 +241,26 @@ class Connection:
     # Liveness / keepalive
     # ------------------------------------------------------------------
 
-    def is_expired(self) -> bool:
-        """True if no recv in CONN_EXPIRY_SECONDS (121s = 2 missed pings + grace)."""
+    def is_idle(self, threshold: float = CONN_IDLE_THRESHOLD) -> bool:
+        """True if no traffic (recv or ping sent) for threshold seconds.
+
+        Only returns True when the connection has been seen at least once
+        AND both last_seen and last_ping_sent are older than threshold.
+        This means: after we send a PING, is_idle won't fire again until
+        another threshold seconds pass without any recv.
+        """
         if self.last_seen == 0.0:
             return False
-        return (time.time() - self.last_seen) > CONN_EXPIRY_SECONDS
+        now = time.time()
+        if (now - self.last_seen) <= threshold:
+            return False
+        if self.last_ping_sent > 0 and (now - self.last_ping_sent) <= threshold:
+            return False
+        return True
+
+    def is_timed_out(self, max_unanswered: int = CONN_MAX_UNANSWERED_PINGS) -> bool:
+        """True if we've sent max_unanswered PINGs with no PONG."""
+        return self.ping_waiting >= max_unanswered
 
     def dh_timed_out(self, timeout_secs: float = 10.0) -> bool:
         """True if DH is pending and has exceeded timeout."""
@@ -250,15 +268,10 @@ class Connection:
             return False
         return (time.time() - self.dh_initiated_at) > timeout_secs
 
-    def ping_due(self, interval_secs: float = 30.0) -> bool:
-        """True if enough time has passed to send another keepalive PING."""
-        return (time.time() - self.last_ping_sent) > interval_secs
-
     def record_ping_sent(self) -> None:
+        """Record that we sent a PING. Increments unanswered counter."""
         self.last_ping_sent = time.time()
-
-    def record_timeout(self) -> None:
-        self.timeout_count += 1
+        self.ping_waiting += 1
 
     # ------------------------------------------------------------------
     # Serialization
@@ -290,7 +303,7 @@ class Connection:
             "dh_pending": self.dh_pending is not None,
             "dh_initiated_at": self.dh_initiated_at,
             "last_ping_sent": self.last_ping_sent,
-            "timeout_count": self.timeout_count,
+            "ping_waiting": self.ping_waiting,
         }
 
     def to_dict(self) -> dict:
