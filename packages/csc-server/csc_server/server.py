@@ -638,15 +638,19 @@ class Server(Service, LinkMixin, UserMixin):
             self.log(f"[S2S] Received ERR_NOT_REGISTERED from unknown {session_id}")
 
     def _get_s2s_cert_path(self) -> str:
-        """Return path to our S2S certificate chain (platform-aware)."""
+        """Return path to our S2S certificate chain via data layer."""
         from_env = os.environ.get("CSC_S2S_CERT")
         if from_env:
             return from_env
+        from csc_data.config import ConfigManager
+        try:
+            cfg = ConfigManager()
+            from_config = cfg.get_value("s2s_cert")
+            if from_config:
+                return from_config
+        except Exception:
+            pass
         etc = Platform.get_etc_dir()
-        # Find any .chain.pem in etc/
-        for f in etc.iterdir():
-            if f.name.endswith(".chain.pem"):
-                return str(f)
         return str(etc / "server.chain.pem")
 
     @staticmethod
