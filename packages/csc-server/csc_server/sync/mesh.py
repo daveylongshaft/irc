@@ -600,9 +600,13 @@ class SyncMesh:
             if conn.crypto_key is not None:
                 # Send BURST if not already sent, or retry if timed out
                 if link.id not in self._burst_complete:
-                    last_sent = self._burst_sent_at.get(link.id, 0)
-                    if last_sent == 0 or (now - last_sent) > self._BURST_TIMEOUT:
-                        self.send_burst(link)
+                    retries = self._burst_retries.get(link.id, 0)
+                    if retries >= self._BURST_MAX_RETRIES:
+                        pass  # exhausted -- wait for reconnect to reset
+                    else:
+                        last_sent = self._burst_sent_at.get(link.id, 0)
+                        if last_sent == 0 or (now - last_sent) > self._BURST_TIMEOUT:
+                            self.send_burst(link)
 
                 # 2 unanswered PINGs = connection dead, reset
                 if conn.is_timed_out(self._MAX_UNANSWERED_PINGS):
