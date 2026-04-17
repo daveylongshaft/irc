@@ -4,7 +4,9 @@ Control Plane for the Bridge Daemon.
 Handles client authentication and acts as a mock IRC server in the LOBBY state.
 """
 
+import hashlib
 import threading
+import time
 from typing import Optional
 from .irc_utils import parse_irc_message, numeric_reply, format_irc_message, SERVER_NAME
 from .transports.tcp_outbound import TCPOutbound
@@ -331,7 +333,7 @@ class ControlHandler:
         """
         Parse connection string and establish upstream connection.
         Format: proto:enc:dialect:host:port
-        Example: udp:rsa:csc:127.0.0.1:9525
+        Example: udp:dh-aes:csc:127.0.0.1:9525
         """
         try:
             parts = conn_str.split(":")
@@ -374,17 +376,39 @@ class ControlHandler:
             # 4. Save to History
             self.bridge.data.add_history(self.username, conn_str)
 
-            # 5. Switch State and Start Listener
-            self.session.state = "CONNECTED"
-            self.send_notice("Connected! Switching to proxy mode.")
-
-            # Start listener thread
+            # 5. Start listener thread FIRST (must receive DHREPLY)
             threading.Thread(
                 target=self.bridge._server_listener,
                 args=(self.session,),
                 daemon=True,
                 name=f"upstream-{self.session.session_id[:8]}",
             ).start()
+
+            # 6. Apply encryption based on enc parameter
+            enc_lower = enc.lower()
+            if enc_lower in ("dh-aes", "dh", "rsa"):
+                dh = self.session.crypto.start_dh()
+                init_msg = dh.format_init_message().encode("utf-8")
+                self.session.outbound.send(self.session.upstream_handle, init_msg)
+                self.send_notice("Negotiating encryption...")
+                if not self.session.crypto.wait_until_ready(timeout=5.0):
+                    self.send_notice("Encryption handshake timed out")
+                    return
+                self.send_notice("Encryption established.")
+            elif enc_lower.startswith("psk"):
+                psk_parts = enc.split("-", 1)
+                if len(psk_parts) == 2 and psk_parts[1]:
+                    self.session.crypto.set_key(
+                        hashlib.sha256(psk_parts[1].encode()).digest()
+                    )
+                else:
+                    self.send_notice("PSK mode requires a key: psk-<key>")
+                    return
+            # "none" = no encryption, crypto stays NONE
+
+            # 7. Switch state AFTER crypto is ready
+            self.session.state = "CONNECTED"
+            self.send_notice("Connected! Switching to proxy mode.")
 
         except Exception as e:
             self.send_notice(f"Connection failed: {e}")

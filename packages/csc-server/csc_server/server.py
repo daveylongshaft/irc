@@ -64,6 +64,7 @@ class Server(Service, LinkMixin, UserMixin):
         self._outbound_cursor = 0
         self._connections_by_key_hash: dict[bytes, Connection] = {}
         self._dh_reattempt_times: dict[str, float] = {}  # ip -> last DH attempt time
+        self._err_not_registered_times: dict[str, float] = {}  # session_id -> last ERR time
         self._last_heartbeat: float = time.time()
         self.state = ServerState(server_name=self.name, bind_host=host, bind_port=port)
         self.command_store = CommandStore(logger=self.log)
@@ -328,13 +329,16 @@ class Server(Service, LinkMixin, UserMixin):
                         self.log(f"[CRYPTO] decrypt failed from {session_id}: {e}")
                         continue
                 else:
-                    if is_s2s:
-                        self.s2s_sock_send(b"ERR_NOT_REGISTERED\r\n", addr)
-                        self._maybe_initiate_dh_for_addr(addr, session_id)
-                    else:
-                        # Tell client to re-negotiate DH
-                        self.log(f"[CRYPTO] encrypted data from {session_id} on client port - no key, sending ERR_NOT_REGISTERED")
-                        self.sock_send(b"ERR_NOT_REGISTERED\r\n", addr)
+                    now = time.time()
+                    last_err = self._err_not_registered_times.get(session_id, 0)
+                    if now - last_err >= 10:
+                        self._err_not_registered_times[session_id] = now
+                        if is_s2s:
+                            self.s2s_sock_send(b"ERR_NOT_REGISTERED\r\n", addr)
+                            self._maybe_initiate_dh_for_addr(addr, session_id)
+                        else:
+                            self.log(f"[CRYPTO] encrypted data from {session_id} on client port - no key, sending ERR_NOT_REGISTERED")
+                            self.sock_send(b"ERR_NOT_REGISTERED\r\n", addr)
                     continue
 
             try:
