@@ -18,15 +18,21 @@ The ``owner`` slot is a back-reference to the User or Link that owns
 this Connection.  After a key_hash lookup in the server's
 ``_connections_by_key_hash`` index, ``conn.owner`` tells the ingress
 dispatcher whether to route to mesh (Link) or IRC dispatch (User).
+
+Crypto state is delegated to a composed CryptoState object at
+``self.crypto``.  Connection adds server integration on top: key_hash
+registry, logging, transport send.  The compat properties crypto_key,
+key_hash, dh_pending, dh_initiated_at expose CryptoState internals
+for existing code that reads them.
 """
 from __future__ import annotations
 
-import hashlib
 import socket
 import time
 import uuid
 
-from csc_crypto.crypto import DHExchange, encrypt
+from csc_crypto.crypto import DHExchange
+from csc_crypto.crypto_state import CryptoState
 
 
 CONN_STATE_UNKNOWN = "UNKNOWN"
@@ -50,10 +56,7 @@ class Connection:
         "port",
         "last_addr",
         "resolved_ips",
-        "crypto_key",
-        "key_hash",
-        "dh_pending",
-        "dh_initiated_at",
+        "crypto",
         "last_ping_sent",
         "ping_waiting",
         "state",
@@ -73,10 +76,7 @@ class Connection:
         self.port: int = int(port)
         self.last_addr: tuple[str, int] | None = addr
         self.resolved_ips: set[str] = set()
-        self.crypto_key: bytes | None = None
-        self.key_hash: bytes | None = None
-        self.dh_pending: DHExchange | None = None
-        self.dh_initiated_at: float = 0.0
+        self.crypto: CryptoState = CryptoState()
         self.last_ping_sent: float = 0.0
         self.ping_waiting: int = 0
         self.state: str = CONN_STATE_UNKNOWN
@@ -86,6 +86,26 @@ class Connection:
         self.sent_bytes: int = 0
         self.recv_msgs: int = 0
         self.recv_bytes: int = 0
+
+    # ------------------------------------------------------------------
+    # Compat properties -- delegate to self.crypto for existing readers
+    # ------------------------------------------------------------------
+
+    @property
+    def crypto_key(self) -> bytes | None:
+        return self.crypto.aes_key
+
+    @property
+    def key_hash(self) -> bytes | None:
+        return self.crypto.key_hash
+
+    @property
+    def dh_pending(self) -> DHExchange | None:
+        return self.crypto._dh
+
+    @property
+    def dh_initiated_at(self) -> float:
+        return self.crypto.dh_initiated_at
 
     # ------------------------------------------------------------------
     # Address resolution + soft matching
@@ -159,7 +179,7 @@ class Connection:
     def sendto(self, data: bytes) -> None:
         """Send data to this connection's peer.
 
-        Auto-encrypts if crypto_key is set: prepends 16-byte key_hash
+        Auto-encrypts if crypto is ready: prepends 16-byte key_hash
         header + AES-256-GCM ciphertext.  Callers always pass plaintext.
 
         Port determines which socket: S2S_PORT -> s2s_sock_send, else
@@ -167,8 +187,8 @@ class Connection:
         """
         addr = self.send_address()
         wire = data
-        if self.crypto_key:
-            wire = self.key_hash + encrypt(self.crypto_key, data)
+        if self.crypto.is_ready:
+            wire = self.crypto.wrap(data)
         if self.port == getattr(self.server, "S2S_PORT", 0):
             self.server.s2s_sock_send(wire, addr)
         else:
@@ -189,52 +209,49 @@ class Connection:
             self.update_addr(addr)
 
     # ------------------------------------------------------------------
-    # Crypto: key management + DH
+    # Crypto: key management + DH (delegates to self.crypto)
     # ------------------------------------------------------------------
 
     def set_crypto_key(self, key: bytes) -> None:
         """Set AES key, compute key_hash, register with server."""
-        old_hash = self.key_hash
+        old_hash = self.crypto.key_hash
         if old_hash is not None:
             self.server.unregister_connection_key(self)
-        self.crypto_key = key
-        self.key_hash = hashlib.sha256(key).digest()[:16]
-        self.dh_pending = None  # DH complete
+        self.crypto.set_key(key)
         self.last_seen = time.time()
         self.server.register_connection_key(self)
         self.server.log(
             f"[CONN] Crypto key set for {self.host} "
-            f"hash={self.key_hash[:4].hex()}..."
+            f"hash={self.crypto.key_hash[:4].hex()}..."
         )
 
     def clear_crypto(self) -> None:
         """Unregister key_hash, clear all crypto state."""
-        if self.key_hash is not None:
+        if self.crypto.key_hash is not None:
             self.server.unregister_connection_key(self)
             self.server.log(
                 f"[CONN] Crypto cleared for {self.host} "
-                f"hash={self.key_hash[:4].hex()}..."
+                f"hash={self.crypto.key_hash[:4].hex()}..."
             )
-        self.crypto_key = None
-        self.key_hash = None
-        self.dh_pending = None
+        self.crypto.clear()
 
     def matches_key_hash(self, hash_bytes: bytes) -> bool:
         """Does this connection own the given key_hash?"""
-        return self.key_hash is not None and self.key_hash == hash_bytes
+        return self.crypto.matches_key_hash(hash_bytes)
 
     def start_dh(self) -> DHExchange:
         """Create a new DH exchange and store as pending."""
-        self.dh_pending = DHExchange()
-        self.dh_initiated_at = time.time()
-        return self.dh_pending
+        return self.crypto.start_dh()
 
     def complete_dh(self, other_public: int) -> bytes:
         """Finish DH exchange: compute shared key, set crypto, return key."""
-        if self.dh_pending is None:
-            raise RuntimeError("No pending DH exchange to complete")
-        key = self.dh_pending.compute_shared_key(other_public)
-        self.set_crypto_key(key)
+        key = self.crypto.complete_dh(other_public)
+        self.last_seen = time.time()
+        self.server.register_connection_key(self)
+        self.server.log(
+            f"[CONN] Crypto key set for {self.host} "
+            f"hash={self.crypto.key_hash[:4].hex()}..."
+        )
         return key
 
     # ------------------------------------------------------------------
@@ -264,9 +281,7 @@ class Connection:
 
     def dh_timed_out(self, timeout_secs: float = 10.0) -> bool:
         """True if DH is pending and has exceeded timeout."""
-        if self.dh_pending is None:
-            return False
-        return (time.time() - self.dh_initiated_at) > timeout_secs
+        return self.crypto.dh_timed_out(timeout_secs)
 
     def record_ping_sent(self) -> None:
         """Record that we sent a PING. Increments unanswered counter."""
@@ -298,10 +313,10 @@ class Connection:
             "opened_at": self.opened_at,
             "time_open": int(now - self.opened_at),
             "last_seen": self.last_seen,
-            "has_crypto": self.crypto_key is not None,
-            "key_hash": self.key_hash[:4].hex() if self.key_hash else "",
-            "dh_pending": self.dh_pending is not None,
-            "dh_initiated_at": self.dh_initiated_at,
+            "has_crypto": self.crypto.is_ready,
+            "key_hash": self.crypto.key_hash[:4].hex() if self.crypto.key_hash else "",
+            "dh_pending": self.crypto.is_pending,
+            "dh_initiated_at": self.crypto.dh_initiated_at,
             "last_ping_sent": self.last_ping_sent,
             "ping_waiting": self.ping_waiting,
         }
@@ -317,7 +332,7 @@ class Connection:
         return (
             f"Connection(id={self.id[:8]} host={self.host} port={self.port} "
             f"last_addr={addr} state={self.state} "
-            f"crypto={'yes' if self.crypto_key else 'no'} "
+            f"crypto={'yes' if self.crypto.is_ready else 'no'} "
             f"sent={self.sent_msgs}/{self.sent_bytes}B "
             f"recv={self.recv_msgs}/{self.recv_bytes}B)"
         )

@@ -86,7 +86,7 @@ from .irc_normalizer import IrcNormalizer
 from .data_bridge import BridgeData
 from .control_handler import ControlHandler
 import hashlib
-from csc_crypto import DHExchange, decrypt, encrypt, is_encrypted
+from csc_crypto import DHExchange, is_encrypted
 
 logger = logging.getLogger("csc_bridge")
 
@@ -411,39 +411,32 @@ class Bridge:
         import hashlib
 
         if config.encrypt_mode == "none":
-            session.encrypted = False
-            session.aes_key = None
+            session.crypto.clear()
 
         elif config.encrypt_mode == "dh-aes":
             try:
                 if session.upstream_handle:
-                    session.dh = DHExchange()
-                    init_msg = session.dh.format_init_message().encode("utf-8")
+                    dh = session.crypto.start_dh()
+                    init_msg = dh.format_init_message().encode("utf-8")
                     session.outbound.send(session.upstream_handle, init_msg)
                     logger.info(f"Sent CRYPTOINIT DH for {session.session_id[:8]}")
                 else:
                     logger.warning(f"DH-AES crypto requested but upstream handle not available for {session.session_id[:8]}, skipping")
-                    session.encrypted = False
             except Exception as e:
                 logger.error(f"Failed to initiate DH crypto for {session.session_id[:8]}: {e}")
-                session.encrypted = False
 
         elif config.encrypt_mode.startswith("psk-aes:"):
             try:
                 if config.psk:
-                    session.aes_key = hashlib.sha256(config.psk).digest()
-                    session.encrypted = True
+                    session.crypto.set_key(hashlib.sha256(config.psk).digest())
                     logger.info(f"PSK-AES crypto enabled for {session.session_id[:8]}")
                 else:
                     logger.error(f"PSK-AES configured but no PSK available for {session.session_id[:8]}")
-                    session.encrypted = False
             except Exception as e:
                 logger.error(f"Failed to set PSK-AES crypto for {session.session_id[:8]}: {e}")
-                session.encrypted = False
 
         else:
             logger.warning(f"Unknown encrypt_mode: {config.encrypt_mode}")
-            session.encrypted = False
 
     def _handle_disconnect(self, client_id: ClientID):
         """Handle a client disconnect event.
@@ -759,21 +752,15 @@ class Bridge:
             return
 
         # Encrypt if session is secure
-        if session.encrypted:
-            if session.aes_key:
-                try:
-                    data = encrypt(session.aes_key, data)
-                    # Prepend 16-byte key_hash so server can match to session
-                    key_hash = hashlib.sha256(session.aes_key).digest()[:16]
-                    data = key_hash + data
-                except Exception as e:
-                    logger.error(f"Encryption failed for {session.session_id[:8]}: {e}")
-            else:
-                logger.error(f"Encryption enabled but aes_key missing for {session.session_id[:8]}. Forwarding as plaintext.")
+        if session.crypto.is_ready:
+            try:
+                data = session.crypto.wrap(data)
+            except Exception as e:
+                logger.error(f"Encryption failed for {session.session_id[:8]}: {e}")
 
         try:
             to_send = data
-            if session.normalizer and not session.encrypted: # Only normalize plaintext
+            if session.normalizer and not session.crypto.is_ready: # Only normalize plaintext
                 try:
                     text = data.decode("utf-8")
                     norm_text = session.normalizer.normalize_client_to_server(text, session)
@@ -944,17 +931,11 @@ class Bridge:
         logger.debug(f"_forward_to_client: inbound_name={session.inbound_name}, inbound={inbound is not None}")
 
         # If session has encryption enabled, decrypt server->client data
-        if getattr(session, 'encrypted', False) and getattr(session, 'aes_key', None):
-            if is_encrypted(data):
-                try:
-                    # Strip key_hash prefix (16 bytes) if present
-                    expected_hash = hashlib.sha256(session.aes_key).digest()[:16]
-                    if len(data) > 16 and data[:16] == expected_hash:
-                        data = decrypt(session.aes_key, data[16:])
-                    else:
-                        data = decrypt(session.aes_key, data)
-                except Exception as e:
-                    logger.error(f"Decryption failed for {session.session_id[:8]}: {e}")
+        if session.crypto.is_ready and is_encrypted(data):
+            try:
+                data = session.crypto.unwrap(data)
+            except Exception as e:
+                logger.error(f"Decryption failed for {session.session_id[:8]}: {e}")
 
         if inbound:
             try:
@@ -1112,20 +1093,17 @@ class Bridge:
                             try:
                                 text = data.decode("utf-8", errors="ignore").strip()
                                 if text.startswith("CRYPTOINIT DHREPLY"):
-                                    if session.dh:
+                                    if session.crypto.is_pending:
                                         server_pub = DHExchange.parse_reply_message(text)
-                                        session.aes_key = session.dh.compute_shared_key(server_pub)
-                                        session.encrypted = True
+                                        session.crypto.complete_dh(server_pub)
                                         logger.info(f"Encrypted session established for {session.session_id[:8]}")
                                         continue # Consume the handshake message
                                 elif text.startswith("ERR_NOT_REGISTERED"):
                                     # Server lost our DH key (e.g. after restart) -- re-initiate
                                     logger.info(f"Server sent ERR_NOT_REGISTERED for {session.session_id[:8]}, re-initiating DH")
-                                    session.encrypted = False
-                                    session.aes_key = None
                                     if session.outbound and session.upstream_handle:
-                                        session.dh = DHExchange()
-                                        init_msg = session.dh.format_init_message().encode("utf-8")
+                                        dh = session.crypto.start_dh()
+                                        init_msg = dh.format_init_message().encode("utf-8")
                                         session.outbound.send(session.upstream_handle, init_msg)
                                     continue
                             except Exception:
