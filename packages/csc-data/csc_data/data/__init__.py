@@ -116,7 +116,11 @@ class Data(OldData):
             print(log_entry.strip())
 
         try:
-            log_filename = Path(self.log_file).name if hasattr(self, "log_file") else "data.log"
+            # Use self.log_file if set (by csc_log.Log), otherwise use self.name + .log
+            if hasattr(self, "log_file"):
+                log_filename = Path(self.log_file).name
+            else:
+                log_filename = f"{self.name}.log" if hasattr(self, "name") else "data.log"
             log_path = _get_logs_dir() / log_filename
             with open(log_path, "a") as f:
                 f.write(log_entry)

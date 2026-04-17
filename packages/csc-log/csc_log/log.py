@@ -53,6 +53,8 @@ class Log(Root):
     def __init__(self, server=None):
         super().__init__()
         self.name = "log"
+        # Set a default log_file that subclasses can override.
+        # The log() method will use self.name if subclass sets it after calling super().__init__()
         self.log_file = f"{self.name}.log"
 
     @classmethod
@@ -63,11 +65,11 @@ class Log(Root):
 
     def log(self, message: str, level: str = "INFO"):
         """
-        Logs a message to the central project log file and prints to console.
+        Logs a message to per-service log file and prints to console.
 
-        - What it does: Formats a log entry with a timestamp, level, and the 
-          calling class's name, prints it to the console, and then appends it 
-          to the log file.
+        - What it does: Formats a log entry with a timestamp, level, and the
+          calling class's name, prints it to the console, and then appends it
+          to the service-specific log file (self.log_file, which defaults to self.name + .log).
         - Arguments:
             - `message` (str): The message to be logged.
             - `level` (str): Severity level (default: INFO).
