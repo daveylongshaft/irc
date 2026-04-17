@@ -476,6 +476,26 @@ class CommandDispatcher:
 
         target_session = self.state.find_session_by_nick(target_name)
         if target_session is None:
+            # Try to route to remote nick via link
+            for link in self.server.iter_links():
+                if link.has_nick_behind(target_name):
+                    # Relay to peer
+                    from csc_server.queue.command import CommandEnvelope as CmdEnv
+                    relay_envelope = CmdEnv(
+                        kind="PRIVMSG",
+                        payload={"line": f"PRIVMSG {target_name} :{text}", "source_nick": nick},
+                        origin_server=self.server.name,
+                        source_session=envelope.source_session,
+                        replicate=True,
+                    )
+                    self.server.sync_mesh.sync_command(relay_envelope)
+                    self.state.record_protocol_event(
+                        envelope,
+                        "privmsg",
+                        {"text": text, "service_command": False, "target_nick": target_name, "remote": True},
+                    )
+                    return
+
             self._send_numeric(envelope, ERR_NOSUCHNICK, nick, f"{target_name} :No such nick/channel")
             return
         out = format_irc_message(self._user_host(nick, envelope), "PRIVMSG", [target_name], text)
@@ -512,6 +532,24 @@ class CommandDispatcher:
 
         target_session = self.state.find_session_by_nick(target_name)
         if target_session is None:
+            # Try to route to remote nick via link
+            for link in self.server.iter_links():
+                if link.has_nick_behind(target_name):
+                    from csc_server.queue.command import CommandEnvelope as CmdEnv
+                    relay_envelope = CmdEnv(
+                        kind="NOTICE",
+                        payload={"line": f"NOTICE {target_name} :{text}", "source_nick": nick},
+                        origin_server=self.server.name,
+                        source_session=envelope.source_session,
+                        replicate=True,
+                    )
+                    self.server.sync_mesh.sync_command(relay_envelope)
+                    self.state.record_protocol_event(
+                        envelope,
+                        "notice",
+                        {"text": text, "target_nick": target_name, "remote": True},
+                    )
+                    return
             return
         out = format_irc_message(self._user_host(nick, envelope), "NOTICE", [target_name], text)
         self.state.record_session_outbound(target_session, out)
@@ -548,27 +586,52 @@ class CommandDispatcher:
         requester_session = self.state.ensure_session(envelope.source_session)
         requester_is_oper = bool(requester_session.get("oper_flags"))
         requester_is_member = self.state.is_channel_member(normalized, nick)
-        if channel is None or (
-            channel is not None and {"p", "s"} & set(channel.get("modes", set()))
-            and not requester_is_member and not requester_is_oper
-        ):
+
+        # Channel must exist locally or on a link
+        has_remote = any(lk.has_channel(normalized) for lk in self.server.iter_links())
+        if channel is None and not has_remote:
+            self._send_numeric(envelope, ERR_NOSUCHCHANNEL, nick, f"{normalized} :No such channel")
+            return
+        if channel is not None and {"p", "s"} & set(channel.get("modes", set())) \
+                and not requester_is_member and not requester_is_oper:
             self._send_numeric(envelope, ERR_NOSUCHCHANNEL, nick, f"{normalized} :No such channel")
             return
 
-        for member in channel["members"].values():
-            member_session = self.state.get_session(member["session_id"]) or {}
-            member_modes = self.state.get_user_modes(member["session_id"])
-            if "i" in member_modes and not requester_is_member and not requester_is_oper:
+        # Local members
+        if channel is not None:
+            for member in channel["members"].values():
+                member_session = self.state.get_session(member["session_id"]) or {}
+                member_modes = self.state.get_user_modes(member["session_id"])
+                if "i" in member_modes and not requester_is_member and not requester_is_oper:
+                    continue
+                flags = self._who_flags(member["session_id"], member, member_session)
+                user = member_session.get("user") or member["nick"]
+                host = member_session.get("last_server") or self.server.name
+                realname = member_session.get("realname") or member["nick"]
+                self.state.record_session_outbound(
+                    envelope.source_session,
+                    f":{self.server.name} {RPL_WHOREPLY} {nick} {normalized} {user} "
+                    f"{host} {host} {member['nick']} {flags} :0 {realname}",
+                )
+
+        # Remote members from all links
+        for link in self.server.iter_links():
+            if not link.has_channel(normalized):
                 continue
-            flags = self._who_flags(member["session_id"], member, member_session)
-            user = member_session.get("user") or member["nick"]
-            host = member_session.get("last_server") or self.server.name
-            realname = member_session.get("realname") or member["nick"]
-            self.state.record_session_outbound(
-                envelope.source_session,
-                f":{self.server.name} {RPL_WHOREPLY} {nick} {normalized} {user} "
-                f"{host} {host} {member['nick']} {flags} :0 {realname}",
-            )
+            remote_chan = link.channels[normalized]
+            remote_server = link.origin_server or link.name
+            for remote_nick in remote_chan.get_all_users():
+                modes = remote_chan.get_user_modes(remote_nick)
+                flags = "H"
+                if "@" in modes:
+                    flags += "@"
+                elif "+" in modes:
+                    flags += "+"
+                self.state.record_session_outbound(
+                    envelope.source_session,
+                    f":{self.server.name} {RPL_WHOREPLY} {nick} {normalized} {remote_nick} "
+                    f"{remote_server} {remote_server} {remote_nick} {flags} :1 {remote_nick}",
+                )
 
         self.state.record_session_outbound(
             envelope.source_session,
@@ -581,6 +644,7 @@ class CommandDispatcher:
         requester_channels = self.state.session_channels(envelope.source_session)
         lowered_mask = mask.lower()
 
+        # Local users
         for session_id, session in self.state.sessions.items():
             target_nick = str(session.get("nick") or "")
             if not target_nick or not fnmatch.fnmatch(target_nick.lower(), lowered_mask):
@@ -600,6 +664,33 @@ class CommandDispatcher:
                 f"{host} {host} {target_nick} {flags} :0 {realname}",
             )
 
+        # Remote users from all links
+        seen_remote = set()
+        for link in self.server.iter_links():
+            remote_server = link.origin_server or link.name
+            for remote_nick in link.user_list():
+                if remote_nick.lower() in seen_remote:
+                    continue
+                if not fnmatch.fnmatch(remote_nick.lower(), lowered_mask):
+                    continue
+                seen_remote.add(remote_nick.lower())
+                self.state.record_session_outbound(
+                    envelope.source_session,
+                    f":{self.server.name} {RPL_WHOREPLY} {nick} * {remote_nick} "
+                    f"{remote_server} {remote_server} {remote_nick} H :1 {remote_nick}",
+                )
+            for remote_nick in link.nicks_behind:
+                if remote_nick.lower() in seen_remote:
+                    continue
+                if not fnmatch.fnmatch(remote_nick.lower(), lowered_mask):
+                    continue
+                seen_remote.add(remote_nick.lower())
+                self.state.record_session_outbound(
+                    envelope.source_session,
+                    f":{self.server.name} {RPL_WHOREPLY} {nick} * {remote_nick} "
+                    f"{remote_server} {remote_server} {remote_nick} H :1 {remote_nick}",
+                )
+
         self.state.record_session_outbound(
             envelope.source_session,
             f":{self.server.name} {RPL_ENDOFWHO} {nick} {mask} :End of /WHO list",
@@ -615,8 +706,54 @@ class CommandDispatcher:
 
         target_nick = str(message.params[-1]).strip()
         target_session_id = self.state.find_session_by_nick(target_nick)
+
+        # Check remote links if not found locally
         if target_session_id is None:
-            self._send_numeric(envelope, ERR_NOSUCHNICK, nick, f"{target_nick} :No such nick/channel")
+            remote_link = None
+            for link in self.server.iter_links():
+                if link.has_user(target_nick) or link.has_nick_behind(target_nick):
+                    remote_link = link
+                    break
+            if remote_link is None:
+                self._send_numeric(envelope, ERR_NOSUCHNICK, nick, f"{target_nick} :No such nick/channel")
+                return
+            # Build WHOIS reply from link state
+            remote_server = remote_link.origin_server or remote_link.name
+            self.state.record_session_outbound(
+                envelope.source_session,
+                f":{self.server.name} {RPL_WHOISUSER} {nick} {target_nick} {target_nick} {remote_server} * :{target_nick}",
+            )
+            self.state.record_session_outbound(
+                envelope.source_session,
+                f":{self.server.name} {RPL_WHOISSERVER} {nick} {target_nick} {remote_server} :CSC IRC Server",
+            )
+            # Show channels the remote user is in
+            remote_channels = []
+            for chan_name, channel in remote_link.channels.items():
+                if channel.has_user(target_nick):
+                    modes = channel.get_user_modes(target_nick)
+                    prefix = ""
+                    if "@" in modes:
+                        prefix = "@"
+                    elif "+" in modes:
+                        prefix = "+"
+                    remote_channels.append(f"{prefix}{chan_name}")
+            if remote_channels:
+                self.state.record_session_outbound(
+                    envelope.source_session,
+                    f":{self.server.name} {RPL_WHOISCHANNELS} {nick} {target_nick} :{' '.join(remote_channels)}",
+                )
+            # Check if remote oper
+            if target_nick in remote_link.opers:
+                self.state.record_session_outbound(
+                    envelope.source_session,
+                    f":{self.server.name} {RPL_WHOISOPERATOR} {nick} {target_nick} :is an IRC operator",
+                )
+            self.state.record_session_outbound(
+                envelope.source_session,
+                f":{self.server.name} {RPL_ENDOFWHOIS} {nick} {target_nick} :End of /WHOIS list",
+            )
+            self.state.record_protocol_event(envelope, "whois", {"target": target_nick, "remote": True})
             return
 
         target_session = self.state.ensure_session(target_session_id)
@@ -945,12 +1082,25 @@ class CommandDispatcher:
         normalized = self.state.normalize_channel_name(chan_name)
         channel = self.state.get_channel(normalized)
         if channel is None:
-            self._send_numeric(envelope, ERR_NOSUCHCHANNEL, nick, f"{chan_name} :No such channel")
-            return
+            # Channel might exist only on a link
+            has_remote = any(lk.has_channel(normalized) for lk in self.server.iter_links())
+            if not has_remote:
+                self._send_numeric(envelope, ERR_NOSUCHCHANNEL, nick, f"{chan_name} :No such channel")
+                return
+            # For remote-only channels, create a local placeholder so mode logic works
+            channel = self.state.ensure_channel(normalized)
 
         # Query mode (no mode string)
         if len(message.params) < 2:
             modes, params = self.state.get_channel_modes(normalized)
+            # Also check link channel modes if local is empty
+            if not modes:
+                for link in self.server.iter_links():
+                    if link.has_channel(normalized):
+                        link_modes = link.channels[normalized].modes
+                        if link_modes:
+                            modes = set(link_modes)
+                            break
             mode_str = "+" + "".join(sorted(modes)) if modes else "+"
             param_parts = []
             for m in sorted(modes):
@@ -968,10 +1118,12 @@ class CommandDispatcher:
             self._send_ban_list(envelope, nick, normalized)
             return
 
-        # Require chanop or oper for mode changes
+        # Require chanop or oper for mode changes (skip for remote-origin commands
+        # since the originating server already authorized the change)
+        is_remote = envelope.origin_server and envelope.origin_server != self.server.name
         session = self.state.ensure_session(envelope.source_session)
         is_oper = bool(session.get("oper_flags"))
-        if not is_oper and not self.state.is_channel_op(normalized, nick):
+        if not is_remote and not is_oper and not self.state.is_channel_op(normalized, nick):
             self._send_numeric(envelope, ERR_CHANOPRIVSNEEDED, nick, f"{normalized} :You're not channel operator")
             return
 
@@ -1088,6 +1240,9 @@ class CommandDispatcher:
         if not applied_modes:
             return
 
+        # Sync link channel states from local server state
+        self._sync_link_channel_state(normalized)
+
         # Broadcast mode change to channel
         prefix = self._user_host(nick, envelope)
         params_str = (" " + " ".join(applied_params)) if applied_params else ""
@@ -1159,6 +1314,11 @@ class CommandDispatcher:
         channel["topic_author"] = nick
         channel["topic_time"] = time.time()
 
+        # Update topic in link channel states
+        for link in self.server.iter_links():
+            if link.has_channel(normalized):
+                link.channels[normalized].set_topic(new_topic)
+
         topic_line = format_irc_message(self._user_host(nick, envelope), "TOPIC", [normalized], new_topic)
         self._broadcast_to_channel(normalized, topic_line, exclude_session=None)
 
@@ -1206,6 +1366,14 @@ class CommandDispatcher:
         )
         self._broadcast_to_channel(normalized, kick_line, exclude_session=None)
         self.state.remove_channel_member(normalized, target_nick)
+
+        # Remove from link channels
+        for link in self.server.iter_links():
+            if link.has_channel(normalized):
+                link.channels[normalized].remove_user(target_nick)
+
+        # Clean up empty channels from link tracking
+        self._cleanup_empty_link_channels(normalized)
 
         self.state.record_protocol_event(
             envelope, "kick",
@@ -1269,6 +1437,11 @@ class CommandDispatcher:
                     affected_sessions.add(member_session)
             for sid in affected_sessions:
                 self.state.record_session_outbound(sid, nick_msg)
+
+            # Propagate nick change to all link channel user lists
+            for link in self.server.iter_links():
+                link.rename_nick(old_nick, new_nick)
+
             self.state.record_protocol_event(
                 envelope,
                 "nick_change",
@@ -1329,6 +1502,9 @@ class CommandDispatcher:
         session["oper_account"] = account
         session["oper_flags"] = str(flags)
         self.server.add_active_oper(nick.lower(), account, flags)
+        # Sync oper status to all links
+        for link in self.server.iter_links():
+            link.add_oper(nick)
         self.state.set_session_context(
             envelope.source_session,
             source_nick=nick,
@@ -1384,10 +1560,17 @@ class CommandDispatcher:
 
     def _nick_in_use(self, new_nick: str, source_session: str) -> bool:
         target = new_nick.lower()
+        # Check local sessions
         for session_id, session in self.state.sessions.items():
             if session_id == source_session:
                 continue
             if str(session.get("nick") or "").lower() == target:
+                return True
+        # Check remote nicks on all links
+        for link in self.server.iter_links():
+            if target in {n.lower() for n in link.users}:
+                return True
+            if target in {n.lower() for n in link.nicks_behind}:
                 return True
         return False
 
@@ -1479,8 +1662,52 @@ class CommandDispatcher:
         )
         sync_mesh.sync_command(envelope)
 
+    def _cleanup_empty_link_channels(self, channel_name: str) -> None:
+        """Remove a channel from link tracking if it has no users anywhere."""
+        local_channel = self.state.get_channel(channel_name)
+        local_has_members = local_channel is not None and bool(local_channel.get("members"))
+        if local_has_members:
+            return
+        for link in self.server.iter_links():
+            if link.has_channel(channel_name):
+                if link.channels[channel_name].user_count() == 0:
+                    link.del_channel(channel_name)
+
+    def _sync_link_channel_state(self, channel_name: str) -> None:
+        """Sync local channel member modes, channel modes, and bans to all link channel objects."""
+        channel = self.state.get_channel(channel_name)
+        if channel is None:
+            return
+        for link in self.server.iter_links():
+            link_channel = link.get_channel(channel_name)
+            # Clear and repopulate users from local state
+            link_channel.users.clear()
+            for member in self.state.channel_members(channel_name):
+                member_nick = member["nick"]
+                member_modes = member.get("modes", set())
+                modes_list = []
+                if "o" in member_modes:
+                    modes_list.append("@")
+                if "v" in member_modes:
+                    modes_list.append("+")
+                link_channel.add_user(member_nick, modes=modes_list)
+
+            # Sync channel modes (+i, +m, +n, +t, +s, +p, +Q, +k, +l)
+            modes, params = self.state.get_channel_modes(channel_name)
+            mode_str = "".join(sorted(modes)) if modes else ""
+            link_channel.set_modes(mode_str)
+
+            # Sync bans from local state
+            link_channel.bans = self.state.get_bans(channel_name) or []
+
+            # Sync topic
+            topic = channel.get("topic", "")
+            if topic:
+                link_channel.set_topic(topic)
+
     def _send_names_reply(self, envelope: CommandEnvelope, channel_name: str, nick: str) -> None:
         members = []
+        # Local members
         for member in self.state.channel_members(channel_name):
             member_name = member["nick"]
             member_modes = member.get("modes", set())
@@ -1489,9 +1716,23 @@ class CommandDispatcher:
             elif "v" in member_modes:
                 member_name = f"+{member_name}"
             members.append(member_name)
+
+        # Remote members from all links
+        for link in self.server.iter_links():
+            if link.has_channel(channel_name):
+                channel = link.channels[channel_name]
+                for remote_nick in channel.get_all_users():
+                    modes = channel.get_user_modes(remote_nick)
+                    prefix = ""
+                    if "@" in modes:
+                        prefix = "@"
+                    elif "+" in modes:
+                        prefix = "+"
+                    members.append(prefix + remote_nick)
+
         self.state.record_session_outbound(
             envelope.source_session,
-            f":{self.server.name} {RPL_NAMREPLY} {nick} = {channel_name} :{' '.join(members)}",
+            f":{self.server.name} {RPL_NAMREPLY} {nick} = {channel_name} :{' '.join(sorted(members))}",
         )
         self.state.record_session_outbound(
             envelope.source_session,
@@ -1547,6 +1788,13 @@ class CommandDispatcher:
             self.state.set_channel_mode(normalized, "n")
             self.state.set_channel_mode(normalized, "t")
         self.state.add_channel_member(normalized, envelope.source_session, nick, op=is_first_member)
+
+        # Update link states: add nick to all links' channel tracking
+        for link in self.server.iter_links():
+            link_channel = link.get_channel(normalized)
+            modes = ["@"] if is_first_member else []
+            link_channel.add_user(nick, modes=modes)
+
         join_line = format_irc_message(self._user_host(nick, envelope), "JOIN", [normalized])
         self._broadcast_to_channel(normalized, join_line, exclude_session=None)
         topic = channel.get("topic", "")
@@ -1593,6 +1841,15 @@ class CommandDispatcher:
             part_line = format_irc_message(self._user_host(nick, envelope), "PART", [normalized], reason)
             self._broadcast_to_channel(normalized, part_line, exclude_session=None)
             self.state.remove_channel_member(normalized, nick)
+
+            # Update link states: remove nick from all links' channel tracking
+            for link in self.server.iter_links():
+                if link.has_channel(normalized):
+                    link.channels[normalized].remove_user(nick)
+
+            # Clean up empty channels from link tracking
+            self._cleanup_empty_link_channels(normalized)
+
             self.state.record_protocol_event(
                 envelope,
                 "part",
@@ -1634,15 +1891,29 @@ class CommandDispatcher:
         reason = str(message.trailing or (message.params[0] if message.params else "Client Quit"))
         quit_line = format_irc_message(self._user_host(nick, envelope), "QUIT", [], reason)
         affected_sessions = set()
-        for channel_name in list(session.get("channels", set())):
+        quit_channels = list(session.get("channels", set()))
+        for channel_name in quit_channels:
             for member_session in self.state.channel_member_sessions(channel_name):
                 if member_session != envelope.source_session:
                     affected_sessions.add(member_session)
         for member_session in affected_sessions:
             self.state.record_session_outbound(member_session, quit_line)
         self.state.remove_session_from_all_channels(envelope.source_session)
+
+        # Remove nick from all link channels
+        for link in self.server.iter_links():
+            for channel in link.channels.values():
+                channel.remove_user(nick)
+
+        # Clean up empty channels from link tracking
+        for channel_name in quit_channels:
+            self._cleanup_empty_link_channels(channel_name)
+
         if session.get("oper_flags"):
             self.server.remove_active_oper(str(nick).lower())
+            # Remove oper status from all links
+            for link in self.server.iter_links():
+                link.del_oper(nick)
         self.state.remove_session(envelope.source_session)
         self.state.record_protocol_event(
             envelope,
@@ -1711,9 +1982,15 @@ class CommandDispatcher:
             return
 
         self.state.add_invite(normalized, target_nick)
+
+        # Sync invite to link channel objects
+        for link in self.server.iter_links():
+            if link.has_channel(normalized):
+                link.channels[normalized].add_invite(target_nick)
+
         # RPL_INVITING to inviter
         self._send_numeric(envelope, RPL_INVITING, nick, f"{target_nick} {normalized}")
-        # INVITE notification to target
+        # INVITE notification to target (local)
         target_session = self.state.find_session_by_nick(target_nick)
         if target_session is not None:
             invite_line = format_irc_message(
@@ -1835,22 +2112,101 @@ class CommandDispatcher:
 
     def _require_oper(self, envelope: CommandEnvelope, nick: str) -> bool:
         session = self.state.ensure_session(envelope.source_session)
-        if not session.get("oper_flags"):
-            self._send_numeric(envelope, ERR_NOPRIVILEGES, nick,
-                               ":Permission Denied- You're not an IRC operator")
-            return False
-        return True
+        if session.get("oper_flags"):
+            return True
+        # For remote-origin commands, check if nick is known as oper on any link
+        if envelope.origin_server and envelope.origin_server != self.server.name:
+            for link in self.server.iter_links():
+                if nick in link.opers:
+                    return True
+        self._send_numeric(envelope, ERR_NOPRIVILEGES, nick,
+                           ":Permission Denied- You're not an IRC operator")
+        return False
 
     def _handle_kill(self, message, envelope: CommandEnvelope) -> None:
         nick = self._require_registered(envelope)
         if not nick:
             return
-        if not self._require_oper(envelope, nick):
+        # Remote-origin KILLs (e.g., from SQUIT propagation) are trusted
+        is_remote = envelope.origin_server and envelope.origin_server != self.server.name
+        if not is_remote and not self._require_oper(envelope, nick):
             return
-        self.log_stubbed_call(
-            "CommandDispatcher", "_handle_kill",
-            target=message.params[0] if message.params else None,
+        if not message.params:
+            self._send_numeric(envelope, ERR_NEEDMOREPARAMS, nick, "KILL :Not enough parameters")
+            return
+
+        target_nick = str(message.params[0]).strip()
+        reason = message.trailing or (message.params[1] if len(message.params) > 1 else "Killed")
+
+        # Try local user first
+        target_session_id = self.state.find_session_by_nick(target_nick)
+        if target_session_id is not None:
+            # Emit KILL to all channel members
+            kill_line = format_irc_message(
+                self._user_host(nick, envelope),
+                "KILL",
+                [target_nick],
+                f"Killed ({nick} ({reason}))",
+            )
+            target_session = self.state.ensure_session(target_session_id)
+            affected_sessions = set()
+            for channel_name in list(target_session.get("channels", set())):
+                for member_session in self.state.channel_member_sessions(channel_name):
+                    affected_sessions.add(member_session)
+            for sid in affected_sessions:
+                self.state.record_session_outbound(sid, kill_line)
+
+            # Remove from all channels and clean up
+            quit_channels = list(target_session.get("channels", set()))
+            self.state.remove_session_from_all_channels(target_session_id)
+            for link in self.server.iter_links():
+                for channel in link.channels.values():
+                    channel.remove_user(target_nick)
+            for channel_name in quit_channels:
+                self._cleanup_empty_link_channels(channel_name)
+
+            if target_session.get("oper_flags"):
+                self.server.remove_active_oper(target_nick.lower())
+            self.state.remove_session(target_session_id)
+
+            self.state.record_protocol_event(
+                envelope, "kill",
+                {"killer": nick, "target": target_nick, "reason": reason, "local": True},
+            )
+            self._logger(f"[EXEC] KILL {target_nick} by {nick}: {reason}")
+            return
+
+        # Try remote user -- remove from link state
+        found = False
+        for link in self.server.iter_links():
+            if link.has_user(target_nick) or link.has_nick_behind(target_nick):
+                link.del_user(target_nick)
+                link.remove_nick_behind(target_nick)
+                for channel in link.channels.values():
+                    channel.remove_user(target_nick)
+                link.del_oper(target_nick)
+                found = True
+                break
+
+        if not found:
+            self._send_numeric(envelope, ERR_NOSUCHNICK, nick, f"{target_nick} :No such nick/channel")
+            return
+
+        # Broadcast QUIT for the killed remote user to local clients
+        quit_line = format_irc_message(
+            f"{target_nick}!{target_nick}@{envelope.origin_server or 'remote'}",
+            "QUIT",
+            [],
+            f"Killed ({nick} ({reason}))",
         )
+        for session_id in self.state.sessions:
+            self.state.record_session_outbound(session_id, quit_line)
+
+        self.state.record_protocol_event(
+            envelope, "kill",
+            {"killer": nick, "target": target_nick, "reason": reason, "local": False},
+        )
+        self._logger(f"[EXEC] KILL (remote) {target_nick} by {nick}: {reason}")
 
     def _handle_squit(self, message, envelope: CommandEnvelope) -> None:
         nick = self._require_registered(envelope)
@@ -1858,9 +2214,59 @@ class CommandDispatcher:
             return
         if not self._require_oper(envelope, nick):
             return
-        self.log_stubbed_call(
-            "CommandDispatcher", "_handle_squit",
-            target=message.params[0] if message.params else None,
+        if not message.params:
+            self._send_numeric(envelope, ERR_NEEDMOREPARAMS, nick, "SQUIT :Not enough parameters")
+            return
+
+        target_server = str(message.params[0]).strip()
+        reason = message.trailing or (message.params[1] if len(message.params) > 1 else "No reason")
+        link = self.server.get_link_by_origin(target_server)
+        if link is None:
+            # Try matching by link name
+            for lk in self.server.iter_links():
+                if lk.name == target_server:
+                    link = lk
+                    break
+        if link is None:
+            self._send_numeric(envelope, ERR_NOSUCHSERVER, nick,
+                               f"{target_server} :No such server")
+            return
+
+        # Clean up all remote state from this link
+        removed_nicks, removed_channels = link.clear_remote_state()
+
+        # Emit QUIT messages for all remote users on this link
+        for remote_nick in removed_nicks:
+            quit_line = format_irc_message(
+                f"{remote_nick}!{remote_nick}@{target_server}",
+                "QUIT",
+                [],
+                f"{self.server.name} {target_server}",
+            )
+            for session_id in self.state.sessions:
+                self.state.record_session_outbound(session_id, quit_line)
+
+        # Remove link users from local channel state
+        for remote_nick in removed_nicks:
+            link.del_user(remote_nick)
+
+        # Reset crypto so link can re-establish
+        link.connection.clear_crypto()
+
+        # Notify oper
+        squit_notice = f":{self.server.name} NOTICE {nick} :SQUIT {target_server} ({reason}) " \
+                       f"-- {len(removed_nicks)} users, {len(removed_channels)} channels removed"
+        self.state.record_session_outbound(envelope.source_session, squit_notice)
+
+        self.state.record_protocol_event(
+            envelope, "squit",
+            {"target": target_server, "reason": reason,
+             "removed_nicks": len(removed_nicks),
+             "removed_channels": len(removed_channels)},
+        )
+        self._logger(
+            f"[EXEC] SQUIT {target_server} by {nick}: "
+            f"{len(removed_nicks)} users, {len(removed_channels)} channels cleaned"
         )
 
     def _handle_wallops(self, message, envelope: CommandEnvelope) -> None:

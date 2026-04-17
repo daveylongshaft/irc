@@ -575,7 +575,8 @@ def process_inbox():
         return False
 
 def run_cycle(work_dir_arg=None):
-    # Note: _initialize_paths is called once at startup, not on every cycle
+    if CSC_ROOT is None:
+        _initialize_paths(work_dir_arg)
     git_pull()
 
     busy = monitor_active_tasks()

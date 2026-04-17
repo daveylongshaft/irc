@@ -354,7 +354,16 @@ class Server(Service, LinkMixin, UserMixin):
                 if line.upper().startswith("SYNCLINE "):
                     self.sync_mesh.receive_command_line(line, peer=addr)
                     continue
+                if line.upper().startswith("BURST "):
+                    self._handle_burst(line, addr, session_id)
+                    continue
                 upper = line.upper()
+                if upper.startswith("WRU "):
+                    self._handle_wru(line, addr, session_id)
+                    continue
+                if upper.startswith("HIA "):
+                    self._handle_hia(line, addr, session_id)
+                    continue
                 if upper.startswith("CRYPTOINIT DH "):
                     self._handle_cryptoinit_dh(line, addr, session_id)
                     continue
@@ -389,6 +398,83 @@ class Server(Service, LinkMixin, UserMixin):
             self.sync_mesh._initiate_link_dh(link)
         else:
             self.log(f"[S2S] Stale encrypted traffic from {session_id} -- no matching link")
+
+    def _handle_burst(self, line: str, addr: tuple, session_id: str) -> None:
+        """Receive BURST: link state from peer."""
+        import json
+        try:
+            burst_json = line[6:].strip()
+            burst_data = json.loads(burst_json)
+            link = self._find_link_for_addr(addr)
+            if link:
+                self.sync_mesh.receive_burst(link, burst_data)
+            else:
+                self.log(f"[BURST] Received from unknown address {session_id}")
+        except Exception as e:
+            self.log(f"[BURST] Parse error from {session_id}: {e}")
+
+    def _handle_wru(self, line: str, addr: tuple, session_id: str) -> None:
+        """Receive WRU: query for nick/server location."""
+        import json
+        try:
+            parts = line.split(None, 1)
+            if len(parts) < 2:
+                return
+            query_json = parts[1]
+            query_data = json.loads(query_json)
+            target_type = query_data.get("target_type")
+            target = query_data.get("target")
+            request_id = query_data.get("id")
+            origin_link = self._find_link_for_addr(addr)
+
+            found_link = None
+            if target_type == "nick":
+                for link in self.iter_links():
+                    if link != origin_link and link.has_nick_behind(target):
+                        found_link = link
+                        break
+            elif target_type == "server":
+                for link in self.iter_links():
+                    if link != origin_link and target in link.servers_behind:
+                        found_link = link
+                        break
+
+            if found_link:
+                hia_json = json.dumps({
+                    "target_type": target_type,
+                    "target": target,
+                    "id": request_id,
+                })
+                hia_line = f"HIA {hia_json}\r\n"
+                if origin_link:
+                    origin_link.connection.sendto(hia_line.encode("utf-8"))
+                    self.log(f"[WRU] Replied HIA for {target_type}:{target}")
+        except Exception as e:
+            self.log(f"[WRU] Parse error: {e}")
+
+    def _handle_hia(self, line: str, addr: tuple, session_id: str) -> None:
+        """Receive HIA: nick/server location response."""
+        import json
+        try:
+            parts = line.split(None, 1)
+            if len(parts) < 2:
+                return
+            response_json = parts[1]
+            response_data = json.loads(response_json)
+            target_type = response_data.get("target_type")
+            target = response_data.get("target")
+            from_link = self._find_link_for_addr(addr)
+
+            if from_link:
+                if target_type == "nick":
+                    from_link.add_nick_behind(target)
+                    self.log(f"[HIA] Learned {target} is behind {from_link.name}")
+                elif target_type == "server":
+                    if target not in from_link.servers_behind:
+                        from_link.servers_behind.append(target)
+                    self.log(f"[HIA] Learned {target} is behind {from_link.name}")
+        except Exception as e:
+            self.log(f"[HIA] Parse error: {e}")
 
     def _flush_outbound_events(self) -> None:
         while self._outbound_cursor < len(self.state.outbound_events):

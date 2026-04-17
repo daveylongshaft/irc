@@ -21,6 +21,7 @@ import uuid
 from typing import Iterable
 
 from csc_crypto.connection import Connection
+from csc_server.channel import Channel
 
 
 class Link:
@@ -34,6 +35,8 @@ class Link:
         "users",
         "channels",
         "opers",
+        "servers_behind",
+        "nicks_behind",
         "is_inbound",
         "ftpd_role",
         "cert_fingerprint",
@@ -57,8 +60,10 @@ class Link:
         self.connection: Connection = Connection(server, host, port)
         self.connection.owner = self
         self.users: dict[str, dict] = {}
-        self.channels: dict[str, dict] = {}
+        self.channels: dict[str, Channel] = {}
         self.opers: set[str] = set()
+        self.servers_behind: list[str] = []
+        self.nicks_behind: set[str] = set()
         self.is_inbound: bool = False
         self.ftpd_role: str | None = None
         self.cert_fingerprint: str | None = None
@@ -98,8 +103,18 @@ class Link:
     def user_list(self) -> list[str]:
         return list(self.users.keys())
 
-    def add_channel(self, name: str, **attrs) -> None:
-        self.channels[name] = attrs
+    def get_channel(self, name: str) -> Channel:
+        """Get or create channel."""
+        if name not in self.channels:
+            self.channels[name] = Channel(name=name)
+        return self.channels[name]
+
+    def add_channel(self, name: str, channel: Channel | None = None) -> Channel:
+        """Add or replace channel."""
+        if channel is None:
+            channel = Channel(name=name)
+        self.channels[name] = channel
+        return channel
 
     def del_channel(self, name: str) -> bool:
         return self.channels.pop(name, None) is not None
@@ -117,6 +132,79 @@ class Link:
         was_present = nick in self.opers
         self.opers.discard(nick)
         return was_present
+
+    def set_servers_behind(self, servers: list[str]) -> None:
+        """Set servers reachable through this link."""
+        self.servers_behind = servers
+
+    def set_nicks_behind(self, nicks: set[str]) -> None:
+        """Set nicks reachable through this link."""
+        self.nicks_behind = nicks
+
+    def add_nick_behind(self, nick: str) -> None:
+        """Add nick to reachable set."""
+        self.nicks_behind.add(nick)
+
+    def remove_nick_behind(self, nick: str) -> bool:
+        """Remove nick from reachable set."""
+        return bool(self.nicks_behind.discard(nick))
+
+    def has_nick_behind(self, nick: str) -> bool:
+        """Check if nick is reachable through this link."""
+        return nick in self.nicks_behind
+
+    def clear_remote_state(self) -> tuple[list[str], list[str]]:
+        """Remove all known entities from this link.
+
+        Returns (removed_nicks, removed_channels) for cleanup notification.
+        """
+        removed_nicks = list(self.users.keys()) + sorted(self.nicks_behind)
+        removed_channels = list(self.channels.keys())
+        self.users.clear()
+        self.channels.clear()
+        self.opers.clear()
+        self.nicks_behind.clear()
+        self.servers_behind.clear()
+        return removed_nicks, removed_channels
+
+    def rename_nick(self, old_nick: str, new_nick: str) -> None:
+        """Rename a nick across users, nicks_behind, opers, and all channels."""
+        # users dict
+        if old_nick in self.users:
+            self.users[new_nick] = self.users.pop(old_nick)
+        # nicks_behind
+        if old_nick in self.nicks_behind:
+            self.nicks_behind.discard(old_nick)
+            self.nicks_behind.add(new_nick)
+        # opers
+        if old_nick in self.opers:
+            self.opers.discard(old_nick)
+            self.opers.add(new_nick)
+        # channel user lists
+        for channel in self.channels.values():
+            if channel.has_user(old_nick):
+                modes = channel.get_user_modes(old_nick)
+                channel.remove_user(old_nick)
+                channel.add_user(new_nick, modes=modes)
+
+    def serialize_for_burst(self) -> dict:
+        """Serialize link state for BURST transmission."""
+        return {
+            "servers_behind": self.servers_behind,
+            "nicks_behind": sorted(self.nicks_behind),
+            "channels": {
+                name: channel.to_dict()
+                for name, channel in self.channels.items()
+            }
+        }
+
+    def apply_burst(self, burst_data: dict) -> None:
+        """Apply BURST data from peer."""
+        self.set_servers_behind(burst_data.get("servers_behind", []))
+        self.set_nicks_behind(set(burst_data.get("nicks_behind", [])))
+        for channel_data in burst_data.get("channels", {}).values():
+            channel = Channel.from_dict(channel_data)
+            self.channels[channel.name] = channel
 
     # ------------------------------------------------------------------
     # Serialization / introspection

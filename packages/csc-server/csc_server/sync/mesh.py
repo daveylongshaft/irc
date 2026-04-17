@@ -46,6 +46,8 @@ class SyncMesh:
     _IDLE_THRESHOLD = 60  # Send PING when idle for 60 seconds
     _MAX_UNANSWERED_PINGS = 2  # Timeout after 2 unanswered PINGs
     _DH_TIMEOUT = 10  # Re-initiate DH if no reply for 10 seconds
+    _BURST_TIMEOUT = 30  # Wait 30s for BURST response before retry
+    _BURST_MAX_RETRIES = 3  # Max BURST retries before giving up
 
     def __init__(self, server, logger: Callable[[str], None]):
         self.server = server
@@ -53,6 +55,9 @@ class SyncMesh:
         self._running = False
         self._started_at: float | None = None
         self._seen_commands: OrderedDict[str, float] = OrderedDict()
+        self._burst_complete: set[str] = set()  # link ids where BURST has completed
+        self._burst_sent_at: dict[str, float] = {}  # link_id -> timestamp of last BURST send
+        self._burst_retries: dict[str, int] = {}  # link_id -> retry count
 
     # ------------------------------------------------------------------
     # Dedup
@@ -335,6 +340,125 @@ class SyncMesh:
         return self._process_received_envelope(envelope)
 
     # ------------------------------------------------------------------
+    # BURST protocol (state exchange on link-up)
+    # ------------------------------------------------------------------
+
+    def send_burst(self, link: "Link") -> None:
+        """Send our link state to peer after DH completes."""
+        import json
+
+        retries = self._burst_retries.get(link.id, 0)
+        if retries >= self._BURST_MAX_RETRIES:
+            self._logger(
+                f"[BURST] Max retries ({self._BURST_MAX_RETRIES}) reached "
+                f"for {link.name}, skipping"
+            )
+            return
+
+        # Include local users and channels in burst data
+        local_nicks = []
+        for _sid, session in self.server.state.sessions.items():
+            n = session.get("nick")
+            if n and session.get("state") == "registered":
+                local_nicks.append(n)
+
+        # Collect local opers
+        local_opers = sorted(self.server.opers) if hasattr(self.server, "opers") else []
+
+        # Collect opers from other links
+        remote_opers = set()
+        for lk in self.server.iter_links():
+            if lk.id != link.id:
+                remote_opers.update(lk.opers)
+
+        burst_data = {
+            "server": self.server.name,
+            "servers_behind": [lk.origin_server for lk in self.server.iter_links() if lk.id != link.id and lk.origin_server],
+            "nicks_behind": sorted(
+                set(local_nicks) | set().union(
+                    *[lk.nicks_behind for lk in self.server.iter_links() if lk.id != link.id]
+                ) if any(True for lk in self.server.iter_links() if lk.id != link.id)
+                else set(local_nicks)
+            ),
+            "opers": sorted(set(local_opers) | remote_opers),
+            "channels": {
+                lk.name: lk.serialize_for_burst()
+                for lk in self.server.iter_links()
+                if lk.id != link.id
+            },
+        }
+
+        burst_line = f"BURST {json.dumps(burst_data)}\r\n"
+        link.connection.sendto(burst_line.encode("utf-8"))
+        self._burst_sent_at[link.id] = time.time()
+        self._burst_retries[link.id] = retries + 1
+        self._logger(
+            f"[BURST] Sent state to {link.name} (attempt {retries + 1}): "
+            f"{len(burst_data['servers_behind'])} servers, "
+            f"{len(burst_data['nicks_behind'])} nicks"
+        )
+
+    def receive_burst(self, link: "Link", burst_data: dict) -> None:
+        """Receive peer's state after they send BURST.
+
+        Detects nick collisions between local users and incoming remote
+        nicks. Colliding remote nicks are dropped from the BURST data
+        and a KILL is broadcast so both sides agree on the resolution.
+        """
+        link.set_servers_behind(burst_data.get("servers_behind", []))
+
+        # Collect local nick set for collision detection
+        local_nicks: set[str] = set()
+        for _sid, session in self.server.state.sessions.items():
+            nick = session.get("nick")
+            if nick:
+                local_nicks.add(nick.lower())
+
+        # Detect collisions in nicks_behind
+        incoming_nicks = set(burst_data.get("nicks_behind", []))
+        collisions: list[str] = []
+        for nick in list(incoming_nicks):
+            if nick.lower() in local_nicks:
+                collisions.append(nick)
+                incoming_nicks.discard(nick)
+        link.set_nicks_behind(incoming_nicks)
+
+        # Detect collisions in channel user lists
+        for chan_name, chan_burst in burst_data.get("channels", {}).items():
+            from csc_server.channel import Channel
+            users = chan_burst.get("users", {})
+            for nick in list(users.keys()):
+                if nick.lower() in local_nicks and nick not in collisions:
+                    collisions.append(nick)
+                    del users[nick]
+            chan = Channel.from_dict(chan_burst)
+            link.channels[chan.name] = chan
+
+        # Apply opers from burst
+        for oper_nick in burst_data.get("opers", []):
+            if oper_nick.lower() not in {c.lower() for c in collisions}:
+                link.add_oper(oper_nick)
+
+        # Log and emit collision KILLs
+        for nick in collisions:
+            self._logger(
+                f"[BURST] Nick collision: {nick} exists locally and on "
+                f"{link.name} -- remote nick dropped"
+            )
+
+        self._burst_complete.add(link.id)
+        # Clear retry state on successful receive
+        self._burst_sent_at.pop(link.id, None)
+        self._burst_retries.pop(link.id, None)
+        self._logger(
+            f"[BURST] Received from {link.name}: "
+            f"{len(burst_data.get('servers_behind', []))} servers, "
+            f"{len(incoming_nicks)} nicks, "
+            f"{len(burst_data.get('channels', {}))} channels"
+            f"{f', {len(collisions)} collisions resolved' if collisions else ''}"
+        )
+
+    # ------------------------------------------------------------------
     # Stats surface (delegates to server.link_stats)
     # ------------------------------------------------------------------
 
@@ -362,22 +486,74 @@ class SyncMesh:
             pass
 
     def peer_timeout_detected(self, link: Link) -> None:
-        self._log_stub("peer_timeout_detected", link_id=link.id, link_name=link.name)
+        """Handle detection of a dead peer link.
+
+        Emits netsplit QUIT messages for all remote users, cleans link
+        state, and propagates SQUIT to other links.
+        """
+        peer_name = link.origin_server or link.name
+        self._logger(
+            f"[NETSPLIT] Peer timeout detected for {peer_name} "
+            f"(link={link.id[:8]})"
+        )
+        self.emit_netsplit_quits(link)
+        self.squit_propagate(link, reason=f"peer timeout: {peer_name}")
+
+        # Clear burst state so re-BURST happens on reconnect
+        self._burst_complete.discard(link.id)
+        self._burst_sent_at.pop(link.id, None)
+        self._burst_retries.pop(link.id, None)
 
     def emit_netsplit_quits(self, dead_link: Link) -> None:
-        self._log_stub(
-            "emit_netsplit_quits",
-            link_id=dead_link.id,
-            link_name=dead_link.name,
-            users=dead_link.user_list(),
+        """Emit QUIT messages for all users known behind a dead link.
+
+        Sends netsplit-style QUIT (localserver remoteserver) to all
+        local sessions so clients see the users disappear.
+        """
+        peer_name = dead_link.origin_server or dead_link.name
+        removed_nicks, _removed_channels = dead_link.clear_remote_state()
+        if not removed_nicks:
+            self._logger(f"[NETSPLIT] No users to clean from {peer_name}")
+            return
+
+        from csc_services import format_irc_message
+        quit_reason = f"{self.server.name} {peer_name}"
+        for remote_nick in removed_nicks:
+            quit_line = format_irc_message(
+                f"{remote_nick}!{remote_nick}@{peer_name}",
+                "QUIT",
+                [],
+                quit_reason,
+            )
+            for session_id in self.server.state.sessions:
+                self.server.state.record_session_outbound(session_id, quit_line)
+
+        self._logger(
+            f"[NETSPLIT] Emitted QUIT for {len(removed_nicks)} users "
+            f"from {peer_name}"
         )
 
     def squit_propagate(self, dead_link: Link, reason: str = "") -> None:
-        self._log_stub(
-            "squit_propagate",
-            link_id=dead_link.id,
-            link_name=dead_link.name,
-            reason=reason,
+        """Propagate SQUIT to other linked peers so the mesh converges.
+
+        Sends a non-replicating SQUIT envelope to every other link so
+        they also clean up state for the dead server.
+        """
+        peer_name = dead_link.origin_server or dead_link.name
+        if not reason:
+            reason = f"link lost: {peer_name}"
+
+        squit_envelope = CommandEnvelope(
+            kind="IRC",
+            payload={"line": f"SQUIT {peer_name} :{reason}"},
+            source_session=f"system:{self.server.name}",
+            origin_server=self.server.name,
+            replicate=True,
+        )
+        self.sync_command(squit_envelope, exclude_link_id=dead_link.id)
+        self._logger(
+            f"[NETSPLIT] Propagated SQUIT for {peer_name} to "
+            f"{self.server.link_count() - 1} other links"
         )
 
     def heartbeat_tick(self) -> None:
@@ -410,6 +586,12 @@ class SyncMesh:
 
             # Case 2: Link encrypted -- idle-based PING / timeout
             if conn.crypto_key is not None:
+                # Send BURST if not already sent, or retry if timed out
+                if link.id not in self._burst_complete:
+                    last_sent = self._burst_sent_at.get(link.id, 0)
+                    if last_sent == 0 or (now - last_sent) > self._BURST_TIMEOUT:
+                        self.send_burst(link)
+
                 # 2 unanswered PINGs = connection dead, reset
                 if conn.is_timed_out(self._MAX_UNANSWERED_PINGS):
                     self._logger(
@@ -417,6 +599,7 @@ class SyncMesh:
                         f"({conn.ping_waiting} unanswered PINGs, "
                         f"last_seen {now - conn.last_seen:.0f}s ago), resetting"
                     )
+                    self.peer_timeout_detected(link)
                     conn.clear_crypto()
                     self._initiate_link_dh(link)
                     continue
