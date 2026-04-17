@@ -446,6 +446,8 @@ class SyncMesh:
                 f"{link.name} -- remote nick dropped"
             )
 
+        # Send our own BURST back if we haven't yet (peer sent first)
+        already_sent = link.id in self._burst_complete or self._burst_retries.get(link.id, 0) > 0
         self._burst_complete.add(link.id)
         # Clear retry state on successful receive
         self._burst_sent_at.pop(link.id, None)
@@ -457,6 +459,9 @@ class SyncMesh:
             f"{len(burst_data.get('channels', {}))} channels"
             f"{f', {len(collisions)} collisions resolved' if collisions else ''}"
         )
+        if not already_sent:
+            self._logger(f"[BURST] Sending reply BURST to {link.name}")
+            self.send_burst(link)
 
     # ------------------------------------------------------------------
     # Stats surface (delegates to server.link_stats)
