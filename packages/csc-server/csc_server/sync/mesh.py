@@ -159,8 +159,8 @@ class SyncMesh:
         """Send SLINKDH_CERT with cert to peer; store DHExchange on Connection."""
         try:
             dh = link.connection.start_dh()
-            link.is_inbound = False
-            link.ftpd_role = "slave"
+            if not link.is_inbound:
+                link.ftpd_role = "slave"
 
             # Send cert + DH public key for cert-based auth
             s2s_cert_path = self.server._get_s2s_cert_path()
@@ -574,14 +574,26 @@ class SyncMesh:
         for link in self.server.iter_links():
             conn = link.connection
 
+            # Never re-initiate outbound DH for inbound-only links.
+            # The remote side is responsible for reconnecting.
+            if link.is_inbound and conn.crypto_key is None and conn.dh_pending is None:
+                continue
+
             # Case 1: DH is pending -- check if it timed out
             if conn.dh_pending is not None:
                 if conn.dh_timed_out(self._DH_TIMEOUT):
-                    self._logger(
-                        f"[KEEPALIVE] Link {link.name} DH timeout "
-                        f"(no reply for {now - conn.dh_initiated_at:.0f}s), re-initiating"
-                    )
-                    self._initiate_link_dh(link)
+                    if link.is_inbound:
+                        # Inbound link DH timed out -- just clear it, don't retry
+                        self._logger(
+                            f"[KEEPALIVE] Inbound link {link.name} DH timeout, clearing"
+                        )
+                        conn.clear_crypto()
+                    else:
+                        self._logger(
+                            f"[KEEPALIVE] Link {link.name} DH timeout "
+                            f"(no reply for {now - conn.dh_initiated_at:.0f}s), re-initiating"
+                        )
+                        self._initiate_link_dh(link)
                 continue
 
             # Case 2: Link encrypted -- idle-based PING / timeout
@@ -601,7 +613,8 @@ class SyncMesh:
                     )
                     self.peer_timeout_detected(link)
                     conn.clear_crypto()
-                    self._initiate_link_dh(link)
+                    if not link.is_inbound:
+                        self._initiate_link_dh(link)
                     continue
 
                 # Idle > threshold and no recent PING sent -- send PING
@@ -624,9 +637,10 @@ class SyncMesh:
                     )
                 continue
 
-            # Case 3: No crypto, no pending DH -- initiate
-            self._logger(f"[KEEPALIVE] Link {link.name} has no crypto or pending DH, initiating")
-            self._initiate_link_dh(link)
+            # Case 3: No crypto, no pending DH -- initiate (outbound only)
+            if not link.is_inbound:
+                self._logger(f"[KEEPALIVE] Link {link.name} has no crypto or pending DH, initiating")
+                self._initiate_link_dh(link)
 
     def _announce_stub(self, method_name: str, detail: str) -> None:
         self._logger(f"[STUB] SyncMesh.{method_name} called: {detail}.")
