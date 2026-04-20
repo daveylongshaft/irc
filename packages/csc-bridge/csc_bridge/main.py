@@ -211,6 +211,9 @@ def main():
 
     # Default server configuration
     server_host = config.get("server_host", "127.0.0.1")
+    # 0.0.0.0 is a valid bind address but not a valid sendto target on Windows
+    if server_host == "0.0.0.0":
+        server_host = "127.0.0.1"
     server_port = config.get("server_port", 9525)
 
     # Local bridge configuration (local_tcp_port -> server_host:server_port)
