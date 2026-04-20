@@ -142,7 +142,10 @@ class UDPOutbound(OutboundTransport):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(1.0)
         # Bind to ephemeral port so server sees unique (host, port)
-        sock.bind(("0.0.0.0", 0))
+        # Use server_host for bind when it's loopback -- Windows
+        # rejects sendto(127.0.0.1) from a socket bound to 0.0.0.0
+        bind_host = self.server_addr[0] if self.server_addr[0] in ("127.0.0.1", "localhost") else "0.0.0.0"
+        sock.bind((bind_host, 0))
         handle = UDPUpstreamHandle(sock, self.server_addr)
         self._handles[session_id] = handle
         return handle
