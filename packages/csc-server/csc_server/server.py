@@ -599,9 +599,34 @@ class Server(Service, LinkMixin, UserMixin):
                 link.ftpd_role = "master"
                 self.log(f"[S2S] Auto-created inbound link from {peer_name} (cert-based, we are FTPD master)")
 
+            # DH race tiebreaker: if we also initiated DH to this peer
+            # (dh_pending is set), both sides sent SLINKDH_CERT at the
+            # same time. Each side would complete both exchanges with
+            # different keys, breaking encryption. Tiebreaker: the server
+            # whose name sorts lower wins as initiator; the other yields
+            # by accepting the inbound DH and dropping its pending outbound.
+            if link.connection.dh_pending is not None:
+                our_name = self.name.lower()
+                their_name = peer_name.lower()
+                if our_name < their_name:
+                    # We win the tiebreaker -- ignore their DH, they will
+                    # accept our SLINKDHREPLY when it arrives.
+                    self.log(
+                        f"[S2S-CERT] DH race with {peer_name}: we win tiebreaker "
+                        f"({our_name} < {their_name}), ignoring inbound DH"
+                    )
+                    return
+                else:
+                    # They win -- drop our pending outbound DH and accept theirs.
+                    self.log(
+                        f"[S2S-CERT] DH race with {peer_name}: they win tiebreaker "
+                        f"({their_name} < {our_name}), accepting inbound DH"
+                    )
+                    link.connection.clear_crypto()
+
             # Peer wants to rekey -- allow it even if we have a live key.
             # The peer may have lost state or expired their side.
-            if link.connection.crypto_key is not None:
+            elif link.connection.crypto_key is not None:
                 self.log(f"[S2S-CERT] Rekeying link {peer_name} (peer requested new DH)")
                 link.connection.clear_crypto()
 
