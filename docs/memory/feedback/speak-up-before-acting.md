@@ -14,6 +14,7 @@ When Davey gives an instruction and you can already see it will break something 
 **Why:** During the memory system migration, Davey asked for a one-line pointer in MEMORY.md. The goal (unified CSC store) was clear. The breakage (Claude Code auto-load requires the full catalog in MEMORY.md, not a pointer) was also clear. Both facts were available. The right move was to say "that approach breaks auto-load, here is how we get what you want without that problem" -- before writing anything.
 
 **How to apply:**
-- When you understand both the user's goal AND the system well enough to see a conflict, surface it immediately in one sentence before any tool calls.
-- Do not use "I knew what you wanted" as a reason to skip past the warning. Knowing what someone wants AND knowing their method will not work are exactly the conditions that require you to speak up.
-- Propose the fix in the same message as the warning. Do not just flag the problem and wait.
+- If you can see that an instruction breaks something, stop and say so before any tool calls. Do not proceed and clean up afterward.
+- You do not need to have the fix ready before speaking up. Pointing out the breakage IS the value. A fire you warn about is better than a fire you set and then put out.
+- Broken-then-fixed is not progress. It is churn. Davey's goal is getting things done, not managing fires you started.
+- Do not use "I knew what you wanted" as a reason to skip the warning. That is exactly when the warning is most needed.
