@@ -1,21 +1,52 @@
 # Memory Status
 
-Use this file to see what is active, stashed, done, blocked, or just reference material.
-
 ## active
 - none
 
 ## stashed
-- `s2s-linking-investigation` (tasks): Unfinished work to restore haven-4346 <-> haven-ef6e server linking and synchronized #general membership.
+- `s2s-linking-investigation` (task) -- Restore haven-4346 <-> haven-ef6e linking; next steps in file.
+- `account-manager` (task) -- Google account manager; awaiting user input to resume.
+- `bridge-dual-server` (task) -- Bridge routing for dual test servers; solution options in file.
 
 ## blocked
 - none
 
 ## done
-- none
+- `phase1-dispatcher` (task) -- CSC dispatcher complete 2026-05-05.
+- `csc-bot-package` (task) -- bot.tgz built and deploy-tested.
 
-## reference
-- `server-topology` (environment): Local host is haven-4346; remote servers are haven-ef6e, beacon-83eb, and well-b7ea over hosts/VPN.
-- `davey-collaboration-preferences` (user): Preserve interrupted work, track finished vs unfinished tasks, and avoid rereading irrelevant history.
-- `temp-clone-git-workflow` (workflow): Do implementation work in C:/csc/tmp/irc on a feature branch, open a PR, and keep the main checkout disposable.
-- `ops-roles-shared-entrypoint` (workflow): Shared role guidance exists in the main CSC tree and should be discovered through indexes, not loaded into every session up front.
+## reference (stable, load on demand)
+- `davey-profile` (user)
+- `davey-collaboration-preferences` (user)
+- `ascii-only` (feedback)
+- `right-over-immediate` (feedback)
+- `attention-to-detail` (feedback)
+- `verbose-script-logging` (feedback)
+- `no-find-grep-cat` (feedback)
+- `oo-containerization` (feedback)
+- `snake-case` (feedback)
+- `no-ssh` (feedback)
+- `git-no-claude` (feedback)
+- `tool-permissions` (feedback)
+- `csc-chain-integration` (feedback)
+- `es-for-search` (feedback)
+- `proactive-tool-usage` (feedback)
+- `news-scholarly-sources` (feedback)
+- `margaret-weak-reviewer` (feedback)
+- `server-topology` (environment)
+- `sudo-server` (environment)
+- `haven-vpn` (environment)
+- `rucky-admin` (environment)
+- `temp-clone-git-workflow` (workflow)
+- `ops-roles-shared-entrypoint` (workflow)
+- `csc-stub-logging` (workflow)
+- `csc-github` (reference)
+- `elevenlabs-key` (reference)
+- `code-maps` (reference)
+- `haven-script-server` (reference)
+- `pm-queue-worker` (reference)
+- `testing-servers` (task)
+- `acc-spring-2026` (project)
+- `distributed-workforce-arch` (project)
+- `iran-war-overview` (topic)
+- `iran-war-timeline` (topic)

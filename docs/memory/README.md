@@ -1,29 +1,39 @@
-# Durable Memory
+# Shared Agent Memory
 
-This directory is the durable, indexed context store for ongoing collaboration.
-It is the shared memory layer for repo-launched CLI sessions such as Codex,
-Claude, and Gemini when they are run against this checkout.
+Durable, indexed memory for all agents working against this tree (Claude, Codex, Gemini, etc.).
 
-Use it like this:
+## How to use
 
-1. Read `INDEX.md` to see what memory exists.
-2. Read `STATUS.md` to see what is active, stashed, blocked, done, or just reference material.
-3. Read `XREF.md` when a topic spans multiple entries.
-4. Open only the specific entry files that match the current task.
+1. Read INDEX.md -- one line per entry, enough to decide what to open.
+2. Read STATUS.md -- see what is active, stashed, blocked, or done.
+3. Read XREF.md -- when a topic spans multiple entries.
+4. Open only the specific files you need.
 
-Conventions:
+## File format
 
-- Each memory entry lives in a category directory such as `user/`, `workflow/`, `environment/`, or `tasks/`.
-- `index.json` is the structured index. `INDEX.md` is the human summary of the same catalog.
-- `xref.json` and `XREF.md` track cross-topic relationships.
-- This shared store is additive. Existing per-agent `memory.db` files are left intact.
-- This store is for cross-CLI collaboration memory, not for changing Anthropic/Google
-  message APIs or the existing `ops/agents/*` execution setup.
-- Task-like entries must use a status from: `active`, `stashed`, `blocked`, `done`, `reference`.
-- Interrupted work should be marked `stashed` with enough summary and update notes to resume without rereading the whole session.
-- Completed work should be marked `done` instead of deleted.
+Each memory file has YAML frontmatter:
 
-Maintenance:
+```
+---
+slug:        unique identifier, matches index.json key
+name:        human title
+description: one line -- this is what INDEX.md shows
+type:        user | feedback | environment | workflow | task | topic | reference
+status:      reference | active | stashed | blocked | done
+tags:        [...]
+related:     [other slugs]
+updated:     ISO 8601 timestamp
+---
+```
 
-- Prefer updating memory through `python bin/csc-memory.py ...` or `csc_data.memory_store.MemoryStore`.
-- The helper rewrites `INDEX.md`, `STATUS.md`, and `XREF.md` automatically.
+Body is plain prose. No markdown list metadata blocks.
+
+## Updating
+
+- Edit files directly; keep frontmatter in sync with index.json and INDEX.md.
+- Or use `python bin/csc-memory.py` if available (reads frontmatter, rewrites index files).
+- When adding an entry: create the file, add it to index.json and INDEX.md, update XREF.md if it has relations, update STATUS.md.
+
+## Scope
+
+This store is for everything an agent needs to serve Davey well: user preferences, feedback rules, environment facts, workflow conventions, stashed tasks, and tracked world topics. It is not limited to CSC project internals.

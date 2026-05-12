@@ -1,122 +1,281 @@
 {
-  "categories": {
-    "user": {
-      "entries": [
-        "davey-collaboration-preferences"
-      ],
-      "updated_at": "2026-04-06T17:51:18Z"
-    },
-    "environment": {
-      "entries": [
-        "server-topology"
-      ],
-      "updated_at": "2026-04-06T17:51:18Z"
-    },
-    "workflow": {
-      "entries": [
-        "ops-roles-shared-entrypoint",
-        "temp-clone-git-workflow"
-      ],
-      "updated_at": "2026-04-06T18:01:23Z"
-    },
-    "tasks": {
-      "entries": [
-        "s2s-linking-investigation"
-      ],
-      "updated_at": "2026-04-06T17:52:03Z"
-    }
-  },
+  "updated_at": "2026-05-12T00:00:00Z",
+  "schema": "slug, name, description, type, status, tags, related, path, updated -- mirrored from file frontmatter. index.json is the fast-load catalog; open individual files only when needed.",
   "entries": {
+    "davey-profile": {
+      "slug": "davey-profile", "name": "Davey - Profile and Values",
+      "description": "Who Davey is: background, expertise, core values, and work style. Primary context for tailoring all responses.",
+      "type": "user", "status": "reference",
+      "tags": ["user", "background", "values", "expertise"],
+      "related": ["davey-collaboration-preferences"],
+      "path": "user/davey-profile.md", "updated": "2026-05-12T00:00:00Z"
+    },
     "davey-collaboration-preferences": {
-      "slug": "davey-collaboration-preferences",
-      "title": "Davey Collaboration Preferences",
-      "category": "user",
-      "summary": "Preserve interrupted work, track finished vs unfinished tasks, and avoid rereading irrelevant history.",
-      "status": "reference",
-      "tags": [
-        "context",
-        "user",
-        "workflow"
-      ],
-      "related": [],
-      "path": "user/davey-collaboration-preferences.md",
-      "created_at": "2026-04-06T17:51:18Z",
-      "updated_at": "2026-04-06T17:51:18Z"
+      "slug": "davey-collaboration-preferences", "name": "Davey Collaboration Preferences",
+      "description": "Preserve interrupted work, track finished vs unfinished tasks, keep implementation off main checkouts.",
+      "type": "user", "status": "reference",
+      "tags": ["user", "workflow", "context"],
+      "related": ["temp-clone-git-workflow"],
+      "path": "user/davey-collaboration-preferences.md", "updated": "2026-04-06T17:51:18Z"
+    },
+    "ascii-only": {
+      "slug": "ascii-only", "name": "ASCII-only in all files",
+      "description": "Never use non-ASCII characters in any file output -- no emoji, no Unicode dashes or arrows.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "files", "encoding"], "related": [],
+      "path": "feedback/ascii-only.md", "updated": "2026-04-10T00:00:00Z"
+    },
+    "right-over-immediate": {
+      "slug": "right-over-immediate", "name": "Right solution over immediate solution",
+      "description": "Always choose the architecturally correct approach; never build scaffolding then offer to upgrade it.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "architecture", "approach"], "related": ["oo-containerization"],
+      "path": "feedback/right-over-immediate.md", "updated": "2026-04-12T00:00:00Z"
+    },
+    "attention-to-detail": {
+      "slug": "attention-to-detail", "name": "Attention to detail",
+      "description": "Read requirements carefully, verify configurations exactly, announce each action before doing it.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "quality", "verification"], "related": [],
+      "path": "feedback/attention-to-detail.md", "updated": "2026-04-11T00:00:00Z"
+    },
+    "verbose-script-logging": {
+      "slug": "verbose-script-logging", "name": "Verbose script logging",
+      "description": "Long-running scripts must emit timestamped progress to stdout AND a log file.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "scripting", "logging"], "related": [],
+      "path": "feedback/verbose-script-logging.md", "updated": "2026-04-29T00:00:00Z"
+    },
+    "no-find-grep-cat": {
+      "slug": "no-find-grep-cat", "name": "Never use find/grep/cat via Bash",
+      "description": "Always use dedicated tools (Glob/Grep/Read/Edit); never reach for find/grep/cat/head/tail/sed/awk in Bash.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "tooling", "bash"], "related": ["es-for-search"],
+      "path": "feedback/no-find-grep-cat.md", "updated": "2026-04-12T00:00:00Z"
+    },
+    "oo-containerization": {
+      "slug": "oo-containerization", "name": "OO containerization -- entities own data AND behavior",
+      "description": "Domain entities own their data AND the methods that operate on it; no parallel dicts keyed by identity tuples.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "architecture", "oo", "csc"], "related": ["right-over-immediate", "csc-chain-integration"],
+      "path": "feedback/oo-containerization.md", "updated": "2026-04-12T00:00:00Z"
+    },
+    "snake-case": {
+      "slug": "snake-case", "name": "snake_case everywhere",
+      "description": "All identifiers including class names use snake_case; overrides Python PEP8 PascalCase convention.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "style", "python"], "related": [],
+      "path": "feedback/snake-case.md", "updated": "2026-05-01T00:00:00Z"
+    },
+    "no-ssh": {
+      "slug": "no-ssh", "name": "No SSH by default",
+      "description": "Do not initiate SSH or remote commands by default; a direct instruction overrides this for that task only.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "ssh", "remote"], "related": [],
+      "path": "feedback/no-ssh.md", "updated": "2026-05-01T00:00:00Z"
+    },
+    "git-no-claude": {
+      "slug": "git-no-claude", "name": "No Claude attribution in git commits",
+      "description": "Omit Co-Authored-By Claude footer from all commit messages.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "git"], "related": [],
+      "path": "feedback/git-no-claude.md", "updated": "2026-04-17T00:00:00Z"
+    },
+    "tool-permissions": {
+      "slug": "tool-permissions", "name": "Tool use pre-approved",
+      "description": "All tool use is pre-approved; call tools directly without asking for permission first.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "tools", "permissions"], "related": [],
+      "path": "feedback/tool-permissions.md", "updated": "2026-04-17T00:00:00Z"
+    },
+    "csc-chain-integration": {
+      "slug": "csc-chain-integration", "name": "CSC chain integration required",
+      "description": "New CSC classes must integrate into the inheritance chain via server reference, not float as standalone objects.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "csc", "architecture", "python"], "related": ["oo-containerization"],
+      "path": "feedback/csc-chain-integration.md", "updated": "2026-04-15T00:00:00Z"
+    },
+    "es-for-search": {
+      "slug": "es-for-search", "name": "Use es (Everything CLI) for file searches",
+      "description": "Prefer the es command for locating files by name; install CLI tools to ~/.local/bin/ exactly as directed.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "tooling", "search", "windows"], "related": ["no-find-grep-cat"],
+      "path": "feedback/es-for-search.md", "updated": "2026-04-14T00:00:00Z"
+    },
+    "proactive-tool-usage": {
+      "slug": "proactive-tool-usage", "name": "Use memory, code maps, and agents proactively",
+      "description": "Check memory at session start, use code maps as source of truth, save learnings immediately -- do not force Davey to repeat context.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "workflow", "memory", "tools"], "related": ["davey-collaboration-preferences"],
+      "path": "feedback/proactive-tool-usage.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "news-scholarly-sources": {
+      "slug": "news-scholarly-sources", "name": "Prefer news and scholarly sources over Wikipedia",
+      "description": "For current events and tracked topics, cite news, scholarly/think-tank work, and official briefings -- not Wikipedia or Britannica.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "research", "citations"], "related": [],
+      "path": "feedback/news-scholarly-sources.md", "updated": "2026-05-12T00:00:00Z"
+    },
+    "margaret-weak-reviewer": {
+      "slug": "margaret-weak-reviewer", "name": "Margaret Bridges peer review is weak",
+      "description": "ENGL 1302 peer reviewer Margaret Bridges provides inaccurate feedback; weight below Prof. Royall's.",
+      "type": "feedback", "status": "reference",
+      "tags": ["feedback", "school", "engl1302"], "related": ["acc-spring-2026"],
+      "path": "feedback/margaret-weak-reviewer.md", "updated": "2026-05-09T00:00:00Z"
     },
     "server-topology": {
-      "slug": "server-topology",
-      "title": "Current Server Topology",
-      "category": "environment",
-      "summary": "Local host is haven-4346; remote servers are haven-ef6e, beacon-83eb, and well-b7ea over hosts/VPN.",
-      "status": "reference",
-      "tags": [
-        "environment",
-        "network",
-        "servers"
-      ],
-      "related": [],
-      "path": "environment/server-topology.md",
-      "created_at": "2026-04-06T17:51:18Z",
-      "updated_at": "2026-04-06T17:51:18Z"
+      "slug": "server-topology", "name": "Server Topology",
+      "description": "Local is haven-4346 (davey-hp-ai laptop); remotes are haven-ef6e (hub/FTP/VPN/PKI), beacon-83eb, well-b7ea.",
+      "type": "environment", "status": "reference",
+      "tags": ["environment", "network", "servers"], "related": ["s2s-linking-investigation"],
+      "path": "environment/server-topology.md", "updated": "2026-04-06T17:51:18Z"
+    },
+    "sudo-server": {
+      "slug": "sudo-server", "name": "Sudo Server (Windows elevated execution)",
+      "description": "TCP server on 127.0.0.1:7329 running as SYSTEM at boot; accepts JSON commands and runs them elevated.",
+      "type": "environment", "status": "reference",
+      "tags": ["environment", "windows", "elevated", "sudo"], "related": ["server-topology"],
+      "path": "environment/sudo-server.md", "updated": "2026-05-09T00:00:00Z"
+    },
+    "haven-vpn": {
+      "slug": "haven-vpn", "name": "Haven VPN",
+      "description": "OpenVPN auto-connects to haven at 107.173.223.138 TCP/443 split-mode; tunnel IP 10.10.10.10.",
+      "type": "environment", "status": "reference",
+      "tags": ["environment", "vpn", "network", "haven"], "related": ["server-topology"],
+      "path": "environment/haven-vpn.md", "updated": "2026-05-09T00:00:00Z"
+    },
+    "rucky-admin": {
+      "slug": "rucky-admin", "name": "rucky backup admin account",
+      "description": "Local admin on haven-4346 with blank password, console-only logon, for recovering from a broken davey config.",
+      "type": "environment", "status": "reference",
+      "tags": ["environment", "windows", "admin", "recovery"], "related": ["server-topology"],
+      "path": "environment/rucky-admin.md", "updated": "2026-05-09T00:00:00Z"
     },
     "temp-clone-git-workflow": {
-      "slug": "temp-clone-git-workflow",
-      "title": "Temp Clone Git Workflow",
-      "category": "workflow",
-      "summary": "Do implementation work in C:/csc/tmp/irc on a feature branch, open a PR, and keep the main checkout disposable.",
-      "status": "reference",
-      "tags": [
-        "git",
-        "temp-clone",
-        "workflow"
-      ],
-      "related": [
-        "davey-collaboration-preferences"
-      ],
-      "path": "workflow/temp-clone-git-workflow.md",
-      "created_at": "2026-04-06T17:51:18Z",
-      "updated_at": "2026-04-06T17:51:18Z"
-    },
-    "s2s-linking-investigation": {
-      "slug": "s2s-linking-investigation",
-      "title": "S2S Linking Investigation",
-      "category": "tasks",
-      "summary": "Unfinished work to restore haven-4346 <-> haven-ef6e server linking and synchronized #general membership.",
-      "status": "stashed",
-      "tags": [
-        "networking",
-        "resume",
-        "s2s",
-        "unfinished"
-      ],
-      "related": [
-        "server-topology",
-        "temp-clone-git-workflow"
-      ],
-      "path": "tasks/s2s-linking-investigation.md",
-      "created_at": "2026-04-06T17:51:18Z",
-      "updated_at": "2026-04-06T17:52:03Z"
+      "slug": "temp-clone-git-workflow", "name": "Temp Clone Git Workflow",
+      "description": "Implementation work goes in C:/csc/tmp/irc on a feature branch; main checkouts are disposable and reset to origin/main periodically.",
+      "type": "workflow", "status": "reference",
+      "tags": ["git", "workflow", "temp-clone"], "related": ["davey-collaboration-preferences"],
+      "path": "workflow/temp-clone-git-workflow.md", "updated": "2026-04-06T17:51:18Z"
     },
     "ops-roles-shared-entrypoint": {
-      "slug": "ops-roles-shared-entrypoint",
-      "title": "ops/roles/_shared Entrypoint",
-      "category": "workflow",
-      "summary": "Shared role guidance exists in the main CSC tree and should be discovered through indexes, not loaded into every session up front.",
-      "status": "reference",
-      "tags": [
-        "context",
-        "roles",
-        "shared",
-        "workflow"
-      ],
-      "related": [
-        "davey-collaboration-preferences",
-        "temp-clone-git-workflow"
-      ],
-      "path": "workflow/ops-roles-shared-entrypoint.md",
-      "created_at": "2026-04-06T18:01:23Z",
-      "updated_at": "2026-04-06T18:01:23Z"
+      "slug": "ops-roles-shared-entrypoint", "name": "ops/roles/_shared Entrypoint",
+      "description": "Shared role guidance lives in ops/roles/_shared/ -- load on demand, not by default.",
+      "type": "workflow", "status": "reference",
+      "tags": ["workflow", "roles", "shared", "context"], "related": ["davey-collaboration-preferences", "temp-clone-git-workflow"],
+      "path": "workflow/ops-roles-shared-entrypoint.md", "updated": "2026-04-06T18:01:23Z"
+    },
+    "csc-stub-logging": {
+      "slug": "csc-stub-logging", "name": "CSC stub logging convention",
+      "description": "Unimplemented CSC methods must call log_stubbed_call(); output goes to stdout AND stubs.log for workorder reconciliation.",
+      "type": "workflow", "status": "reference",
+      "tags": ["workflow", "csc", "stubs", "logging"], "related": ["code-maps"],
+      "path": "workflow/csc-stub-logging.md", "updated": "2026-04-12T00:00:00Z"
+    },
+    "csc-github": {
+      "slug": "csc-github", "name": "CSC GitHub repository",
+      "description": "Central CSC repo at github.com/daveylongshaft/csc.git; clone with --recurse-submodules.",
+      "type": "reference", "status": "reference",
+      "tags": ["reference", "git", "csc", "github"], "related": ["temp-clone-git-workflow"],
+      "path": "reference/csc-github.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "elevenlabs-key": {
+      "slug": "elevenlabs-key", "name": "ElevenLabs API key location",
+      "description": "Pro-tier ElevenLabs key for the english/ animation framework lives at C:\\Users\\davey\\.api_keys (outside any repo).",
+      "type": "reference", "status": "reference",
+      "tags": ["reference", "api-keys", "elevenlabs"], "related": [],
+      "path": "reference/elevenlabs-key.md", "updated": "2026-05-01T00:00:00Z"
+    },
+    "code-maps": {
+      "slug": "code-maps", "name": "CSC Code Maps",
+      "description": "/irc/docs/tools/ has auto-generated authoritative code maps for all CSC services and methods; use instead of reading source.",
+      "type": "reference", "status": "reference",
+      "tags": ["reference", "csc", "code-maps", "documentation"], "related": ["pm-queue-worker", "proactive-tool-usage"],
+      "path": "reference/code-maps.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "haven-script-server": {
+      "slug": "haven-script-server", "name": "Haven Script Server (Eggdrop infrastructure)",
+      "description": "Pre-built eggdrop binaries, python.so, and deployment scripts at /var/www/script-server/ on haven.",
+      "type": "reference", "status": "reference",
+      "tags": ["reference", "haven", "eggdrop", "deployment"], "related": ["csc-bot-package", "server-topology"],
+      "path": "reference/haven-script-server.md", "updated": "2026-05-08T00:00:00Z"
+    },
+    "pm-queue-worker": {
+      "slug": "pm-queue-worker", "name": "PM and Queue-Worker methods",
+      "description": "Orchestration layer: PM.classify/pick_agent/run_cycle and queue_worker.process_inbox/monitor_active_tasks.",
+      "type": "reference", "status": "reference",
+      "tags": ["reference", "csc", "orchestration", "pm", "queue-worker"], "related": ["code-maps", "distributed-workforce-arch"],
+      "path": "reference/pm-queue-worker.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "s2s-linking-investigation": {
+      "slug": "s2s-linking-investigation", "name": "S2S Linking Investigation",
+      "description": "Stashed work to restore haven-4346 <-> haven-ef6e server linking and synchronized #general membership.",
+      "type": "task", "status": "stashed",
+      "tags": ["networking", "s2s", "unfinished", "resume"], "related": ["server-topology", "temp-clone-git-workflow"],
+      "path": "task/s2s-linking-investigation.md", "updated": "2026-04-06T17:52:03Z"
+    },
+    "phase1-dispatcher": {
+      "slug": "phase1-dispatcher", "name": "Phase 1 - CSC Dispatcher",
+      "description": "Eggdrop dispatcher with dual access (DCC + IRC channel), event-driven monitoring, mircryption. COMPLETE 2026-05-05.",
+      "type": "task", "status": "done",
+      "tags": ["csc", "eggdrop", "dispatcher", "phase1"], "related": ["csc-bot-package", "distributed-workforce-arch"],
+      "path": "task/phase1-dispatcher.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "csc-bot-package": {
+      "slug": "csc-bot-package", "name": "CSC Bot Package (bot.tgz)",
+      "description": "Deployable bot bundle at C:\\csc\\tmp\\bot.tgz -- eggdrop 1.10.1 + python.so + dispatcher scripts + setup.sh. Deploy-tested in WSL.",
+      "type": "task", "status": "done",
+      "tags": ["csc", "eggdrop", "deployment", "artifact"], "related": ["phase1-dispatcher", "haven-script-server", "distributed-workforce-arch"],
+      "path": "task/csc-bot-package.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "account-manager": {
+      "slug": "account-manager", "name": "Google Account Manager",
+      "description": "8-account Google Drive/email management system; stashed awaiting user input on recovery emails, 2FA, and ruckypup.tab@ purpose.",
+      "type": "task", "status": "stashed",
+      "tags": ["google", "accounts", "drive", "email"], "related": [],
+      "path": "task/account-manager.md", "updated": "2026-04-17T00:00:00Z"
+    },
+    "bridge-dual-server": {
+      "slug": "bridge-dual-server", "name": "Bridge dual-server architecture issue",
+      "description": "Bridge designed for single outbound; stashed work to support routing to two test servers (19525 and 29525).",
+      "type": "task", "status": "stashed",
+      "tags": ["csc", "bridge", "networking", "s2s"], "related": ["testing-servers", "s2s-linking-investigation"],
+      "path": "task/bridge-dual-server.md", "updated": "2026-04-11T00:00:00Z"
+    },
+    "testing-servers": {
+      "slug": "testing-servers", "name": "S2S test server setup",
+      "description": "Two IRC test servers at /c/csc/tmp/s2s-test/; server1 on 19525, server2 on 29525.",
+      "type": "task", "status": "reference",
+      "tags": ["csc", "testing", "s2s", "servers"], "related": ["bridge-dual-server", "s2s-linking-investigation"],
+      "path": "task/testing-servers.md", "updated": "2026-04-11T00:00:00Z"
+    },
+    "acc-spring-2026": {
+      "slug": "acc-spring-2026", "name": "ACC Spring 2026 courses",
+      "description": "Davey is enrolled at Austin Community College Spring 2026 in Ethics, ENGL 1302, Phys-Anth, and College Algebra.",
+      "type": "project", "status": "reference",
+      "tags": ["school", "acc", "coursework"], "related": ["margaret-weak-reviewer"],
+      "path": "project/acc-spring-2026.md", "updated": "2026-05-09T00:00:00Z"
+    },
+    "distributed-workforce-arch": {
+      "slug": "distributed-workforce-arch", "name": "Distributed Workforce Architecture",
+      "description": "Eggdrop bot + background services + shared ops/ filesystem; no root required, everything in user home dirs.",
+      "type": "project", "status": "reference",
+      "tags": ["csc", "architecture", "eggdrop", "distributed"], "related": ["phase1-dispatcher", "pm-queue-worker", "haven-script-server"],
+      "path": "project/distributed-workforce-arch.md", "updated": "2026-05-05T00:00:00Z"
+    },
+    "iran-war-overview": {
+      "slug": "iran-war-overview", "name": "Iran war overview (tracked topic)",
+      "description": "2026 US/Israel-Iran war status snapshot -- belligerents, casus belli, current status, peace blockers, economic impact.",
+      "type": "topic", "status": "reference",
+      "tags": ["topic", "iran", "geopolitics", "world"], "related": ["iran-war-timeline"],
+      "path": "topic/iran-war-overview.md", "updated": "2026-05-12T00:00:00Z"
+    },
+    "iran-war-timeline": {
+      "slug": "iran-war-timeline", "name": "Iran war timeline (tracked topic)",
+      "description": "Append-only dated event log for the 2026 US/Israel-Iran war from June 2025 onward.",
+      "type": "topic", "status": "reference",
+      "tags": ["topic", "iran", "geopolitics", "world", "timeline"], "related": ["iran-war-overview"],
+      "path": "topic/iran-war-timeline.md", "updated": "2026-05-12T00:00:00Z"
     }
-  },
-  "updated_at": "2026-04-06T18:01:23Z"
+  }
 }
