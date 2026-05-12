@@ -24,6 +24,7 @@ Machine-readable version: index.json (same data; YAML frontmatter in each file i
 - `proactive-tool-usage` [reference] -- Check memory at session start, use code maps as source of truth, save learnings immediately.
 - `news-scholarly-sources` [reference] -- For current events and tracked topics, cite news, scholarly/think-tank work, and official briefings -- not Wikipedia or Britannica.
 - `margaret-weak-reviewer` [reference] -- ENGL 1302 peer reviewer Margaret Bridges provides inaccurate feedback; weight below Prof. Royall's.
+- `speak-up-before-acting` [reference] -- If an instruction will break something obvious, say so before executing and propose the fix.
 
 ## environment
 - `server-topology` [reference] -- Local is haven-4346 (davey-hp-ai laptop); remotes are haven-ef6e (hub/FTP/VPN/PKI), beacon-83eb, well-b7ea.
