@@ -5,7 +5,7 @@ After=network.target
 [Service]
 ExecStart=/opt/csc/bin/python /opt/csc/irc/bin/csc-memory-web
 WorkingDirectory=/opt/csc/irc
-Environment=PYTHONPATH=/opt/csc/irc/packages/csc-root:/opt/csc/irc/packages/csc-log:/opt/csc/irc/packages/csc-data:/opt/csc/irc/packages/csc-memory
+Environment=PYTHONPATH=/opt/csc/irc/packages/csc-memory
 Restart=on-failure
 RestartSec=5
 

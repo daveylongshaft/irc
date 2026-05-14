@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-for _pkg in ("csc-root", "csc-log", "csc-data", "csc-memory"):
+for _pkg in ("csc-memory",):
     _p = REPO_ROOT / "packages" / _pkg
     if _p.exists() and str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
